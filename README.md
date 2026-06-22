@@ -161,11 +161,7 @@ nb plugin install nonebot-plugin-xiuxian-signin
 pip install nonebot-plugin-xiuxian-signin
 ```
 
-如果暂未发布到 PyPI，也可以直接从 GitHub 安装：
 
-```bash
-pip install git+https://github.com/hszxjs/nonebot-plugin-xiuxian-signin.git
-```
 
 
 ## 加载
