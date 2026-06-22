@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nonebot-plugin-xiuxian-signin"
-version = "0.5.0"
+version = "0.5.1"
 description = "A NoneBot2 cultivation-themed signin plugin with image panels, fishing, realms, mystic realms, routes, shop, and rankings."
 readme = "README.md"
 requires-python = ">=3.9, <4.0"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [
     { name = "fallen_rainy" }
 ]
@@ -27,9 +27,14 @@ classifiers = [
 dependencies = [
     "nonebot2>=2.2.0",
     "nonebot-adapter-onebot>=2.4.0",
+    "nonebot-plugin-localstore>=0.7.0",
     "Pillow>=10.0.0",
     "httpx>=0.24.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hszxjs/nonebot-plugin-xiuxian-signin"
+Repository = "https://github.com/hszxjs/nonebot-plugin-xiuxian-signin"
 
 [project.optional-dependencies]
 dev = [

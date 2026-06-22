@@ -15,6 +15,11 @@ try:
 except ImportError:
     httpx = None
 
+try:
+    import nonebot_plugin_localstore as localstore
+except ImportError:
+    localstore = None
+
 from nonebot import get_bot, get_driver, logger, on_message
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent, MessageSegment
 from nonebot.matcher import Matcher
@@ -105,7 +110,7 @@ from .domain import (
 )
 from .storage import JsonStore
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 PICMENU_NEXT_FUNCS = [
     {
@@ -263,6 +268,8 @@ __plugin_meta__ = PluginMetadata(
         "背包：使用丹药、符箓、灵石、灵食、奇物和杂物\n"
         "秘境：60秒限时入口，进入后发送 探索 1-5"
     ),
+    type="application",
+    homepage="https://github.com/hszxjs/nonebot-plugin-xiuxian-signin",
     config=Config,
     supported_adapters={"~onebot.v11"},
     extra={
@@ -369,6 +376,8 @@ set_font_paths(config.xiuxian_signin_font_path, config.xiuxian_signin_bold_font_
 def get_data_dir() -> Path:
     if config.xiuxian_signin_data_dir:
         return Path(config.xiuxian_signin_data_dir)
+    if localstore is not None:
+        return localstore.get_plugin_data_dir()
     return Path(__file__).parent / "data"
 
 

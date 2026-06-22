@@ -147,6 +147,27 @@
 
 同时保留 `menu_data`，用于兼容仍读取旧字段的菜单插件或旧配置。
 
+## 安装
+
+使用 NB-CLI 安装：
+
+```bash
+nb plugin install nonebot-plugin-xiuxian-signin
+```
+
+使用 pip 安装：
+
+```bash
+pip install nonebot-plugin-xiuxian-signin
+```
+
+如果暂未发布到 PyPI，也可以直接从 GitHub 安装：
+
+```bash
+pip install git+https://github.com/hszxjs/nonebot-plugin-xiuxian-signin.git
+```
+
+
 ## 加载
 
 在 NoneBot 项目中加载：
@@ -179,7 +200,7 @@ XIUXIAN_SIGNIN_BOLD_FONT_PATH=
 
 | 配置项 | 默认值 | 说明 |
 | --- | ---: | --- |
-| `xiuxian_signin_data_dir` | 插件目录下 `data` | 用户数据和群日榜数据保存目录 |
+| `xiuxian_signin_data_dir` | localstore 插件数据目录 | 用户数据和群日榜数据保存目录；配置后会覆盖默认目录 |
 | `xiuxian_signin_timezone` | `Asia/Shanghai` | 每日签到和 22:00 榜单结算的时区 |
 | `xiuxian_signin_image_width` | `900` | 签到和垂钓图片宽度 |
 | `xiuxian_signin_avatar_timeout` | `8.0` | QQ 头像下载超时时间 |
@@ -188,25 +209,25 @@ XIUXIAN_SIGNIN_BOLD_FONT_PATH=
 
 ## 数据
 
-用户数据默认保存到：
+用户数据默认保存到 `nonebot-plugin-localstore` 分配的插件数据目录：
 
 ```text
-nonebot_plugin_xiuxian_signin/data/users.json
+<localstore>/nonebot_plugin_xiuxian_signin/users.json
 ```
 
 群每日话痨榜数据默认保存到：
 
 ```text
-nonebot_plugin_xiuxian_signin/data/daily_chat_rank.json
+<localstore>/nonebot_plugin_xiuxian_signin/daily_chat_rank.json
 ```
 
 群成员索引数据默认保存到：
 
 ```text
-nonebot_plugin_xiuxian_signin/data/group_members.json
+<localstore>/nonebot_plugin_xiuxian_signin/group_members.json
 ```
 
-如果部署环境不适合向插件目录写入文件，请配置 `XIUXIAN_SIGNIN_DATA_DIR` 指向可写目录。
+如果需要迁移旧数据或指定固定目录，可配置 `XIUXIAN_SIGNIN_DATA_DIR` 指向可写目录。
 
 插件已内置 `assets/fonts/NotoSansSC-VF.ttf`，默认优先使用内置字体。如果你想替换成自己的字体，可以手动配置字体路径，例如：
 
@@ -221,5 +242,10 @@ XIUXIAN_SIGNIN_BOLD_FONT_PATH=/path/to/your-bold-font.ttf
 - `nonebot-adapter-onebot`
 - `Pillow`
 - `httpx`
+- `nonebot-plugin-localstore`
 
 如果头像接口请求失败或缺少 `httpx`，插件仍会生成默认头像占位图，不影响签到、垂钓和榜单奖励。
+
+## 许可证
+
+MIT License
