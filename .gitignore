@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.env
+.ruff_cache/
+.pytest_cache/
+nonebot_plugin_xiuxian_signin/data/

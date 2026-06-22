@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nonebot-plugin-xiuxian-signin"
+version = "0.5.0"
+description = "A NoneBot2 cultivation-themed signin plugin with image panels, fishing, realms, mystic realms, routes, shop, and rankings."
+readme = "README.md"
+requires-python = ">=3.9, <4.0"
+license = { text = "MIT" }
+authors = [
+    { name = "fallen_rainy" }
+]
+keywords = ["nonebot", "nonebot2", "plugin", "signin", "xiuxian", "onebot"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+]
+dependencies = [
+    "nonebot2>=2.2.0",
+    "nonebot-adapter-onebot>=2.4.0",
+    "Pillow>=10.0.0",
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4.0",
+]
+
+[tool.nonebot]
+plugins = ["nonebot_plugin_xiuxian_signin"]
+
+[tool.setuptools]
+packages = ["nonebot_plugin_xiuxian_signin"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+nonebot_plugin_xiuxian_signin = ["py.typed", "assets/fonts/*.ttf"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.format]
+line-ending = "lf"
