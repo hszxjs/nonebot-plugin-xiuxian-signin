@@ -14,6 +14,7 @@ from .domain import (
     array_multiplier,
     battle_power,
     breakthrough_required_text,
+    combat_max_mana,
     hehuan_remaining_text,
     is_breakthrough_bottleneck,
     reward_display_name,
@@ -388,8 +389,8 @@ def render_signin_card(
     row3_y = info_top + 300
     array_status = array_proficiency_text(record)
     bottleneck = is_breakthrough_bottleneck(record)
-    power_label = "瓶颈" if bottleneck else "战力"
-    power_value = f"需 {breakthrough_required_text(record)}" if bottleneck else str(battle_power(record))
+    power_label = "\u74f6\u9888" if bottleneck else "\u6218\u6597\u5c5e\u6027"
+    power_value = f"\u9700 {breakthrough_required_text(record)}" if bottleneck else f"\u6218\u529b{battle_power(record)} / \u7075\u529b{combat_max_mana(record)}"
     info_rows = [
         ("灵器", equipped_title(record.equipped_artifact, "未装备灵器"), row1_y),
         ("功法", equipped_title(record.equipped_method, "未参悟功法"), row1_y),
@@ -489,51 +490,81 @@ def render_fishing_card(
     return png_bytes(image)
 
 PANEL_ICON_ALIASES = {
-    "签到": "signin",
-    "灵根": "realm",
-    "修为": "realm",
-    "境界": "realm",
-    "突破": "breakthrough",
-    "垂钓": "fishing",
-    "排行": "rank",
-    "榜": "rank",
-    "战力": "power",
-    "切磋": "duel",
+    "\u7b7e\u5230": "signin",
+    "\u7075\u6839": "realm",
+    "\u4fee\u4e3a": "realm",
+    "\u5883\u754c": "realm",
+    "\u72b6\u6001": "realm",
+    "\u7a81\u7834": "breakthrough",
+    "\u74f6\u9888": "breakthrough",
+    "\u6c89\u6dc0": "breakthrough",
+    "\u6563\u529f": "breakthrough",
+    "\u5782\u9493": "fishing",
+    "\u9493\u9c7c": "fishing",
+    "\u6392\u884c": "rank",
+    "\u699c": "rank",
+    "\u6218\u529b": "power",
+    "\u5207\u78cb": "duel",
     "PK": "duel",
     "pk": "duel",
-    "灵器": "artifact",
-    "功法": "method",
-    "阵盘": "array",
-    "阵法": "array",
-    "傀儡": "puppet",
-    "灵植": "plant",
-    "丹药": "pill",
-    "符箓": "talisman",
-    "灵石": "stone",
-    "灵食": "food",
-    "奇物": "curio",
-    "杂物": "misc",
-    "背包": "bag",
-    "道具": "bag",
-    "秘境": "mystic",
-    "历练": "adventure",
-    "警": "warning",
-    "错": "warning",
-    "仙缘": "curio",
-    "灵材": "stone",
-    "奖励": "bag",
-    "入口": "mystic",
-    "状态": "realm",
-    "禁修": "warning",
-    "失败": "warning",
-    "路线": "token",
-    "身份": "token",
-    "令牌": "token",
-    "任务": "task",
-    "商店": "shop",
-    "坊市": "shop",
-    "炼丹": "alchemy",
-    "丹方": "alchemy",
+    "\u7075\u5668": "artifact",
+    "\u6b66\u5668": "artifact",
+    "\u5251": "artifact",
+    "\u5200": "artifact",
+    "\u67aa": "artifact",
+    "\u529f\u6cd5": "method",
+    "\u4e66": "method",
+    "\u7ecf": "method",
+    "\u9635\u76d8": "array",
+    "\u9635\u6cd5": "array",
+    "\u5080\u5121": "puppet",
+    "\u7075\u690d": "plant",
+    "\u4e39\u836f": "pill",
+    "\u7b26\u7b93": "talisman",
+    "\u7ed8\u5236": "talisman",
+    "\u753b\u7b26": "talisman",
+    "\u5236\u7b26": "talisman",
+    "\u7075\u77f3": "stone",
+    "\u7075\u6db2": "stone",
+    "\u7cbe\u7eaf\u7075\u6db2": "stone",
+    "\u7075\u6750": "stone",
+    "\u6750\u6599": "stone",
+    "\u70bc\u5316": "stone",
+    "\u7075\u98df": "food",
+    "\u5947\u7269": "curio",
+    "\u4ed9\u7f18": "curio",
+    "\u6742\u7269": "misc",
+    "\u9274\u5b9a": "misc",
+    "\u80cc\u5305": "bag",
+    "\u9053\u5177": "bag",
+    "\u7269\u54c1": "bag",
+    "\u5956\u52b1": "bag",
+    "\u79d8\u5883": "mystic",
+    "\u5165\u53e3": "mystic",
+    "\u5386\u7ec3": "adventure",
+    "\u5e2e\u52a9": "scroll",
+    "\u8bf4\u660e": "scroll",
+    "\u83dc\u5355": "scroll",
+    "\u56fe\u9274": "catalog",
+    "\u56fe\u5f55": "catalog",
+    "\u8def\u7ebf": "token",
+    "\u8eab\u4efd": "token",
+    "\u4ee4\u724c": "token",
+    "\u4efb\u52a1": "task",
+    "\u5546\u5e97": "shop",
+    "\u574a\u5e02": "shop",
+    "\u70bc\u4e39": "alchemy",
+    "\u4e39\u65b9": "alchemy",
+    "\u7279\u6b8a\u80fd\u529b": "ability",
+    "\u795e\u901a": "ability",
+    "\u4e5d\u79d8": "ability",
+    "\u516b\u7981": "ability",
+    "\u795e\u7981": "ability",
+    "\u4f20\u627f": "ability",
+    "\u8b66": "warning",
+    "\u9519": "warning",
+    "\u7981\u4fee": "warning",
+    "\u5931\u8d25": "warning",
 }
 
 
@@ -595,6 +626,22 @@ def draw_panel_icon(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], i
         line([(x1 + int(0.74 * w), y1 + int(0.20 * h)), (x1 + int(0.26 * w), y1 + int(0.76 * h))], fill=dark, width=max(4, w // 13))
         line([(x1 + int(0.38 * w), y1 + int(0.58 * h)), (x1 + int(0.24 * w), y1 + int(0.72 * h))], fill=accent, width=max(3, w // 16))
         line([(x1 + int(0.62 * w), y1 + int(0.58 * h)), (x1 + int(0.76 * w), y1 + int(0.72 * h))], fill=accent, width=max(3, w // 16))
+    elif icon_key == "ability":
+        rect((0.24, 0.20, 0.70, 0.78), fill=(255, 255, 255, 135), radius=7)
+        draw.polygon([
+            (x1 + int(0.24 * w), y1 + int(0.20 * h)),
+            (x1 + int(0.36 * w), y1 + int(0.14 * h)),
+            (x1 + int(0.70 * w), y1 + int(0.20 * h)),
+            (x1 + int(0.70 * w), y1 + int(0.78 * h)),
+            (x1 + int(0.58 * w), y1 + int(0.84 * h)),
+            (x1 + int(0.24 * w), y1 + int(0.78 * h)),
+        ], fill=(255, 255, 255, 95), outline=dark)
+        line([(x1 + int(0.34 * w), y1 + int(0.34 * h)), (x1 + int(0.58 * w), y1 + int(0.34 * h))], fill=dark, width=max(2, w // 23))
+        line([(x1 + int(0.34 * w), y1 + int(0.50 * h)), (x1 + int(0.55 * w), y1 + int(0.50 * h))], fill=dark, width=max(2, w // 23))
+        line([(x1 + int(0.34 * w), y1 + int(0.66 * h)), (x1 + int(0.50 * w), y1 + int(0.66 * h))], fill=dark, width=max(2, w // 23))
+        draw.arc((x1 + int(0.48 * w), y1 + int(0.24 * h), x1 + int(0.86 * w), y1 + int(0.62 * h)), 205, 35, fill=accent, width=max(3, w // 16))
+        draw.arc((x1 + int(0.52 * w), y1 + int(0.34 * h), x1 + int(0.82 * w), y1 + int(0.86 * h)), 25, 230, fill=accent, width=max(3, w // 18))
+        ellipse((0.64, 0.42, 0.82, 0.60), fill=(*accent_rgb, 160), outline=dark)
     elif icon_key == "power":
         line([(x1 + int(0.30 * w), y1 + int(0.22 * h)), (x1 + int(0.58 * w), y1 + int(0.22 * h)), (x1 + int(0.46 * w), y1 + int(0.48 * h)), (x1 + int(0.70 * w), y1 + int(0.48 * h)), (x1 + int(0.36 * w), y1 + int(0.84 * h)), (x1 + int(0.48 * w), y1 + int(0.58 * h)), (x1 + int(0.24 * w), y1 + int(0.58 * h))], fill=accent, width=max(4, w // 13))
     elif icon_key == "method":
@@ -669,6 +716,14 @@ def draw_panel_icon(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], i
         for yy in (0.38, 0.52, 0.66):
             ellipse((0.34, yy - 0.03, 0.40, yy + 0.03), fill=accent, outline=accent)
             line([(x1 + int(0.46 * w), y1 + int(yy * h)), (x1 + int(0.66 * w), y1 + int(yy * h))], width=max(2, w // 24))
+    elif icon_key == "catalog":
+        rect((0.22, 0.18, 0.78, 0.82), fill=(255, 255, 255, 130), radius=8)
+        for xx in (0.36, 0.58):
+            line([(x1 + int(xx * w), y1 + int(0.22 * h)), (x1 + int(xx * w), y1 + int(0.78 * h))], fill=accent, width=max(2, w // 24))
+        for yy in (0.36, 0.54):
+            line([(x1 + int(0.26 * w), y1 + int(yy * h)), (x1 + int(0.74 * w), y1 + int(yy * h))], fill=dark, width=max(2, w // 24))
+        rect((0.28, 0.24, 0.34, 0.32), fill=(*accent_rgb, 160), radius=2)
+        rect((0.62, 0.60, 0.70, 0.72), fill=(*accent_rgb, 160), radius=2)
     elif icon_key == "shop":
         draw.polygon([
             (x1 + int(0.20 * w), y1 + int(0.26 * h)),
@@ -730,6 +785,145 @@ def wrap_panel_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageF
     return chunks or [""]
 
 
+
+def draw_wrapped_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    xy: tuple[int, int],
+    font: ImageFont.ImageFont,
+    fill: str,
+    max_width: int,
+    line_gap: int = 8,
+    weight: int = 1,
+    max_lines: int = 3,
+) -> int:
+    y = xy[1]
+    lines = wrap_panel_text(draw, text, font, max_width)
+    for part in lines[:max_lines]:
+        draw_weighted_text(draw, (xy[0], y), part, font, fill, weight=weight)
+        y += text_size(draw, part, font)[1] + line_gap
+    return y
+
+
+def render_battle_card(
+    result: dict[str, Any],
+    left_avatar: Optional[bytes] = None,
+    right_avatar: Optional[bytes] = None,
+    width: int = 1180,
+) -> bytes:
+    width = max(width, 1180)
+    height = 1320
+    left = dict(result.get("left") or {})
+    right = dict(result.get("right") or {})
+    accent = "#b91c1c" if result.get("ended_early") else "#7c5ce6"
+    image = make_xiuxian_background(width, height, accent)
+    draw = ImageDraw.Draw(image)
+    draw_card(image, (54, 58, width - 54, height - 58))
+
+    title_font = fit_font(draw, "\u666e\u901a\u6597\u6cd5\u6218\u62a5", width - 320, 64, bold=True, min_size=44)
+    subtitle_font = load_font(30, bold=True)
+    name_font = load_font(36, bold=True)
+    label_font = load_font(24, bold=True)
+    body_font = load_font(26, bold=True)
+    small_font = load_font(22, bold=True)
+    big_font = load_font(44, bold=True)
+
+    draw_panel_icon(draw, (98, 104, 198, 204), "duel", accent)
+    draw_weighted_text(draw, (226, 104), "\u666e\u901a\u6597\u6cd5\u6218\u62a5", title_font, "#172033", weight=4)
+    subtitle = str(result.get("summary") or "\u6218\u6597\u8bb0\u5f55")
+    draw_weighted_text(draw, (230, 178), subtitle, subtitle_font, "#6b2737", weight=2)
+    if result.get("ended_early"):
+        remain = int(result.get("remaining_seconds", 0))
+        draw_weighted_text(draw, (width - 360, 180), f"\u63d0\u524d\u7ed3\u675f\uff0c\u5269\u4f59 {remain}s", small_font, "#9a3412", weight=2)
+
+    panel_top = 260
+    panel_h = 500
+    gap = 34
+    panel_w = (width - 180 - gap) // 2
+    left_box = (90, panel_top, 90 + panel_w, panel_top + panel_h)
+    right_box = (90 + panel_w + gap, panel_top, width - 90, panel_top + panel_h)
+
+    def fighter_panel(fighter: dict[str, Any], avatar_bytes: Optional[bytes], box: tuple[int, int, int, int], side: str) -> None:
+        x1, y1, x2, y2 = box
+        winner = str(result.get("winner_id")) == str(fighter.get("user_id"))
+        fill = (255, 255, 255, 235) if winner else (248, 244, 236, 225)
+        outline = "#d4af37" if winner else "#eadfca"
+        draw.rounded_rectangle(box, radius=30, fill=fill, outline=outline, width=5 if winner else 3)
+        avatar = make_avatar(avatar_bytes, 108, accent)
+        image.alpha_composite(avatar, (x1 + 30, y1 + 34))
+        draw.ellipse((x1 + 24, y1 + 28, x1 + 144, y1 + 148), outline=accent, width=4)
+        name = str(fighter.get("nickname") or "\u4fee\u58eb")
+        name_fit = fit_font(draw, name, x2 - x1 - 190, 38, bold=True, min_size=24)
+        draw_weighted_text(draw, (x1 + 164, y1 + 34), name, name_fit, "#172033", weight=4)
+        realm = str(fighter.get("realm") or "\u672a\u77e5\u5883\u754c")
+        draw_weighted_text(draw, (x1 + 166, y1 + 86), realm, small_font, "#667085", weight=2)
+        status = "\u80dc\u8005" if winner else "\u8d25\u8005"
+        draw_weighted_text(draw, (x1 + 166, y1 + 118), status, body_font, "#b45309" if winner else "#475467", weight=3)
+
+        max_hp = max(1, int(fighter.get("max_hp") or 1))
+        hp = max(0, int(fighter.get("hp") or 0))
+        draw_weighted_text(draw, (x1 + 30, y1 + 168), f"\u8840\u91cf {hp}/{max_hp}", body_font, "#172033", weight=3)
+        draw_progress(draw, (x1 + 30, y1 + 204, x2 - 30, y1 + 236), hp / max_hp, "#dc2626" if hp < max_hp * 0.35 else accent)
+        max_mana = max(1, int(fighter.get("max_mana") or 1))
+        mana = max(0, int(fighter.get("mana") or 0))
+        draw_weighted_text(draw, (x1 + 30, y1 + 246), f"\u7075\u529b {mana}/{max_mana}", body_font, "#172033", weight=3)
+        draw_progress(draw, (x1 + 30, y1 + 282, x2 - 30, y1 + 314), mana / max_mana, "#2563eb" if mana >= max_mana * 0.28 else "#9333ea")
+
+        rows = [
+            ("\u7075\u6839", str(fighter.get("root") or "\u672a\u77e5")),
+            ("\u79cd\u65cf", str(fighter.get("race") or "\u672a\u77e5")),
+            ("\u4f53\u8d28", str(fighter.get("physique") or "\u672a\u77e5")),
+            ("\u529f\u6cd5", str(fighter.get("method") or "\u672a\u53c2\u609f\u529f\u6cd5")),
+            ("\u7c7b\u578b", str(fighter.get("method_kind") or "\u65e0")),
+        ]
+        y = y1 + 334
+        for label, value in rows:
+            draw_weighted_text(draw, (x1 + 34, y), label, label_font, "#667085", weight=2)
+            draw_wrapped_text(draw, value, (x1 + 104, y - 2), small_font, "#344054", x2 - x1 - 138, line_gap=4, weight=1, max_lines=1)
+            y += 40
+
+        abilities = "\u3001".join(str(item) for item in fighter.get("abilities", [])[:4]) or "\u6682\u672a\u663e\u5316"
+        techs = "\u3001".join(str(item) for item in fighter.get("triggered_techniques", [])[:5]) or "\u672a\u89e6\u53d1"
+        cd_items = [f"{name}:{turns}\u606f" for name, turns in list(dict(fighter.get("cooldowns") or {}).items())[:2]]
+        resource = f"\u8017\u7075 {int(fighter.get('mana_spent') or 0)}\uff0c\u4f53\u672f {int(fighter.get('physical_hits') or 0)}\uff0c\u4f53\u8d28 {int(fighter.get('trait_triggers') or 0)}"
+        if cd_items:
+            resource += "\uff0cCD " + "\u3001".join(cd_items)
+        draw_weighted_text(draw, (x1 + 34, y), "\u7279\u6b8a", label_font, "#667085", weight=2)
+        draw_wrapped_text(draw, abilities, (x1 + 104, y - 2), small_font, "#7c2d12", x2 - x1 - 138, line_gap=4, weight=2, max_lines=1)
+        y += 36
+        draw_weighted_text(draw, (x1 + 34, y), "\u6218\u6280", label_font, "#667085", weight=2)
+        draw_wrapped_text(draw, techs, (x1 + 104, y - 2), small_font, accent, x2 - x1 - 138, line_gap=4, weight=2, max_lines=1)
+        y += 36
+        draw_weighted_text(draw, (x1 + 34, y), "\u8d44\u6e90", label_font, "#667085", weight=2)
+        draw_wrapped_text(draw, resource, (x1 + 104, y - 2), small_font, "#475467", x2 - x1 - 138, line_gap=4, weight=1, max_lines=1)
+
+    fighter_panel(left, left_avatar, left_box, "left")
+    fighter_panel(right, right_avatar, right_box, "right")
+
+    vs_font = load_font(62, bold=True)
+    draw.rounded_rectangle((width // 2 - 54, panel_top + 186, width // 2 + 54, panel_top + 294), radius=54, fill=(255, 255, 255, 230), outline=accent, width=4)
+    draw_weighted_text(draw, (width // 2 - 34, panel_top + 205), "VS", vs_font, accent, weight=4)
+
+    detail_top = 810
+    draw.rounded_rectangle((90, detail_top, width - 90, height - 126), radius=30, fill=(255, 255, 255, 226), outline="#eadfca", width=3)
+    draw_weighted_text(draw, (126, detail_top + 32), "\u6218\u6597\u8bb0\u5f55", big_font, "#172033", weight=4)
+    draw_weighted_text(draw, (width - 360, detail_top + 44), f"\u7528\u65f6 {int(result.get('elapsed_seconds', 60))}/{int(result.get('duration_seconds', 60))}s", body_font, "#667085", weight=2)
+
+    timeline = list(result.get("timeline") or [])
+    y = detail_top + 106
+    for index, line in enumerate(timeline[:8], start=1):
+        draw.rounded_rectangle((126, y, width - 126, y + 54), radius=18, fill=(252, 247, 232, 230), outline="#efe3cb", width=2)
+        draw.rounded_rectangle((144, y + 12, 186, y + 42), radius=12, fill=accent)
+        draw_weighted_text(draw, (154, y + 13), f"{index}", small_font, "#ffffff", weight=2)
+        draw_wrapped_text(draw, str(line), (206, y + 12), body_font, "#344054", width - 360, line_gap=4, weight=1, max_lines=1)
+        y += 64
+
+    footer = "\u5207\u78cb\u4e0d\u4f1a\u6d88\u8017\u4fee\u4e3a\u6216\u635f\u6bc1\u88c5\u5907\uff1b\u6218\u6280\u6d88\u8017\u7075\u529b\u5e76\u8fdb\u5165CD\uff0c\u7075\u529b\u8017\u5c3d\u540e\u4f1a\u6539\u7528\u4f53\u672f\u3001\u795e\u901a\u6216\u4f53\u8d28\u7279\u6027"
+    footer_fit = fit_font(draw, footer, width - 190, 24, bold=True, min_size=18)
+    draw_weighted_text(draw, (96, height - 105), footer, footer_fit, "#667085", weight=1)
+    return png_bytes(image)
+
+
 def render_text_panel(
     title: str,
     content: str | list[str],
@@ -750,27 +944,36 @@ def render_text_panel(
     section_font = load_font(32, bold=True)
     max_text_width = width - 260
 
-    layout: list[tuple[str, str, list[str], str]] = []
+    layout: list[tuple[str, str, list[str], str, int, int]] = []
     content_height = 0
     for raw in raw_lines or [""]:
         line = str(raw).strip()
         if not line:
-            layout.append(("space", "", [""], "scroll"))
-            content_height += 18
+            block_h = 18
+            gap = 0
+            layout.append(("space", "", [""], "scroll", block_h, gap))
+            content_height += block_h + gap
             continue
-        if line.startswith("【") and line.endswith("】"):
+        if line.startswith("\u3010") and line.endswith("\u3011"):
             wrapped = wrap_panel_text(measure_draw, line, section_font, max_text_width)
-            layout.append(("section", line, wrapped, icon_key_from_text(line, icon)))
-            content_height += 62 + max(0, len(wrapped) - 1) * 36
+            block_h = 54 + max(0, len(wrapped) - 1) * 34
+            gap = 14
+            layout.append(("section", line, wrapped, icon_key_from_text(line, icon), block_h, gap))
+            content_height += block_h + gap
             continue
         row_icon = icon_key_from_text(line, icon)
         prefix_width = 86
         wrapped = wrap_panel_text(measure_draw, line, body_font, max_text_width - prefix_width)
-        layout.append(("row", line, wrapped, row_icon))
-        content_height += max(68, 42 * len(wrapped) + 24)
+        block_h = max(62, 42 * len(wrapped) + 20)
+        gap = 12
+        layout.append(("row", line, wrapped, row_icon, block_h, gap))
+        content_height += block_h + gap
 
-    footer_height = 52 if footer else 0
-    height = max(520, 230 + content_height + footer_height + 110)
+    content_start_y = 268
+    content_bottom_padding = 56
+    footer_reserved = 60 if footer else 0
+    card_outer_bottom = 58
+    height = max(520, content_start_y + content_height + footer_reserved + content_bottom_padding + card_outer_bottom)
     image = make_xiuxian_background(width, height, accent)
     draw = ImageDraw.Draw(image)
     draw_card(image, (58, 62, width - 58, height - 58))
@@ -781,34 +984,32 @@ def render_text_panel(
         subtitle_fit = fit_font(draw, subtitle, width - 300, 30, bold=True, min_size=22)
         draw_weighted_text(draw, (242, 184), subtitle, subtitle_fit, "#6b7280", weight=2)
 
-    y = 268
+    y = content_start_y
     left = 104
     right = width - 104
-    for kind, raw, wrapped, row_icon in layout:
+    for kind, raw, wrapped, row_icon, block_h, gap in layout:
         if kind == "space":
-            y += 18
+            y += block_h + gap
             continue
         if kind == "section":
-            block_h = 54 + max(0, len(wrapped) - 1) * 34
             draw.rounded_rectangle((left, y, right, y + block_h), radius=20, fill=(252, 247, 232, 232), outline="#eadfca", width=2)
             draw_panel_icon(draw, (left + 16, y + 10, left + 56, y + 50), row_icon, accent)
             text_y = y + 12
             for part in wrapped:
                 draw_weighted_text(draw, (left + 74, text_y), part, section_font, "#172033", weight=3)
                 text_y += 34
-            y += block_h + 14
+            y += block_h + gap
             continue
-        row_h = max(62, 42 * len(wrapped) + 20)
+        row_h = block_h
         draw.rounded_rectangle((left, y, right, y + row_h), radius=18, fill=(255, 255, 255, 222), outline="#eee2ca", width=2)
         draw_panel_icon(draw, (left + 16, y + 12, left + 58, y + 54), row_icon, accent)
         text_y = y + 14
         for part in wrapped:
             draw_weighted_text(draw, (left + 78, text_y), part, body_font, "#344054", weight=2)
             text_y += 42
-        y += row_h + 12
+        y += row_h + gap
 
     if footer:
         footer_font = fit_font(draw, footer, width - 208, 26, bold=True, min_size=18)
         draw_weighted_text(draw, (104, height - 108), footer, footer_font, "#667085", weight=1)
     return png_bytes(image)
-
