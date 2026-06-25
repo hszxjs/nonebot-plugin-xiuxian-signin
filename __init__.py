@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 import random
 import re
 import time
@@ -34,6 +35,8 @@ from .domain import (
     REALMS,
     RankReward,
     SigninResult,
+    acquired_root_summary,
+    acquired_root_text,
     alchemy_text,
 
     apply_chat_cultivation,
@@ -85,6 +88,7 @@ from .domain import (
     equip_artifact,
     equip_method,
     equip_puppet,
+    equip_talisman,
     simulate_normal_duel,
     method_profile,
     format_method_detail,
@@ -103,8 +107,11 @@ from .domain import (
     rank_reward_for,
 
     refine_pill_by_recipe,
+    refine_dan_root,
+    refine_artifact_root,
     regress_cultivation,
     refine_spirit_stone,
+    refine_spirit_liquid,
     reward_display_name,
 
     route_status_text,
@@ -117,8 +124,10 @@ from .domain import (
     special_ability_list_text,
     spirit_stone_text,
     talisman_draw_text,
+    tianji_divination_text,
     start_mystic_realm,
     unequip_artifact,
+    unequip_talisman,
     use_curio,
     use_food,
     use_pill,
@@ -145,24 +154,24 @@ PICMENU_NEXT_FUNCS = [
     },
     {
         "func": "\u7a81\u7834\u4e0e\u4fee\u4e3a",
-        "trigger_method": "\u7a81\u7834 / \u6563\u529f / \u5883\u754c\u56fe\u9274 / \u7a81\u7834\u56fe\u9274",
+        "trigger_method": "\u7a81\u7834 / \u6563\u529f / \u70bc\u5316\u7075\u6db2 / \u540e\u5929\u7075\u6839 / \u5883\u754c\u56fe\u9274 / \u7a81\u7834\u56fe\u9274",
         "trigger_condition": "\u5883\u754c\u5706\u6ee1\u540e\u8fdb\u5165\u74f6\u9888\uff0c\u9700\u7a81\u7834\u540e\u7ee7\u7eed\u589e\u957f\u4fee\u4e3a",
         "brief_des": "\u67e5\u770b\u5883\u754c\u74f6\u9888\u3001\u7a81\u7834\u6750\u6599\u548c\u91cd\u4fee\u673a\u4f1a",
-        "detail_des": "\u74f6\u9888\u540e\u4fee\u4e3a\u4e0d\u4f1a\u7ee7\u7eed\u589e\u52a0\uff0c\u6ea2\u51fa\u4fee\u4e3a\u4f1a\u51dd\u6210\u7cbe\u7eaf\u7075\u6db2\uff1b\u6c89\u6dc0\u5929\u6570\u4f1a\u63d0\u9ad8\u5782\u9493\u83b7\u5f97\u9ad8\u9636\u9ad8\u54c1\u8d28\u7a81\u7834\u9053\u5177\u7684\u6982\u7387\u3002",
+        "detail_des": "\u74f6\u9888\u540e\u4fee\u4e3a\u4e0d\u4f1a\u7ee7\u7eed\u589e\u52a0\uff0c\u6ea2\u51fa\u4fee\u4e3a\u4f1a\u51dd\u6210\u7cbe\u7eaf\u7075\u6db2\uff1b\u5316\u795e\u7834\u70bc\u865a\u9700\u4e94\u884c\u8865\u5168\uff0c\u53ef\u7528 `\u540e\u5929\u7075\u6839` \u67e5\u770b\u4e39\u7075\u6839/\u5668\u7075\u6839\u70bc\u5316\u65b9\u5f0f\uff1b`\u70bc\u5316\u7075\u6db2` \u53ef\u628a\u5df2\u6c89\u6dc0\u7075\u6db2\u8f6c\u4e3a\u4fee\u4e3a\u3002",
     },
     {
         "func": "\u5386\u7ec3\u4e0e\u88c5\u5907",
-        "trigger_method": "\u5386\u7ec3 / \u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u6218\u529b / \u6218\u529b\u699c",
-        "trigger_condition": "\u7f16\u53f7\u6765\u81ea\u5bf9\u5e94\u9762\u677f",
-        "brief_des": "\u88c5\u5907\u7075\u5668\u3001\u53c2\u609f\u529f\u6cd5\u3001\u5e03\u7f6e\u9635\u76d8\u5e76\u8ba1\u7b97\u6218\u529b",
-        "detail_des": "`\u88c5\u5907\u7075\u5668 1`\u3001`\u53c2\u609f\u529f\u6cd5 1`\u3001`\u5e03\u7f6e\u9635\u76d8 1` \u7ba1\u7406\u5386\u7ec3\u914d\u7f6e\uff1b`\u7279\u6b8a\u80fd\u529b` \u67e5\u770b\u6597\u6cd5\u53ef\u89e6\u53d1\u7684\u795e\u901a\uff1b`pk @\u7fa4\u53cb` \u53ef\u8fdb\u884c\u5207\u78cb\u3002",
+        "trigger_method": "\u5386\u7ec3 / \u7075\u5668 / \u88c5\u5907\u7075\u5668 1 \u4e3b\u624b / \u88c5\u5907\u7075\u5668 2 \u526f\u624b / \u88c5\u5907\u7b26\u7b93 1 / \u6218\u529b / \u6218\u529b\u699c",
+        "trigger_condition": "\u7f16\u53f7\u6765\u81ea\u5bf9\u5e94\u9762\u677f\uff1b\u4e3b\u624b\u3001\u526f\u624b\u3001\u62a4\u7532\u5404\u53ef\u88c5\u5907\u4e00\u4ef6\u7075\u5668",
+        "brief_des": "\u7ba1\u7406\u4e09\u69fd\u7075\u5668\u3001\u7b26\u7b93\u680f\u3001\u529f\u6cd5\u9635\u76d8\u5e76\u8ba1\u7b97\u6218\u529b",
+        "detail_des": "`\u88c5\u5907\u7075\u5668 1 \u4e3b\u624b`\u3001`\u88c5\u5907\u7075\u5668 2 \u526f\u624b`\u3001`\u88c5\u5907\u7075\u5668 3 \u62a4\u7532` \u7ba1\u7406\u7075\u5668\u69fd\uff1b`\u88c5\u5907\u7b26\u7b93 1` \u653e\u5165\u7b26\u7b93\u680f\uff0c\u666e\u901a\u6597\u6cd5\u751f\u6548\u4e14\u4e0d\u6d88\u8017\uff1b`\u53c2\u609f\u529f\u6cd5 1`\u3001`\u5e03\u7f6e\u9635\u76d8 1` \u7ba1\u7406\u5386\u7ec3\u914d\u7f6e\uff1b`pk @\u7fa4\u53cb` \u53ef\u8fdb\u884c\u5207\u78cb\u3002",
     },
     {
         "func": "\u79d8\u5883\u4e0e\u4efb\u52a1",
-        "trigger_method": "\u79d8\u5883 / \u63a2\u7d22 1 / \u6bcf\u65e5\u4efb\u52a1 / \u5546\u5e97",
+        "trigger_method": "\u79d8\u5883 / \u63a2\u7d22 1 / \u5929\u673a\u79d8\u5883 / \u6bcf\u65e5\u4efb\u52a1 / \u5546\u5e97",
         "trigger_condition": "\u79d8\u5883\u5165\u53e3 60 \u79d2\u5185\u9009\u62e9\uff1b\u4efb\u52a1\u7b7e\u5230\u540e\u751f\u6210",
         "brief_des": "\u9650\u65f6\u79d8\u5883\u3001\u6bcf\u65e5\u4efb\u52a1\u548c\u6bcf\u65e5\u5546\u5e97",
-        "detail_des": "`\u79d8\u5883` \u62bd\u53d6 3 \u4e2a\u5165\u53e3\uff0c\u8fdb\u5165\u540e 10 \u6b21\u63a2\u7d22\uff1b`\u6bcf\u65e5\u4efb\u52a1` \u67e5\u770b\u76ee\u6807\uff1b`\u5546\u5e97` \u4f7f\u7528\u7075\u77f3\u8d2d\u4e70\u6216\u51fa\u552e\u7269\u54c1\u3002",
+        "detail_des": "`\u79d8\u5883` \u4ece\u4e0a\u53e4\u5b97\u95e8\u9057\u5740\u3001\u517d\u6f6e\u3001\u6d1e\u5e9c\u3001\u592a\u53e4\u77ff\u533a\u3001\u865a\u795e\u754c\u6b8b\u57df\u3001\u9752\u94dc\u4ed9\u6bbf\u4e2d\u62bd 3 \u4e2a 60 \u79d2\u5165\u53e3\uff1b\u8fdb\u5165\u540e 10 \u6b21\u63a2\u7d22\uff0c\u6bcf\u8f6e\u542b\u9996\u9886\u6311\u6218\u9879\uff0c\u80dc\u5229\u53ef\u76f4\u63a5\u83b7\u5f97 10 \u6b21\u63a2\u7d22\u6298\u7b97\u5956\u52b1\u3001\u9996\u9886\u5996\u4e39\uff0c\u5e76\u63d0\u5347\u529f\u6cd5\u5c42\u6570\u719f\u7ec3\u5ea6\u4e0e\u9635\u6cd5\u719f\u7ec3\u5ea6\u3002",
     },
     {
         "func": "\u8def\u7ebf\u4e0e\u8eab\u4efd",
@@ -177,6 +186,13 @@ PICMENU_NEXT_FUNCS = [
         "trigger_condition": "\u70bc\u4e39\u9700\u70bc\u4e39\u5e08\u8def\u7ebf\uff1b\u7ed8\u5236\u7b26\u7b93\u9700\u4fee\u4e3a\u548c\u7075\u77f3",
         "brief_des": "\u70bc\u5236\u4e39\u836f\u3001\u67e5\u770b\u4e39\u65b9\u5e76\u7ed8\u5236\u7b26\u7b93",
         "detail_des": "\u6750\u6599\u54c1\u9636\u548c\u54c1\u8d28\u4f1a\u5f71\u54cd\u70bc\u4e39\u6210\u529f\u7387\u4e0e\u6210\u4e39\u54c1\u8d28\uff1b\u7a81\u7834\u7b26\u4ee4\u3001\u7b26\u8bcf\u548c\u6cd5\u65e8\u9700\u8981\u5bf9\u5e94\u5883\u754c\u5dc5\u5cf0\u624d\u53ef\u7ed8\u5236\u3002",
+    },
+    {
+        "func": "\u8da3\u5473\u73a9\u6cd5",
+        "trigger_method": "\u5929\u673a\u5360\u535c / \u5750\u5802 / \u5360\u535c \u4eca\u65e5\u8fd0\u52bf / \u6597\u5730\u4e3b / \u6597\u5730\u4e3b\u5f00\u684c / \u4eba\u673a\u6597\u5730\u4e3b",
+        "trigger_condition": "\u8da3\u5473\u4f11\u95f2\u73a9\u6cd5\uff1b\u6597\u5730\u4e3b\u9700\u7fa4\u804a\u4f7f\u7528",
+        "brief_des": "\u5929\u673a\u95ee\u5366\u4e0e\u7fa4\u804a\u6597\u5730\u4e3b\uff0c\u652f\u6301\u5a01\u538b\u62a2\u5730\u4e3b\u3001\u52a0\u500d\u548c\u6625\u5929",
+        "detail_des": "`\u5929\u673a\u5360\u535c` \u9700\u672c\u7fa4\u5929\u673a\u9601\u95e8\u4eba\u5750\u5802\u540e\u624d\u80fd\u95ee\u5366\uff1b\u5176\u4ed6\u5929\u673a\u9601\u95e8\u4eba\u53ef\u53d1\u9001 `\u5750\u5802` \u52a0\u5165\u5360\u535c\u6da6\u8d44\u5206\u6da6\u3002`\u6597\u5730\u4e3b\u5e2e\u52a9` \u67e5\u770b\u72ec\u7acb\u89c4\u5219\u3002",
     },
     {
         "func": "\u6392\u884c",
@@ -196,11 +212,11 @@ __plugin_meta__ = PluginMetadata(
         "垂钓：消耗已有诸天万界垂钓次数\n"
         "每日话痨榜：群聊发言自动统计，每晚 22:00 发布并发奖\n"
         "修为榜：查看本群修为排行榜\n"
-        "历练：装备灵器、参悟功法、布置阵盘、查看战力、PK 与战力榜\n"
+        "历练：主手/副手/护甲三槽灵器、符箓栏、功法阵盘、PK 与战力榜\n"
         "突破/散功：突破境界瓶颈，或回退至上一境界后期重修\n"
-        "背包：使用丹药、符箓、灵石、灵食、奇物和杂物\n"
+        "背包：使用丹药、灵石、灵食、奇物和杂物；装备符箓进入符箓栏，炼化灵液可转为修为\n"
         "特殊能力：查看九秘残页、八禁感悟、神禁烙印等传承材料；领悟特殊能力 1 进行参悟\n"
-        "秘境：60秒限时入口，进入后发送 探索 1-5"
+        "秘境：60秒限时入口，进入后发送 探索 1-6；首领挑战胜利可折算10次探索奖励"
     ),
     type="application",
     homepage="https://github.com/hszxjs/nonebot-plugin-xiuxian-signin",
@@ -251,6 +267,7 @@ ARRAY_LIST_TEXTS = {"阵盘", "我的阵盘", "阵盘列表", "阵法", "我的�
 PUPPET_LIST_TEXTS = {"傀儡", "我的傀儡", "傀儡列表"}
 PLANT_LIST_TEXTS = {"灵植", "我的灵植", "灵植列表"}
 ITEM_LIST_TEXTS = {"\u9053\u5177", "\u6211\u7684\u9053\u5177", "\u80cc\u5305", "\u7269\u54c1", "\u6211\u7684\u7269\u54c1", "\u5305\u88f9"}
+ACQUIRED_ROOT_TEXTS = {"\u540e\u5929\u7075\u6839", "\u4e39\u7075\u6839", "\u5668\u7075\u6839", "\u70bc\u5316\u7075\u6839", "\u4e94\u884c\u8865\u5168"}
 SPECIAL_ABILITY_TEXTS = {"特殊能力", "我的特殊能力", "神通", "我的神通"}
 SPECIAL_ABILITY_CATALOG_TEXTS = {"特殊能力图鉴", "神通图鉴"}
 ROUTE_TEXTS = {"\u4fee\u70bc\u8def\u7ebf", "\u8def\u7ebf", "\u8eab\u4efd", "\u8eab\u4efd\u4ee4\u724c", "\u5b97\u95e8\u8eab\u4efd"}
@@ -259,9 +276,39 @@ SHOP_TEXTS = {"商店", "坊市", "每日商店"}
 ALCHEMY_TEXTS = {"炼丹", "丹方"}
 TALISMAN_DRAW_TEXTS = {"\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7b26\u7b93\u7ed8\u5236", "\u7ed8\u7b26"}
 TIANJI_MYSTIC_TEXTS = {"天机秘境", "天机探索", "特殊秘境"}
+DIVINATION_TEXTS = {"\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366"}
+TIANJI_SIT_TEXTS = {"\u5750\u5802", "\u5929\u673a\u5750\u5802", "\u7533\u8bf7\u5750\u5802"}
+DOUDIZHU_HELP_TEXTS = {"斗地主帮助", "斗地主规则", "斗牌帮助"}
+DOUDIZHU_TEXTS = {
+    "斗地主",
+    "斗地主开桌",
+    "加入斗地主",
+    "退出斗地主",
+    "开始斗地主",
+    "人机斗地主",
+    "手牌",
+    "提示",
+    "托管",
+    "结束斗地主",
+    "叫地主",
+    "不叫",
+    "抢地主",
+    "不抢",
+    "施加威压",
+    "保留地主",
+    "放弃地主",
+    "加倍",
+    "不加倍",
+    "不要",
+} | DOUDIZHU_HELP_TEXTS
+DOUDIZHU_PLAY_PREFIXES = ("出牌", "打牌")
+DOUDIZHU_BID_PREFIXES = ("叫分",)
 MYSTIC_ENTRY_TEXTS = {"秘境", "查看秘境", "秘境入口", "探查秘境"}
 UNEQUIP_TEXTS = {"卸下灵器", "卸下装备"}
 EQUIP_PREFIXES = ("装备灵器", "装备")
+ARTIFACT_SLOT_NAMES = ("主手", "副手", "护甲", "护盾")
+TALISMAN_EQUIP_PREFIXES = ("装备符箓", "佩戴符箓", "符箓栏")
+TALISMAN_UNEQUIP_TEXTS = {"卸下符箓", "卸下符箓栏"}
 METHOD_EQUIP_PREFIXES = ("参悟功法", "修炼功法", "装备功法")
 METHOD_DETAIL_PREFIXES = ("学习功法", "查看功法", "功法详情", "功法页面")
 ARRAY_EQUIP_PREFIXES = ("布置阵盘", "装备阵盘", "布阵", "布置阵法")
@@ -270,9 +317,12 @@ PLANT_EQUIP_PREFIXES = ("栽种灵植", "种植灵植", "种灵植")
 PILL_USE_PREFIXES = ("使用丹药", "服用丹药", "服丹", "吃丹药")
 TALISMAN_USE_PREFIXES = ("使用符箓", "激发符箓", "用符")
 STONE_USE_PREFIXES = ("炼化灵石", "使用灵石", "吸收灵石")
+SPIRIT_LIQUID_USE_PREFIXES = ("炼化灵液", "炼化精纯灵液", "吸收灵液", "吸收精纯灵液", "使用灵液", "使用精纯灵液")
 FOOD_USE_PREFIXES = ("使用灵食", "食用灵食", "吃灵食")
 CURIO_USE_PREFIXES = ("使用奇物", "催动奇物", "参悟奇物")
 MISC_USE_PREFIXES = ("鉴定杂物", "鉴定")
+DAN_ROOT_PREFIXES = ("\u70bc\u5316\u4e39\u7075\u6839", "\u51dd\u7ec3\u4e39\u7075\u6839", "\u8865\u5168\u4e39\u7075\u6839")
+ARTIFACT_ROOT_PREFIXES = ("\u70bc\u5316\u5668\u7075\u6839", "\u51dd\u7ec3\u5668\u7075\u6839", "\u8865\u5168\u5668\u7075\u6839", "\u70bc\u5668\u4e3a\u6839")
 ROUTE_SELECT_PREFIXES = ("选择路线", "切换路线")
 IDENTITY_SELECT_PREFIXES = ("选择身份", "加入身份", "晋升身份")
 EVIL_SELECT_TEXTS = {"选择邪修", "加入邪修", "同修邪修"}
@@ -284,12 +334,16 @@ ALCHEMY_PREFIXES = ("炼丹",)
 TALISMAN_DRAW_PREFIXES = ("\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7ed8\u7b26")
 SPECIAL_ABILITY_LEARN_PREFIXES = ("\u9886\u609f\u7279\u6b8a\u80fd\u529b", "\u9886\u609f\u795e\u901a", "\u53c2\u609f\u7279\u6b8a\u80fd\u529b")
 MYSTIC_EXPLORE_PREFIXES = ("探索", "秘境探索")
+DIVINATION_PREFIXES = ("\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366")
 DUEL_PREFIXES = ("pk", "PK", "切磋", "挑战")
 NORMAL_DUEL_TEXTS = {"申请普通斗法", "普通斗法", "普通斗法申请", "申请斗法", "斗法匹配"}
 FISHING_TEXTS = ("\u5782\u9493", "\u9493\u9c7c", "\u8bf8\u5929\u4e07\u754c\u5782\u9493")
 COMMAND_PREFIX_CHARS = "/!！.。"
 PENDING_FISHING_TTL = 120
 MYSTIC_ENTRY_TTL = 60
+DIVINATION_PENDING_TTL = 60
+TIANJI_HALL_IDENTITIES = {"\u5929\u673a\u9601\u5f1f\u5b50", "\u5929\u673a\u9601\u957f\u8001", "\u5929\u673a\u9601\u592a\u4e0a\u957f\u8001"}
+DIVINATION_SITTER_INCOME = 8
 NORMAL_DUEL_PREPARE_SECONDS = 60
 NORMAL_DUEL_DURATION_SECONDS = 60
 NORMAL_DUEL_ACTION_SEGMENT_LABELS = {
@@ -310,8 +364,10 @@ RANK_SETTLE_HOUR = 22
 RANK_SETTLE_MINUTE = 0
 pending_fishing_users: dict[str, float] = {}
 pending_mystic_entries: dict[str, dict[str, Any]] = {}
+pending_divinations: dict[str, dict[str, Any]] = {}
 normal_duel_queue: dict[str, dict[str, Any]] = {}
 normal_duel_sessions: dict[str, dict[str, Any]] = {}
+doudizhu_tables: dict[str, dict[str, Any]] = {}
 rank_scheduler_task: Optional[asyncio.Task] = None
 
 
@@ -336,6 +392,34 @@ async def send_mystic_timeout_notice(
             await bot.send_private_msg(user_id=int(user_id), message=message)
     except Exception:
         logger.exception("发送秘境入口超时提示失败")
+
+
+async def send_divination_timeout_notice(
+    key: str,
+    expected_expires_at: float,
+    user_id: str,
+    group_id: Optional[str] = None,
+) -> None:
+    await asyncio.sleep(max(0.0, expected_expires_at - time.monotonic()))
+    pending = pending_divinations.get(key)
+    if pending is None or float(pending.get("expires_at", 0)) != expected_expires_at:
+        return
+    pending_divinations.pop(key, None)
+    try:
+        record = await store.get_user(user_id)
+        message = panel_segment(
+            "\u5929\u673a\u5360\u535c",
+            "\u5366\u706b\u5df2\u706d\uff0c\u672c\u6b21\u95ee\u5366\u5df2\u8d85\u65f6\u3002\u5982\u9700\u518d\u95ee\uff0c\u8bf7\u91cd\u65b0\u53d1\u9001\u201c\u5929\u673a\u5360\u535c\u201d\u3002",
+            record,
+            icon="warning",
+        )
+        bot = get_bot()
+        if group_id is not None:
+            await bot.send_group_msg(group_id=int(group_id), message=message)
+        else:
+            await bot.send_private_msg(user_id=int(user_id), message=message)
+    except Exception:
+        logger.exception("\u53d1\u9001\u5929\u673a\u5360\u535c\u8d85\u65f6\u63d0\u793a\u5931\u8d25")
 
 
 def load_config() -> Config:
@@ -483,10 +567,19 @@ def at_user_ids(event: MessageEvent) -> list[str]:
     return result
 
 
+def parse_artifact_slot(text: str) -> Optional[str]:
+    for slot in ARTIFACT_SLOT_NAMES:
+        if slot in text:
+            return "护甲" if slot == "护盾" else slot
+    return None
+
+
 def is_equip_command_text(text: str) -> bool:
     if text in UNEQUIP_TEXTS:
         return True
-    if is_equip_method_command_text(text) or is_equip_array_command_text(text):
+    if any(text.startswith(f"{prefix} ") or text.startswith(f"{prefix}　") for prefix in UNEQUIP_TEXTS):
+        return parse_artifact_slot(text) is not None
+    if is_equip_method_command_text(text) or is_equip_array_command_text(text) or is_equip_talisman_command_text(text):
         return False
     for prefix in EQUIP_PREFIXES:
         if text == prefix:
@@ -506,6 +599,14 @@ def parse_equip_index(text: str) -> Optional[int]:
         if match:
             return int(match.group(0))
     return None
+
+
+def parse_equip_artifact_command(text: str) -> tuple[Optional[int], Optional[str]]:
+    return parse_equip_index(text), parse_artifact_slot(text)
+
+
+def parse_unequip_artifact_slot(text: str) -> Optional[str]:
+    return parse_artifact_slot(text)
 
 
 def is_prefixed_index_command(text: str, prefixes: tuple[str, ...]) -> bool:
@@ -529,6 +630,25 @@ def parse_prefixed_index(text: str, prefixes: tuple[str, ...]) -> Optional[int]:
     return None
 
 
+def parse_spirit_liquid_use(text: str) -> Optional[int]:
+    for prefix in SPIRIT_LIQUID_USE_PREFIXES:
+        if text == prefix:
+            return None
+        if text.startswith(prefix):
+            rest = text[len(prefix):].strip()
+            if not rest or rest in {"\u5168\u90e8", "all", "ALL"}:
+                return None
+            match = re.search(r"\d+", rest)
+            if match:
+                return int(match.group(0))
+            return 0
+    return None
+
+
+def is_spirit_liquid_use_command_text(text: str) -> bool:
+    return any(text == prefix or text.startswith(prefix) for prefix in SPIRIT_LIQUID_USE_PREFIXES)
+
+
 def is_item_use_command_text(text: str) -> bool:
     return any(
         is_prefixed_index_command(text, prefixes)
@@ -541,6 +661,14 @@ def is_item_use_command_text(text: str) -> bool:
             MISC_USE_PREFIXES,
         )
     )
+
+
+def is_equip_talisman_command_text(text: str) -> bool:
+    return text in TALISMAN_UNEQUIP_TEXTS or is_prefixed_index_command(text, TALISMAN_EQUIP_PREFIXES)
+
+
+def parse_equip_talisman_index(text: str) -> Optional[int]:
+    return parse_prefixed_index(text, TALISMAN_EQUIP_PREFIXES)
 
 
 def is_equip_puppet_command_text(text: str) -> bool:
@@ -593,6 +721,21 @@ def is_tianji_mystic_command_text(text: str) -> bool:
     return text in TIANJI_MYSTIC_TEXTS
 
 
+def parse_divination_question(text: str) -> Optional[str]:
+    stripped = text.strip()
+    for prefix in DIVINATION_PREFIXES:
+        if stripped == prefix:
+            return ""
+        if stripped.startswith(prefix):
+            rest = stripped[len(prefix):].strip()
+            return rest.lstrip(" \t:：，,。").strip()
+    return None
+
+
+def is_divination_command_text(text: str) -> bool:
+    return parse_divination_question(text) is not None
+
+
 def is_dual_cultivation_command_text(text: str) -> bool:
     return text.startswith("双修") or text == "随机双修"
 
@@ -611,6 +754,22 @@ def parse_item_use(text: str) -> Optional[tuple[str, int]]:
         if index is not None:
             return category, index
     return None
+
+
+def parse_acquired_root_command(text: str) -> Optional[tuple[str, Optional[int]]]:
+    if text in ACQUIRED_ROOT_TEXTS:
+        return ("status", None)
+    dan_index = parse_prefixed_index(text, DAN_ROOT_PREFIXES)
+    if dan_index is not None:
+        return ("dan", dan_index)
+    artifact_index = parse_prefixed_index(text, ARTIFACT_ROOT_PREFIXES)
+    if artifact_index is not None:
+        return ("artifact", artifact_index)
+    return None
+
+
+def is_acquired_root_command_text(text: str) -> bool:
+    return parse_acquired_root_command(text) is not None
 
 
 def parse_prefixed_name(text: str, prefixes: tuple[str, ...]) -> Optional[str]:
@@ -686,6 +845,10 @@ def mystic_pending_key(event: MessageEvent) -> str:
     return f"private:{event.get_user_id()}"
 
 
+def divination_pending_key(event: MessageEvent) -> str:
+    return mystic_pending_key(event)
+
+
 def is_equip_method_command_text(text: str) -> bool:
     return is_prefixed_index_command(text, METHOD_EQUIP_PREFIXES)
 
@@ -734,6 +897,7 @@ def is_managed_command_text(text: str) -> bool:
         or text in PUPPET_LIST_TEXTS
         or text in PLANT_LIST_TEXTS
         or text in ITEM_LIST_TEXTS
+        or is_acquired_root_command_text(text)
         or is_special_ability_command_text(text)
         or is_special_ability_learn_command_text(text)
         or text in MYSTIC_ENTRY_TEXTS
@@ -743,8 +907,11 @@ def is_managed_command_text(text: str) -> bool:
         or is_alchemy_command_text(text)
         or is_talisman_draw_command_text(text)
         or is_tianji_mystic_command_text(text)
+        or is_divination_command_text(text)
+        or is_doudizhu_command_text(text)
         or is_dual_cultivation_command_text(text)
         or text in UNEQUIP_TEXTS
+        or is_equip_talisman_command_text(text)
         or parse_fishing_arg(text) is not None
         or is_equip_command_text(text)
         or is_equip_method_command_text(text)
@@ -754,6 +921,7 @@ def is_managed_command_text(text: str) -> bool:
         or is_equip_puppet_command_text(text)
         or is_plant_command_text(text)
         or is_item_use_command_text(text)
+        or is_spirit_liquid_use_command_text(text)
         or is_mystic_explore_command_text(text)
         or is_duel_command_text(text)
     )
@@ -812,6 +980,109 @@ async def send_image(matcher: Matcher, image_bytes: bytes) -> None:
     await matcher.send(MessageSegment.image(BytesIO(image_bytes)))
 
 
+def is_tianji_hall_identity(record: Any) -> bool:
+    return str(getattr(record, "faction_identity", "") or "") in TIANJI_HALL_IDENTITIES
+
+
+def tianji_sitters(hall: dict[str, Any]) -> list[dict[str, str]]:
+    raw_sitters = hall.get("sitters")
+    if not isinstance(raw_sitters, list) or not raw_sitters:
+        primary_id = str(hall.get("sitter_id") or "")
+        if not primary_id:
+            return []
+        raw_sitters = [{"user_id": primary_id, "nickname": str(hall.get("sitter_name") or primary_id)}]
+    result: list[dict[str, str]] = []
+    seen = set()
+    for item in raw_sitters:
+        if not isinstance(item, dict):
+            continue
+        sitter_id = str(item.get("user_id") or "")
+        if not sitter_id or sitter_id in seen:
+            continue
+        seen.add(sitter_id)
+        result.append({"user_id": sitter_id, "nickname": str(item.get("nickname") or f"QQ {sitter_id}")})
+    return result
+
+
+def tianji_sitter_names(hall: dict[str, Any], limit: int = 4) -> str:
+    sitters = tianji_sitters(hall)
+    names = [str(item.get("nickname") or item.get("user_id")) for item in sitters]
+    if not names:
+        return "天机阁门人"
+    if len(names) > limit:
+        return "、".join(names[:limit]) + f"等{len(names)}人"
+    return "、".join(names)
+
+
+async def require_tianji_hall(matcher: Matcher, event: MessageEvent, record: Any) -> dict[str, Any]:
+    if not isinstance(event, GroupMessageEvent):
+        await finish_panel(
+            matcher,
+            "\u5929\u673a\u5360\u535c",
+            "\u5929\u673a\u5360\u535c\u9700\u5728\u7fa4\u5185\u7531\u5929\u673a\u9601\u95e8\u4eba\u5750\u5802\u540e\u5f00\u542f\uff0c\u8bf7\u5230\u7fa4\u804a\u4e2d\u4f7f\u7528\u3002",
+            record,
+            icon="divination",
+        )
+        return {}
+    hall = await store.get_tianji_hall(str(event.group_id), local_today().isoformat())
+    if not hall:
+        await finish_panel(
+            matcher,
+            "\u5929\u673a\u5360\u535c",
+            "\u4eca\u65e5\u5c1a\u65e0\u5929\u673a\u9601\u5f1f\u5b50\u5750\u5802\uff0c\u65e0\u6cd5\u5f00\u542f\u5360\u535c\u3002\n\u8bf7\u7b49\u5f85\u672c\u7fa4\u7b2c\u4e00\u4f4d\u5929\u673a\u9601\u95e8\u4eba\u7b7e\u5230\u5750\u5802\uff0c\u518d\u6765\u95ee\u5366\u3002",
+            record,
+            icon="warning",
+        )
+        return {}
+    return hall
+
+
+async def settle_divination_income(event: MessageEvent, viewer_record: Any = None) -> str:
+    if not isinstance(event, GroupMessageEvent):
+        return ""
+    hall = await store.add_tianji_divination_income(
+        str(event.group_id),
+        local_today().isoformat(),
+        DIVINATION_SITTER_INCOME,
+    )
+    if not hall:
+        return ""
+    sitters = tianji_sitters(hall)
+    if not sitters:
+        return ""
+    base_share = DIVINATION_SITTER_INCOME // len(sitters)
+    remainder = DIVINATION_SITTER_INCOME % len(sitters)
+    shares: list[tuple[dict[str, str], int]] = []
+    for index, sitter in enumerate(sitters):
+        amount = base_share + (1 if index < remainder else 0)
+        if amount > 0:
+            shares.append((sitter, amount))
+
+    for sitter, amount in shares:
+        sitter_id = str(sitter.get("user_id") or "")
+        if not sitter_id:
+            continue
+
+        def updater(record: Any, gain: int = amount) -> None:
+            record.spirit_stones = int(getattr(record, "spirit_stones", 0)) + gain
+
+        await store.apply_to_user(sitter_id, updater)
+        if viewer_record is not None and str(getattr(viewer_record, "user_id", "")) == sitter_id:
+            viewer_record.spirit_stones = int(getattr(viewer_record, "spirit_stones", 0)) + amount
+
+    count = int(hall.get("divination_count", 0))
+    income = int(hall.get("income", 0))
+    share_text = "\u3001".join(
+        f"{sitter.get('nickname') or sitter.get('user_id')}+{spirit_stone_text(amount)}"
+        for sitter, amount in shares
+    )
+    return (
+        f"\n\n\u3010\u5750\u5802\u6da6\u8d44\u3011\u672c\u6b21\u5171 {spirit_stone_text(DIVINATION_SITTER_INCOME)}\uff0c"
+        f"\u7531 {len(sitters)} \u4f4d\u5929\u673a\u9601\u95e8\u4eba\u5e73\u5206\uff1a{share_text}\u3002"
+        f"\n\u4eca\u65e5\u5df2\u5360 {count} \u5366\uff0c\u5750\u5802\u7d2f\u8ba1 {spirit_stone_text(income)}\u3002"
+    )
+
+
 async def build_signin_image(event: MessageEvent, result: SigninResult) -> bytes:
     avatar = await fetch_avatar(event.get_user_id())
     return render_signin_card(
@@ -854,6 +1125,7 @@ def normal_duel_prepare_cards(record, nickname: str) -> list[tuple[str, str, str
         talisman_lines.append(f"{index}. {reward_display_name(talisman)}")
     if not talisman_lines:
         talisman_lines.append("\u6682\u65e0\u53ef\u7528\u7b26\u7b93\uff1b\u672c\u573a\u53ef\u4f9d\u9760\u6218\u6280\u3001\u795e\u901a\u3001\u4f53\u672f\u548c\u4f53\u8d28\u7279\u6027\u3002")
+    equipped_talisman = reward_display_name(record.equipped_talisman) if record.equipped_talisman else "\u672a\u88c5\u5907\u7b26\u7b93"
     array_text = reward_display_name(record.equipped_array) if record.equipped_array else "\u672a\u5e03\u7f6e\u9635\u76d8"
     cards = [
         (
@@ -900,9 +1172,11 @@ def normal_duel_prepare_cards(record, nickname: str) -> list[tuple[str, str, str
             "\u6597\u6cd5\u51c6\u5907\u00b7\u7b26\u7b93\u51c6\u5907",
             "\n".join(
                 [
+                    f"\u5f53\u524d\u7b26\u7b93\u680f\uff1a{equipped_talisman}",
                     "\u53ef\u7528\u7b26\u7b93\uff1a",
                     *talisman_lines,
-                    "\u7b26\u7b93\u8bf7\u5728\u6597\u6cd5\u5916\u901a\u8fc7\u80cc\u5305/\u7b26\u7b93\u754c\u9762\u786e\u8ba4\uff1b\u672c\u573a\u666e\u901a\u6597\u6cd5\u4f1a\u4f18\u5148\u7ed3\u7b97\u6218\u6280\u3001\u7279\u6b8a\u80fd\u529b\u3001\u4f53\u672f\u548c\u4f53\u8d28\u7279\u6027\u3002",
+                    "\u53d1\u9001\u201c\u88c5\u5907\u7b26\u7b93 \u7f16\u53f7\u201d\u53ef\u653e\u5165\u7b26\u7b93\u680f\uff1b\u666e\u901a\u6597\u6cd5\u751f\u6548\u4e14\u4e0d\u6d88\u8017\u3002",
+                    "\u53d1\u9001\u201c\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7\u201d\u4ecd\u4f1a\u4f5c\u4e3a\u4e00\u6b21\u6027\u7b26\u7b93\u6fc0\u53d1\u5e76\u6d88\u8017\u3002",
                 ]
             ),
             "talisman",
@@ -1020,6 +1294,605 @@ def append_normal_duel_action(event: GroupMessageEvent, text: str) -> bool:
     return True
 
 
+DDZ_RANKS = ["3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2", "小王", "大王"]
+DDZ_VALUES = {rank: index for index, rank in enumerate(DDZ_RANKS)}
+DDZ_HUMAN_WAIT_SECONDS = 120
+
+
+def doudizhu_group_key(event: GroupMessageEvent) -> str:
+    return str(event.group_id)
+
+
+def is_doudizhu_play_text(text: str) -> bool:
+    return any(text == prefix or text.startswith(prefix) for prefix in DOUDIZHU_PLAY_PREFIXES)
+
+
+def is_doudizhu_bid_text(text: str) -> bool:
+    return text in {"叫地主", "不叫"} or any(text == prefix or text.startswith(prefix) for prefix in DOUDIZHU_BID_PREFIXES)
+
+
+def is_doudizhu_command_text(text: str) -> bool:
+    return (
+        text in DOUDIZHU_TEXTS
+        or is_doudizhu_play_text(text)
+        or is_doudizhu_bid_text(text)
+    )
+
+
+def is_doudizhu_entry_text(text: str) -> bool:
+    return text in DOUDIZHU_HELP_TEXTS or text in {"\u6597\u5730\u4e3b", "\u6597\u5730\u4e3b\u5f00\u684c", "\u4eba\u673a\u6597\u5730\u4e3b"}
+
+
+def doudizhu_help_text() -> str:
+    return "\n".join(
+        [
+            "【斗地主帮助】",
+            "开桌流程：斗地主开桌 -> 加入斗地主 -> 开始斗地主；也可直接人机斗地主。",
+            "手牌会私聊发送，群内发送手牌可重新查看。",
+            "叫分阶段：叫分 1/2/3，或发送叫地主 / 不叫。分数最高者进入抢地主阶段。",
+            "抢地主阶段：其他玩家可发送抢地主 / 不抢。高修为玩家可发送施加威压提高抢夺概率。",
+            "威压成功后，原定地主可以发送保留地主 / 放弃地主。若保留，牌局结束后强制进行普通斗法。",
+            "地主确定后进入加倍阶段，发送加倍 / 不加倍；每次加倍会翻倍最终倍数。",
+            "出牌：出牌 34567、出牌 3334、出牌 小王大王；跟不上发送不要。",
+            "修仙牌型：炸弹显示为雷劫，王炸显示为天罚雷劫，触发后都会让当前倍数翻倍。",
+            "春天 / 反春天已实装：达成条件时会在结算面板中标记，并再翻倍。",
+            "其他指令：提示 / 托管 / 结束斗地主。",
+        ]
+    )
+
+
+def ddz_new_deck() -> list[str]:
+    deck = []
+    for rank in DDZ_RANKS[:-2]:
+        deck.extend([rank] * 4)
+    deck.extend(["小王", "大王"])
+    random.shuffle(deck)
+    return deck
+
+
+def ddz_sort_cards(cards: list[str]) -> list[str]:
+    return sorted(cards, key=lambda card: (DDZ_VALUES.get(card, -1), card))
+
+
+def ddz_cards_text(cards: list[str]) -> str:
+    return " ".join(ddz_sort_cards(list(cards))) or "无"
+
+
+def ddz_parse_cards(text: str) -> list[str]:
+    stripped = text.strip()
+    for prefix in DOUDIZHU_PLAY_PREFIXES:
+        if stripped.startswith(prefix):
+            stripped = stripped[len(prefix):].strip()
+            break
+    stripped = stripped.replace("王炸", "小王 大王").replace("双王", "小王 大王").replace("天罚雷劫", "小王 大王")
+    for sep in [",", "，", "、", ";", "；", "|", "/"]:
+        stripped = stripped.replace(sep, " ")
+    result: list[str] = []
+    index = 0
+    compact = "".join(stripped.split())
+    while index < len(compact):
+        matched = None
+        for token in ("小王", "大王", "10", "J", "Q", "K", "A", "2", "3", "4", "5", "6", "7", "8", "9"):
+            if compact.startswith(token, index):
+                matched = token
+                break
+        if matched is None:
+            return []
+        result.append(matched)
+        index += len(matched)
+    return result
+
+
+def ddz_has_cards(hand: list[str], cards: list[str]) -> bool:
+    hand_counter = Counter(hand)
+    for card, count in Counter(cards).items():
+        if hand_counter[card] < count:
+            return False
+    return True
+
+
+def ddz_remove_cards(hand: list[str], cards: list[str]) -> None:
+    for card in cards:
+        hand.remove(card)
+
+
+def ddz_is_consecutive(ranks: list[str]) -> bool:
+    values = [DDZ_VALUES[rank] for rank in ranks]
+    return all(values[i] + 1 == values[i + 1] for i in range(len(values) - 1))
+
+
+def ddz_no_high_sequence(ranks: list[str]) -> bool:
+    return all(rank not in {"2", "小王", "大王"} for rank in ranks)
+
+
+def ddz_analyze_cards(cards: list[str]) -> Optional[dict[str, Any]]:
+    if not cards:
+        return None
+    cards = ddz_sort_cards(cards)
+    total = len(cards)
+    counts = Counter(cards)
+    count_values = sorted(counts.values(), reverse=True)
+    ranks = sorted(counts, key=lambda rank: DDZ_VALUES[rank])
+    if total == 2 and set(cards) == {"小王", "大王"}:
+        return {"type": "rocket", "main": DDZ_VALUES["大王"], "length": 2, "label": "天罚雷劫"}
+    if total == 4 and len(counts) == 1:
+        return {"type": "bomb", "main": DDZ_VALUES[ranks[0]], "length": 4, "label": f"{ranks[0]}重雷劫"}
+    if total == 1:
+        return {"type": "single", "main": DDZ_VALUES[cards[0]], "length": 1, "label": "单牌"}
+    if total == 2 and len(counts) == 1:
+        return {"type": "pair", "main": DDZ_VALUES[ranks[0]], "length": 1, "label": "对子"}
+    if total == 3 and len(counts) == 1:
+        return {"type": "triple", "main": DDZ_VALUES[ranks[0]], "length": 1, "label": "三同"}
+    if total == 4 and count_values == [3, 1]:
+        triple = next(rank for rank, count in counts.items() if count == 3)
+        return {"type": "triple_single", "main": DDZ_VALUES[triple], "length": 1, "label": "三带一"}
+    if total == 5 and count_values == [3, 2]:
+        triple = next(rank for rank, count in counts.items() if count == 3)
+        return {"type": "triple_pair", "main": DDZ_VALUES[triple], "length": 1, "label": "三带一对"}
+    if total >= 5 and len(counts) == total and ddz_no_high_sequence(ranks) and ddz_is_consecutive(ranks):
+        return {"type": "straight", "main": DDZ_VALUES[ranks[-1]], "length": total, "label": f"{total}连顺"}
+    if total >= 6 and total % 2 == 0 and all(count == 2 for count in counts.values()) and ddz_no_high_sequence(ranks) and ddz_is_consecutive(ranks):
+        return {"type": "pair_chain", "main": DDZ_VALUES[ranks[-1]], "length": total // 2, "label": f"{total // 2}连对"}
+    triple_ranks = sorted([rank for rank, count in counts.items() if count == 3], key=lambda rank: DDZ_VALUES[rank])
+    if len(triple_ranks) >= 2 and ddz_no_high_sequence(triple_ranks) and ddz_is_consecutive(triple_ranks):
+        wings = total - len(triple_ranks) * 3
+        if wings == 0:
+            return {"type": "airplane", "main": DDZ_VALUES[triple_ranks[-1]], "length": len(triple_ranks), "label": f"飞舟{len(triple_ranks)}舱"}
+        if wings == len(triple_ranks):
+            return {"type": "airplane_single", "main": DDZ_VALUES[triple_ranks[-1]], "length": len(triple_ranks), "label": f"飞舟带翼{len(triple_ranks)}舱"}
+        if wings == len(triple_ranks) * 2:
+            pair_wings = [rank for rank, count in counts.items() if count == 2]
+            if len(pair_wings) == len(triple_ranks):
+                return {"type": "airplane_pair", "main": DDZ_VALUES[triple_ranks[-1]], "length": len(triple_ranks), "label": f"飞舟载侣{len(triple_ranks)}舱"}
+    return None
+
+
+def ddz_can_beat(play: dict[str, Any], last_play: Optional[dict[str, Any]]) -> bool:
+    if not last_play:
+        return True
+    if play["type"] == "rocket":
+        return last_play["type"] != "rocket"
+    if play["type"] == "bomb" and last_play["type"] not in {"bomb", "rocket"}:
+        return True
+    if play["type"] != last_play["type"]:
+        return False
+    if int(play.get("length", 0)) != int(last_play.get("length", 0)):
+        return False
+    return int(play["main"]) > int(last_play["main"])
+
+
+def ddz_player(table: dict[str, Any], user_id: str) -> Optional[dict[str, Any]]:
+    for player in table.get("players", []):
+        if str(player.get("id")) == str(user_id):
+            return player
+    return None
+
+
+def ddz_current_player(table: dict[str, Any]) -> dict[str, Any]:
+    return table["players"][int(table.get("current", 0)) % len(table["players"])]
+
+
+def ddz_next_turn(table: dict[str, Any]) -> None:
+    table["current"] = (int(table.get("current", 0)) + 1) % len(table["players"])
+
+
+def ddz_player_line(player: dict[str, Any], table: dict[str, Any]) -> str:
+    role = "地主" if str(player.get("id")) == str(table.get("landlord")) else "散修"
+    bot = "机关傀儡" if player.get("bot") else ""
+    doubled = "已加倍" if str(player.get("id")) in set(table.get("double_votes", [])) else "未加倍"
+    return f"{player.get('name')}｜{role}{bot}｜剩{len(player.get('hand', []))}张｜{doubled}"
+
+
+def ddz_table_text(table: dict[str, Any], extra: str = "") -> str:
+    lines = ["【斗地主牌局】", f"阶段：{table.get('phase_text', table.get('phase', '未知'))}"]
+    if table.get("landlord"):
+        landlord = ddz_player(table, str(table.get("landlord")))
+        lines.append(f"地主：{landlord.get('name') if landlord else table.get('landlord')}｜倍数 {table.get('multiplier', 1)}x")
+    if table.get("bottom"):
+        lines.append(f"底牌：{ddz_cards_text(list(table.get('bottom', [])))}")
+    if table.get("last_play"):
+        last_player = ddz_player(table, str(table.get("last_player")))
+        lines.append(f"上一手：{last_player.get('name') if last_player else '未知'} {table['last_play']['label']} [{ddz_cards_text(table['last_play']['cards'])}]")
+    lines.append("玩家：")
+    for player in table.get("players", []):
+        marker = " ->" if player is ddz_current_player(table) and table.get("phase") == "playing" else ""
+        lines.append(f"{marker}{ddz_player_line(player, table)}")
+    if extra:
+        lines.append("")
+        lines.extend(str(extra).splitlines())
+    return "\n".join(lines)
+
+
+def ddz_hand_text(player: dict[str, Any], table: dict[str, Any]) -> str:
+    lines = [f"【{player.get('name')}的手牌】", ddz_cards_text(list(player.get("hand", [])))]
+    if table.get("phase") == "playing":
+        current = ddz_current_player(table)
+        lines.append(f"当前出牌：{current.get('name')}")
+    if table.get("last_play"):
+        lines.append(f"上一手：{table['last_play']['label']} [{ddz_cards_text(table['last_play']['cards'])}]")
+    lines.append("指令：出牌 34567 / 不要 / 提示")
+    return "\n".join(lines)
+
+
+def ddz_deal(table: dict[str, Any]) -> None:
+    deck = ddz_new_deck()
+    for index, player in enumerate(table["players"]):
+        player["hand"] = ddz_sort_cards(deck[index * 17:(index + 1) * 17])
+        player["bid"] = None
+    table["bottom"] = ddz_sort_cards(deck[51:54])
+    table["phase"] = "bidding"
+    table["phase_text"] = "叫分"
+    table["current"] = random.randrange(0, 3)
+    table["highest_bid"] = 0
+    table["landlord_candidate"] = None
+    table["original_landlord"] = None
+    table["bid_count"] = 0
+    table["rob_passes"] = set()
+    table["double_responses"] = set()
+    table["double_votes"] = set()
+    table["multiplier"] = 1
+    table["last_play"] = None
+    table["last_player"] = None
+    table["pass_count"] = 0
+    table["landlord_play_count"] = 0
+    table["farmer_play_count"] = 0
+    table["pressure_duel"] = None
+
+
+def ddz_finalize_landlord(table: dict[str, Any], landlord_id: str) -> None:
+    table["landlord"] = str(landlord_id)
+    table["original_landlord"] = table.get("original_landlord") or str(landlord_id)
+    landlord = ddz_player(table, str(landlord_id))
+    if landlord:
+        landlord["hand"] = ddz_sort_cards(list(landlord.get("hand", [])) + list(table.get("bottom", [])))
+    table["phase"] = "double"
+    table["phase_text"] = "加倍"
+    table["double_responses"] = set()
+    table["double_votes"] = set()
+
+
+def ddz_start_play(table: dict[str, Any]) -> None:
+    landlord_id = str(table.get("landlord"))
+    table["phase"] = "playing"
+    table["phase_text"] = "出牌"
+    for idx, player in enumerate(table["players"]):
+        if str(player.get("id")) == landlord_id:
+            table["current"] = idx
+            break
+
+
+def ddz_bid_status(table: dict[str, Any]) -> str:
+    current = ddz_current_player(table)
+    lines = ["【叫分阶段】", f"当前轮到：{current.get('name')}", f"当前最高分：{table.get('highest_bid', 0)}"]
+    lines.append("可发送：叫分 1 / 叫分 2 / 叫分 3 / 叫地主 / 不叫")
+    return "\n".join(lines)
+
+
+def ddz_begin_rob_text(table: dict[str, Any]) -> str:
+    candidate = ddz_player(table, str(table.get("landlord_candidate")))
+    names = [p.get("name") for p in table["players"] if str(p.get("id")) != str(table.get("landlord_candidate"))]
+    return "\n".join([
+        "【抢地主阶段】",
+        f"候选地主：{candidate.get('name') if candidate else '未知'}",
+        f"可抢修士：{'、'.join(names)}",
+        "修为越高，抢夺成功率越高；施加威压会额外提升概率。",
+        "可发送：抢地主 / 不抢 / 施加威压",
+    ])
+
+
+def ddz_pressure_chance(actor_power: int, target_power: int, pressure: bool = False) -> float:
+    diff = actor_power - target_power
+    chance = 0.35 + max(-0.25, min(0.25, diff / max(1, target_power + actor_power) * 1.6))
+    if pressure:
+        chance += 0.20
+    return max(0.10, min(0.85, chance))
+
+
+def ddz_generate_basic_candidates(hand: list[str]) -> list[list[str]]:
+    counter = Counter(hand)
+    candidates: list[list[str]] = []
+    for rank in DDZ_RANKS:
+        if counter[rank] >= 1:
+            candidates.append([rank])
+    for rank in DDZ_RANKS:
+        if counter[rank] >= 2:
+            candidates.append([rank, rank])
+    for rank in DDZ_RANKS:
+        if counter[rank] >= 3:
+            candidates.append([rank, rank, rank])
+    for rank in DDZ_RANKS:
+        if counter[rank] >= 4:
+            candidates.append([rank, rank, rank, rank])
+    if counter["小王"] and counter["大王"]:
+        candidates.append(["小王", "大王"])
+    return candidates
+
+
+def ddz_find_hint(hand: list[str], last_play: Optional[dict[str, Any]]) -> Optional[list[str]]:
+    for cards in ddz_generate_basic_candidates(hand):
+        analyzed = ddz_analyze_cards(cards)
+        if analyzed and ddz_can_beat(analyzed, last_play):
+            return cards
+    return None
+
+
+def ddz_bot_should_double(player: dict[str, Any]) -> bool:
+    hand = list(player.get("hand", []))
+    counter = Counter(hand)
+    bombs = sum(1 for rank, count in counter.items() if count == 4)
+    jokers = int(counter["小王"] > 0 and counter["大王"] > 0)
+    high_cards = sum(1 for card in hand if DDZ_VALUES.get(card, 0) >= DDZ_VALUES["A"])
+    return bombs + jokers > 0 or high_cards >= 6
+
+
+def ddz_bot_play(player: dict[str, Any], table: dict[str, Any]) -> tuple[bool, str]:
+    last_play = table.get("last_play") if str(table.get("last_player")) != str(player.get("id")) else None
+    cards = ddz_find_hint(list(player.get("hand", [])), last_play)
+    if not cards:
+        return False, f"{player.get('name')} 选择不出"
+    analyzed = ddz_analyze_cards(cards)
+    if not analyzed:
+        return False, f"{player.get('name')} 选择不出"
+    ddz_remove_cards(player["hand"], cards)
+    table["last_play"] = {**analyzed, "cards": cards}
+    table["last_player"] = str(player.get("id"))
+    table["pass_count"] = 0
+    if analyzed["type"] in {"bomb", "rocket"}:
+        table["multiplier"] = int(table.get("multiplier", 1)) * 2
+    if str(player.get("id")) == str(table.get("landlord")):
+        table["landlord_play_count"] = int(table.get("landlord_play_count", 0)) + 1
+    else:
+        table["farmer_play_count"] = int(table.get("farmer_play_count", 0)) + 1
+    return True, f"{player.get('name')} 打出 {analyzed['label']}：{ddz_cards_text(cards)}"
+
+
+async def ddz_send_hand(player: dict[str, Any], table: dict[str, Any], group_id: Optional[str] = None) -> None:
+    if player.get("bot"):
+        return
+    bot = get_bot()
+    record = await store.get_user(str(player.get("id")))
+    message = panel_segment("斗地主手牌", ddz_hand_text(player, table), record, icon="poker")
+    try:
+        await bot.send_private_msg(user_id=int(player["id"]), message=message)
+    except Exception as exc:
+        logger.debug(f"发送斗地主手牌私聊失败: {player.get('id')} {exc}")
+        if group_id:
+            await bot.send_group_msg(group_id=int(group_id), message=panel_segment("斗地主手牌", "私聊手牌发送失败，请检查好友或临时会话权限。", record, icon="warning"))
+
+
+async def ddz_send_all_hands(table: dict[str, Any], group_id: str) -> None:
+    await asyncio.gather(*(ddz_send_hand(player, table, group_id) for player in table.get("players", []) if not player.get("bot")))
+
+
+async def start_forced_normal_duel(group_id: str, left_id: str, right_id: str, left_name: str, right_name: str) -> str:
+    if group_duel_session(group_id):
+        return "本群已有普通斗法进行中，威压约战暂时顺延。"
+    start_at = time.monotonic() + NORMAL_DUEL_PREPARE_SECONDS
+    session = {
+        "left_id": str(left_id),
+        "right_id": str(right_id),
+        "left_name": left_name,
+        "right_name": right_name,
+        "created_at": time.monotonic(),
+        "start_at": start_at,
+        "end_at": start_at + NORMAL_DUEL_DURATION_SECONDS,
+        "active": False,
+        "actions": {str(left_id): [], str(right_id): []},
+    }
+    normal_duel_sessions[group_id] = session
+    asyncio.create_task(send_normal_duel_prepare_messages(session))
+    asyncio.create_task(finish_normal_duel(group_id, session))
+    return f"威压结算：{left_name} 与 {right_name} 将在 1 分钟后强制进行普通斗法。"
+
+
+async def ddz_finish_game(group_id: str, table: dict[str, Any], winner_id: str) -> str:
+    landlord_id = str(table.get("landlord"))
+    landlord_win = str(winner_id) == landlord_id
+    winner = ddz_player(table, str(winner_id))
+    landlord = ddz_player(table, landlord_id)
+    spring = False
+    spring_name = ""
+    if landlord_win and int(table.get("farmer_play_count", 0)) == 0:
+        spring = True
+        spring_name = "春天"
+    elif not landlord_win and int(table.get("landlord_play_count", 0)) <= 1:
+        spring = True
+        spring_name = "反春天"
+    if spring:
+        table["multiplier"] = int(table.get("multiplier", 1)) * 2
+    lines = ["【斗地主结算】"]
+    lines.append(f"胜方：{'地主' if landlord_win else '农家'}｜定胜修士：{winner.get('name') if winner else winner_id}")
+    lines.append(f"地主：{landlord.get('name') if landlord else landlord_id}")
+    lines.append(f"最终倍数：{table.get('multiplier', 1)}x" + (f"｜{spring_name}" if spring else ""))
+    lines.append("剩余手牌：")
+    for player in table.get("players", []):
+        lines.append(f"{player.get('name')}｜剩{len(player.get('hand', []))}张｜[{ddz_cards_text(list(player.get('hand', [])))}]")
+    duel_info = table.get("pressure_duel")
+    if duel_info:
+        duel_message = await start_forced_normal_duel(
+            group_id,
+            str(duel_info.get("left_id")),
+            str(duel_info.get("right_id")),
+            str(duel_info.get("left_name")),
+            str(duel_info.get("right_name")),
+        )
+        lines.append("")
+        lines.append(duel_message)
+    doudizhu_tables.pop(group_id, None)
+    return "\n".join(lines)
+
+
+def ddz_hand_strength(hand: list[str]) -> int:
+    counter = Counter(hand)
+    score = sum(DDZ_VALUES.get(card, 0) for card in hand)
+    score += sum(16 for _rank, count in counter.items() if count == 4)
+    if counter["小王"] and counter["大王"]:
+        score += 24
+    score += sum(5 for card in hand if card in {"2", "小王", "大王"})
+    return score
+
+
+def ddz_bot_bid_value(player: dict[str, Any], highest: int) -> int:
+    strength = ddz_hand_strength(list(player.get("hand", [])))
+    wanted = 0
+    if strength >= 145:
+        wanted = 3
+    elif strength >= 126:
+        wanted = 2
+    elif strength >= 108:
+        wanted = 1
+    return wanted if wanted > highest else 0
+
+
+def ddz_apply_bid(table: dict[str, Any], player: dict[str, Any], bid: int) -> str:
+    table["bid_count"] = int(table.get("bid_count", 0)) + 1
+    player["bid"] = bid
+    if bid > int(table.get("highest_bid", 0)):
+        table["highest_bid"] = bid
+        table["landlord_candidate"] = str(player.get("id"))
+        return f"{player.get('name')} 叫分 {bid}"
+    return f"{player.get('name')} 不叫"
+
+
+def ddz_after_bid(table: dict[str, Any]) -> Optional[str]:
+    if int(table.get("highest_bid", 0)) >= 3 or int(table.get("bid_count", 0)) >= len(table.get("players", [])):
+        if not table.get("landlord_candidate"):
+            ddz_deal(table)
+            return "无人叫地主，重新洗牌。\n" + ddz_bid_status(table)
+        table["phase"] = "rob"
+        table["phase_text"] = "抢地主"
+        table["original_landlord"] = str(table.get("landlord_candidate"))
+        table["rob_passes"] = set()
+        return ddz_begin_rob_text(table)
+    ddz_next_turn(table)
+    return None
+
+
+async def ddz_process_bot_bidding(group_id: str, table: dict[str, Any]) -> list[str]:
+    logs: list[str] = []
+    while table.get("phase") == "bidding" and ddz_current_player(table).get("bot"):
+        player = ddz_current_player(table)
+        bid = ddz_bot_bid_value(player, int(table.get("highest_bid", 0)))
+        logs.append(ddz_apply_bid(table, player, bid))
+        result = ddz_after_bid(table)
+        if result:
+            logs.append(result)
+            break
+    if table.get("phase") == "rob":
+        logs.extend(await ddz_process_bot_rob(group_id, table))
+    return logs
+
+
+async def ddz_process_bot_rob(group_id: str, table: dict[str, Any]) -> list[str]:
+    logs: list[str] = []
+    candidate = str(table.get("landlord_candidate"))
+    for player in table.get("players", []):
+        player_id = str(player.get("id"))
+        if player_id == candidate or player_id in set(table.get("rob_passes", set())):
+            continue
+        if not player.get("bot"):
+            continue
+        table.setdefault("rob_passes", set()).add(player_id)
+        logs.append(f"{player.get('name')} 不抢")
+    needed = {str(p.get("id")) for p in table.get("players", []) if str(p.get("id")) != candidate}
+    if needed and needed.issubset(set(table.get("rob_passes", set()))):
+        logs.append(await ddz_finalize_and_advance(group_id, table, candidate))
+    return logs
+
+
+def ddz_parse_bid(text: str, highest: int) -> Optional[int]:
+    stripped = text.strip()
+    if stripped == "不叫":
+        return 0
+    if stripped == "叫地主":
+        return min(3, max(1, highest + 1))
+    match = re.search(r"(\d+)", stripped)
+    if match and stripped.startswith("叫分"):
+        return int(match.group(1))
+    return None
+
+
+def ddz_rob_needed_done(table: dict[str, Any]) -> bool:
+    candidate = str(table.get("landlord_candidate"))
+    needed = {str(p.get("id")) for p in table.get("players", []) if str(p.get("id")) != candidate}
+    return bool(needed) and needed.issubset(set(table.get("rob_passes", set())))
+
+
+def ddz_user_can_act(table: dict[str, Any], user_id: str) -> bool:
+    return ddz_current_player(table).get("id") == user_id
+
+
+async def ddz_process_bot_steps(group_id: str, table: dict[str, Any]) -> list[str]:
+    logs: list[str] = []
+    while table.get("phase") == "double":
+        pending = [p for p in table["players"] if str(p.get("id")) not in set(table.get("double_responses", set()))]
+        bot_pending = [p for p in pending if p.get("bot")]
+        if not bot_pending:
+            break
+        for player in bot_pending:
+            table.setdefault("double_responses", set()).add(str(player.get("id")))
+            if ddz_bot_should_double(player):
+                table.setdefault("double_votes", set()).add(str(player.get("id")))
+                table["multiplier"] = int(table.get("multiplier", 1)) * 2
+                logs.append(f"{player.get('name')} 选择加倍")
+            else:
+                logs.append(f"{player.get('name')} 不加倍")
+        if len(table.get("double_responses", set())) >= len(table["players"]):
+            ddz_start_play(table)
+            logs.append("加倍阶段结束，地主先出牌。")
+            await ddz_send_all_hands(table, group_id)
+    while table.get("phase") == "playing" and ddz_current_player(table).get("bot"):
+        player = ddz_current_player(table)
+        if table.get("last_play") and str(table.get("last_player")) != str(player.get("id")):
+            played, line = ddz_bot_play(player, table)
+            logs.append(line)
+            if not played:
+                table["pass_count"] = int(table.get("pass_count", 0)) + 1
+                if int(table.get("pass_count", 0)) >= 2:
+                    last = ddz_player(table, str(table.get("last_player")))
+                    logs.append(f"一轮跟牌结束，{last.get('name') if last else '上家'} 重新领牌。")
+                    for idx, candidate in enumerate(table["players"]):
+                        if str(candidate.get("id")) == str(table.get("last_player")):
+                            table["current"] = idx
+                            break
+                    table["last_play"] = None
+                    table["pass_count"] = 0
+                    continue
+        else:
+            played, line = ddz_bot_play(player, table)
+            logs.append(line)
+        if not player.get("hand"):
+            logs.append(await ddz_finish_game(group_id, table, str(player.get("id"))))
+            break
+        ddz_next_turn(table)
+    return logs
+
+
+async def ddz_finalize_and_advance(group_id: str, table: dict[str, Any], landlord_id: str) -> str:
+    ddz_finalize_landlord(table, landlord_id)
+    await ddz_send_all_hands(table, group_id)
+    logs = [ddz_table_text(table, "地主已定，请发送 加倍 / 不加倍")]
+    logs.extend(await ddz_process_bot_steps(group_id, table))
+    if table.get("phase") == "playing":
+        logs.append(ddz_table_text(table, "牌局开始，地主先出牌。"))
+    return "\n".join(logs)
+
+
+def ddz_create_human_player(event: GroupMessageEvent) -> dict[str, Any]:
+    return {"id": event.get_user_id(), "name": nickname_from_event(event) or f"QQ {event.get_user_id()}", "bot": False, "hand": []}
+
+
+def ddz_create_bot_player(index: int) -> dict[str, Any]:
+    return {"id": f"bot-{index}", "name": f"机关修士{index}", "bot": True, "hand": []}
+
+
+def ddz_lobby_text(table: dict[str, Any]) -> str:
+    lines = ["【斗地主等待房】", f"桌主：{table.get('host_name')}", f"人数：{len(table.get('players', []))}/3"]
+    lines.extend(f"{idx}. {player.get('name')}" for idx, player in enumerate(table.get("players", []), start=1))
+    lines.append("发送 加入斗地主 入座；满3人后由桌主发送 开始斗地主。")
+    return "\n".join(lines)
+
+
 def is_settle_time(now: datetime) -> bool:
     return (now.hour, now.minute) >= (RANK_SETTLE_HOUR, RANK_SETTLE_MINUTE)
 
@@ -1103,20 +1976,24 @@ def format_power_rank(entries: list[dict[str, Any]], title: str) -> str:
 
 def format_artifact_list(record) -> str:
     artifacts = available_artifacts(record)
-    lines = ["【我的灵器】"]
-    lines.append(f"当前装备：{reward_display_name(record.equipped_artifact) if record.equipped_artifact else '未装备灵器'}")
+    summary = battle_summary(record)
+    lines = ["\u3010\u6211\u7684\u7075\u5668\u3011"]
+    lines.append(f"\u5f53\u524d\u69fd\u4f4d\uff1a{summary['artifact_slots']}")
+    lines.append("\u69fd\u4f4d\u8bf4\u660e\uff1a\u4e3b\u624b100%\u6218\u529b\uff0c\u526f\u624b65%\u6218\u529b\uff0c\u62a4\u7532/\u62a4\u76fe85%\u6218\u529b\u3002")
     if not artifacts:
-        lines.append("暂无可装备灵器，进行诸天万界垂钓有机会获得。")
+        lines.append("\u6682\u65e0\u53ef\u88c5\u5907\u7075\u5668\uff0c\u8fdb\u884c\u8bf8\u5929\u4e07\u754c\u5782\u9493\u3001\u79d8\u5883\u6216\u5546\u5e97\u6709\u673a\u4f1a\u83b7\u5f97\u3002")
         return "\n".join(lines)
     for index, artifact in enumerate(artifacts, start=1):
         required = artifact.get("required_attribute")
-        compatible = "可装备" if not required or required in record.root_attributes else "灵根不契合"
+        compatible = "\u53ef\u88c5\u5907" if not required or required in record.root_attributes else "\u7075\u6839\u4e0d\u5951\u5408"
         bonus = artifact_power(artifact, record)
+        default_slot = parse_artifact_slot(str(artifact.get("name") or "")) or "\u4e3b\u624b"
         lines.append(
-            f"{index}. {reward_display_name(artifact)}，需求{required or '无'}灵根，"
-            f"{compatible}，战力+{bonus}"
+            f"{index}. {reward_display_name(artifact)}\uff0c\u9ed8\u8ba4{default_slot}\uff0c\u9700\u6c42{required or '\u65e0'}\u7075\u6839\uff0c"
+            f"{compatible}\uff0c\u57fa\u7840\u6218\u529b+{bonus}"
         )
-    lines.append("发送“装备灵器 编号”即可装备；发送“卸下灵器”可卸下当前灵器。")
+    lines.append("\u53d1\u9001\u201c\u88c5\u5907\u7075\u5668 \u7f16\u53f7 \u4e3b\u624b/\u526f\u624b/\u62a4\u7532\u201d\u88c5\u5907\u5230\u6307\u5b9a\u69fd\uff1b\u4e0d\u5199\u69fd\u4f4d\u4f1a\u6309\u7075\u5668\u7c7b\u578b\u81ea\u52a8\u5224\u65ad\u3002")
+    lines.append("\u53d1\u9001\u201c\u5378\u4e0b\u7075\u5668 \u526f\u624b\u201d\u53ef\u5378\u4e0b\u6307\u5b9a\u69fd\uff1b\u53d1\u9001\u201c\u5378\u4e0b\u7075\u5668\u201d\u5378\u4e0b\u5168\u90e8\u7075\u5668\u3002")
     return "\n".join(lines)
 
 
@@ -1197,15 +2074,17 @@ def format_item_list(record) -> str:
     summary = battle_summary(record)
     lines.append(f"\u7075\u77f3\u50a8\u5907\uff1a{spirit_stone_text(record.spirit_stones)}\uff1b\u5782\u9493\u6b21\u6570\uff1a{record.fishing_chances}")
     lines.append(f"\u7cbe\u7eaf\u7075\u6db2\uff1a{summary['spirit_liquid']}\uff1b\u74f6\u9888\u6c89\u6dc0\uff1a{summary['bottleneck_days']} \u5929")
+    lines.append(f"\u540e\u5929\u7075\u6839\uff1a{acquired_root_summary(record, limit=3)}")
+    lines.append("\u7528\u6cd5\uff1a\u70bc\u5316\u7075\u6db2 \u53ef\u5168\u90e8\u8f6c\u4e3a\u4fee\u4e3a\uff1b\u70bc\u5316\u7075\u6db2 100 \u53ef\u6307\u5b9a\u6570\u91cf\u3002")
     if summary.get("is_bottleneck"):
         lines.append(f"\u5f53\u524d\u74f6\u9888\uff1a\u9700 {summary['breakthrough_required']} \u624d\u80fd\u7a81\u7834\u3002")
     if summary.get("cultivation_lock"):
         lines.append(f"\u72b6\u6001\uff1a{summary['cultivation_lock']}")
     sections = [
         ("\u4e39\u836f", available_pills(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u4e39\u836f \u7f16\u53f7\uff1b\u7a81\u7834\u9053\u5177\u8bf7\u53d1\u9001\u201c\u7a81\u7834\u201d"),
-        ("\u7b26\u7b93", available_talismans(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7\uff1b\u7ed8\u5236\u7b26\u7b93 \u7f16\u53f7\u53ef\u81ea\u884c\u5236\u7b26"),
+        ("\u7b26\u7b93", available_talismans(record), "\u7528\u6cd5\uff1a\u88c5\u5907\u7b26\u7b93 \u7f16\u53f7 \u653e\u5165\u7b26\u7b93\u680f\uff0c\u666e\u901a\u6597\u6cd5\u751f\u6548\u4e14\u4e0d\u6d88\u8017\uff1b\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7 \u4e3a\u4e00\u6b21\u6027\u6fc0\u53d1\uff1b\u7ed8\u5236\u7b26\u7b93 \u7f16\u53f7\u53ef\u81ea\u884c\u5236\u7b26"),
         ("\u7075\u77f3", available_spirit_stones(record), "\u7528\u6cd5\uff1a\u70bc\u5316\u7075\u77f3 \u7f16\u53f7\uff1b\u74f6\u9888\u65f6\u4f1a\u8f6c\u4e3a\u7cbe\u7eaf\u7075\u6db2"),
-        ("\u7075\u6750", available_materials(record), "\u7528\u6cd5\uff1a\u70bc\u4e39\u6750\u6599\uff1b\u51fa\u552e\u7075\u6750 \u7f16\u53f7\u53ef\u6362\u7075\u77f3"),
+        ("\u7075\u6750", available_materials(record), "\u7528\u6cd5\uff1a\u70bc\u4e39\u6750\u6599\uff1b\u5996\u4e39\u53ef\u53d1\u9001\u201c\u70bc\u5316\u4e39\u7075\u6839 \u7f16\u53f7\u201d\uff1b\u51fa\u552e\u7075\u6750 \u7f16\u53f7\u53ef\u6362\u7075\u77f3"),
         ("\u7279\u6b8a\u80fd\u529b", available_special_ability_items(record), "\u7528\u6cd5\uff1a\u9886\u609f\u7279\u6b8a\u80fd\u529b \u7f16\u53f7\uff1b\u53ef\u83b7\u5f97\u4e5d\u79d8\u3001\u516b\u7981\u3001\u795e\u7981\u7b49\u80fd\u529b"),
         ("\u7075\u98df", available_foods(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u7075\u98df \u7f16\u53f7\uff1b\u74f6\u9888\u65f6\u4f1a\u8f6c\u4e3a\u7cbe\u7eaf\u7075\u6db2"),
         ("\u5947\u7269", available_curios(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u5947\u7269 \u7f16\u53f7\uff1b\u53ef\u80fd\u5f97\u5230\u4fee\u4e3a\u3001\u5782\u9493\u6216\u5939\u5c42\u9053\u5177"),
@@ -1226,14 +2105,15 @@ def format_help_text() -> str:
     return "\n".join(
         [
             "\u3010\u4fee\u4ed9\u5e2e\u52a9\u3011",
-            "\u5e38\u7528\u5165\u53e3\uff1a\u7b7e\u5230 / \u9762\u677f / \u80cc\u5305 / \u56fe\u9274 / \u5386\u7ec3 / \u79d8\u5883 / \u7a81\u7834 / \u6392\u884c / \u5546\u5e97",
+            "\u5e38\u7528\u5165\u53e3\uff1a\u7b7e\u5230 / \u9762\u677f / \u80cc\u5305 / \u56fe\u9274 / \u5386\u7ec3 / \u79d8\u5883 / \u7a81\u7834 / \u540e\u5929\u7075\u6839 / \u6392\u884c / \u5546\u5e97 / \u5929\u673a\u5360\u535c",
             "",
             "\u3010\u4fee\u4e3a\u63d0\u5347\u8def\u5f84\u3011",
             "1. \u7b7e\u5230\uff1a\u6bcf\u65e5\u589e\u52a0\u4fee\u4e3a\uff0c\u9996\u6b21\u62bd\u53d6\u7075\u6839\uff0c\u6bcf\u6b21\u7b7e\u5230\u83b7\u5f97 1 \u6b21\u5782\u9493\u3002",
             "2. \u529f\u6cd5\uff1a\u53c2\u609f\u540e\u53ef\u63d0\u5347\u7b7e\u5230\u6536\u76ca\uff0c\u804a\u5929\u65f6\u4e5f\u80fd\u6309\u6761\u6570\u4ea7\u751f\u4fee\u4e3a\u3002",
             "3. \u7075\u690d/\u7075\u98df/\u4e39\u836f/\u7075\u77f3\uff1a\u5728\u80cc\u5305\u4e2d\u4f7f\u7528\uff0c\u6216\u7528\u4e8e\u70bc\u4e39\u3001\u7a81\u7834\u3002",
-            "4. \u74f6\u9888\uff1a\u5883\u754c\u5706\u6ee1\u540e\u4fee\u4e3a\u4e0d\u518d\u589e\u957f\uff0c\u6ea2\u51fa\u4fee\u4e3a 50% \u4f1a\u51dd\u6210\u7cbe\u7eaf\u7075\u6db2\u3002",
+            "4. \u74f6\u9888\uff1a\u5883\u754c\u5706\u6ee1\u540e\u4fee\u4e3a\u4e0d\u518d\u589e\u957f\uff0c\u6ea2\u51fa\u4fee\u4e3a 50% \u4f1a\u51dd\u6210\u7cbe\u7eaf\u7075\u6db2\uff1b\u7a81\u7834\u540e\u53ef\u53d1\u9001\u201c\u70bc\u5316\u7075\u6db2\u201d\u8f6c\u56de\u4fee\u4e3a\u3002",
             "5. \u6c89\u6dc0\uff1a\u74f6\u9888\u540e\u6bcf\u5929\u7b7e\u5230\u6c89\u6dc0\u4e00\u6b21\uff0c\u5782\u9493\u9ad8\u9636\u7a81\u7834\u9053\u5177\u6743\u91cd\u4f1a\u9010\u65e5\u63d0\u5347\u3002",
+            "6. \u540e\u5929\u7075\u6839\uff1a\u5316\u795e\u7834\u70bc\u865a\u9700\u4e94\u884c\u8865\u5168\uff0c\u53d1\u9001\u201c\u540e\u5929\u7075\u6839\u201d\u67e5\u770b\uff1b\u5996\u4e39\u7528\u201c\u70bc\u5316\u4e39\u7075\u6839 1\u201d\uff0c\u9002\u914d\u7075\u5668\u7528\u201c\u70bc\u5316\u5668\u7075\u6839 1\u201d\u3002",
             "",
             "\u3010\u8def\u7ebf\u4e0e\u8eab\u4efd\u3011",
             "\u53d1\u9001\u201c\u8def\u7ebf\u201d\u67e5\u770b\u5251\u4fee\u3001\u672f\u4fee\u3001\u70bc\u4e39\u5e08\u3001\u9635\u6cd5\u5e08\u7684\u6548\u679c\uff0c\u4e5f\u4f1a\u663e\u793a\u5929\u673a\u9601\u4e0e\u5408\u6b22\u5b97\u8eab\u4efd\u7684\u95e8\u69db\u3002",
@@ -1245,6 +2125,9 @@ def format_help_text() -> str:
             "\u7279\u6b8a\u80fd\u529b / \u9886\u609f\u7279\u6b8a\u80fd\u529b 1 / \u7279\u6b8a\u80fd\u529b\u56fe\u9274\uff1a\u67e5\u770b\u3001\u9886\u609f\u5e76\u8ffd\u6c42\u4e5d\u79d8\u3001\u516b\u7981\u3001\u795e\u7981\u7b49\u80fd\u529b\u3002",
             "\u3010\u6597\u6cd5\u3011",
             "\u7533\u8bf7\u666e\u901a\u6597\u6cd5\uff1a\u4e24\u4eba\u5339\u914d\u540e 1 \u5206\u949f\u51c6\u5907\uff0c60 \u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u7279\u6b8a\u80fd\u529b\u6216\u5373\u5174\u53f0\u8bcd\uff0c\u7ed3\u675f\u540e\u8f93\u51fa\u6218\u62a5\u56fe\u3002",
+            "\u3010\u8da3\u5473\u73a9\u6cd5\u3011",
+            "\u5929\u673a\u5360\u535c / \u5360\u535c \u4eca\u65e5\u8fd0\u52bf / \u7b97\u547d \u59fb\u7f18\uff1a\u53c2\u8003\u5468\u6613\u5366\u8c61\u4e0e\u9053\u6559\u7b7e\u8bed\u751f\u6210\u8da3\u5473\u65ad\u8bed\uff0c\u4e0d\u6d88\u8017\u4fee\u4e3a\u6216\u9053\u5177\u3002",
+            "斗地主 / 斗地主帮助 / 人机斗地主：群聊三人斗牌，炸弹在修仙牌局中显示为雷劫，王炸显示为天罚雷劫。",
         ]
     )
 
@@ -1363,7 +2246,8 @@ def format_power_status(record, nickname: str) -> str:
         f"\u7d2f\u8ba1\u4fee\u4e3a\uff1a{summary['total_exp']}",
         f"\u7cbe\u7eaf\u7075\u6db2\uff1a{summary['spirit_liquid']}",
         f"\u74f6\u9888\u6c89\u6dc0\uff1a{summary['bottleneck_days']} \u5929",
-        f"\u7075\u5668\uff1a{summary['artifact']}",
+        f"\u7075\u5668\u69fd\uff1a{summary['artifact_slots']}",
+        f"\u7b26\u7b93\u680f\uff1a{summary['talisman']}\uff08\u6218\u529b+{summary['talisman_power']}\uff09",
         f"\u529f\u6cd5\uff1a{summary['method']}",
         f"\u9635\u76d8\uff1a{summary['array']}\uff08{summary['array_multiplier']:.1f}x\uff09",
         f"\u5080\u5121\uff1a{summary['puppet']}\uff08\u6218\u529b+{summary['puppet_power']}\uff09",
@@ -1388,7 +2272,8 @@ def format_adventure_panel(record) -> str:
         [
             "\u3010\u5386\u7ec3\u3011",
             f"\u5f53\u524d\u6218\u529b\uff1a{summary['power']}\uff1b\u7075\u529b\u4e0a\u9650\uff1a{summary['mana']}",
-            f"\u5f53\u524d\u7075\u5668\uff1a{summary['artifact']}",
+            f"\u5f53\u524d\u7075\u5668\u69fd\uff1a{summary['artifact_slots']}",
+            f"\u5f53\u524d\u7b26\u7b93\u680f\uff1a{summary['talisman']}\uff08\u6218\u529b+{summary['talisman_power']}\uff09",
             f"\u5f53\u524d\u529f\u6cd5\uff1a{summary['method']}",
             f"\u5f53\u524d\u9635\u76d8\uff1a{summary['array']}\uff08{summary['array_multiplier']:.1f}x\uff09",
             f"\u5f53\u524d\u5080\u5121\uff1a{summary['puppet']}",
@@ -1403,8 +2288,9 @@ def format_adventure_panel(record) -> str:
             "\u70bc\u4e39 / \u70bc\u4e39 \u7b51\u57fa\u4e39 / \u5929\u673a\u79d8\u5883 / \u53cc\u4fee@\u7fa4\u53cb / \u968f\u673a\u53cc\u4fee",
             "\u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u7279\u6b8a\u80fd\u529b\uff1a\u67e5\u770b\u53ef\u7528\u914d\u7f6e",
             "\u5080\u5121 / \u7075\u690d / \u80cc\u5305\uff1a\u67e5\u770b\u5386\u7ec3\u8d44\u6e90",
-            "\u88c5\u5907\u7075\u5668 1 / \u53c2\u609f\u529f\u6cd5 1 / \u5e03\u7f6e\u9635\u76d8 1",
-            "\u79d8\u5883\uff1a\u67e5\u770b60\u79d2\u9650\u65f6\u79d8\u5883\u5165\u53e3\uff1b\u63a2\u7d22 1\uff1a\u63a8\u8fdb\u5f53\u524d\u79d8\u5883",
+            "\u88c5\u5907\u7075\u5668 1 \u4e3b\u624b / \u88c5\u5907\u7075\u5668 2 \u526f\u624b / \u88c5\u5907\u7075\u5668 3 \u62a4\u7532 / \u88c5\u5907\u7b26\u7b93 1",
+            "\u53c2\u609f\u529f\u6cd5 1 / \u5e03\u7f6e\u9635\u76d8 1 / \u5378\u4e0b\u7075\u5668 \u526f\u624b / \u5378\u4e0b\u7b26\u7b93",
+            "\u79d8\u5883\uff1a\u67e5\u770b60\u79d2\u9650\u65f6\u79d8\u5883\u5165\u53e3\uff1b\u63a2\u7d22 1\uff1a\u63a8\u8fdb\u5f53\u524d\u79d8\u5883\uff1b\u6311\u6218\u9996\u9886\u53ef\u6298\u7b9710\u6b21\u63a2\u7d22\u5956\u52b1",
             "\u7a81\u7834\uff1a\u5883\u754c\u5706\u6ee1\u540e\u4f7f\u7528\u7a81\u7834\u9053\u5177\uff1b\u6563\u529f\uff1a\u56de\u9000\u91cd\u4fee\u6539\u5584\u54c1\u76f8",
             "\u6218\u529b / pk @\u5bf9\u65b9 / \u7533\u8bf7\u666e\u901a\u6597\u6cd5 / \u6218\u529b\u699c\uff1a\u67e5\u770b\u6218\u529b\u4e0e\u5207\u78cb",
         ]
@@ -1584,6 +2470,28 @@ async def is_tianji_mystic_message(event: MessageEvent) -> bool:
     return is_tianji_mystic_command_text(normalized_plain_text(event))
 
 
+async def is_divination_message(event: MessageEvent) -> bool:
+    return is_divination_command_text(normalized_plain_text(event))
+
+
+async def is_tianji_sit_message(event: MessageEvent) -> bool:
+    return isinstance(event, GroupMessageEvent) and normalized_plain_text(event) in TIANJI_SIT_TEXTS
+
+
+async def is_divination_reply(event: MessageEvent) -> bool:
+    key = divination_pending_key(event)
+    pending = pending_divinations.get(key)
+    if pending is None:
+        return False
+    if float(pending.get("expires_at", 0)) < time.monotonic():
+        pending_divinations.pop(key, None)
+        return False
+    text = normalized_plain_text(event)
+    if not text or is_managed_command_text(text):
+        return False
+    return True
+
+
 async def is_dual_cultivation_message(event: MessageEvent) -> bool:
     return isinstance(event, GroupMessageEvent) and is_dual_cultivation_command_text(normalized_plain_text(event))
 
@@ -1598,6 +2506,14 @@ async def is_plant_message(event: MessageEvent) -> bool:
 
 async def is_item_use_message(event: MessageEvent) -> bool:
     return is_item_use_command_text(normalized_plain_text(event))
+
+
+async def is_acquired_root_message(event: MessageEvent) -> bool:
+    return is_acquired_root_command_text(normalized_plain_text(event))
+
+
+async def is_spirit_liquid_use_message(event: MessageEvent) -> bool:
+    return is_spirit_liquid_use_command_text(normalized_plain_text(event))
 
 
 async def is_mystic_entry_message(event: MessageEvent) -> bool:
@@ -1678,6 +2594,10 @@ async def is_equip_artifact_message(event: MessageEvent) -> bool:
     return is_equip_command_text(normalized_plain_text(event))
 
 
+async def is_equip_talisman_message(event: MessageEvent) -> bool:
+    return is_equip_talisman_command_text(normalized_plain_text(event))
+
+
 async def is_equip_method_message(event: MessageEvent) -> bool:
     return is_equip_method_command_text(normalized_plain_text(event))
 
@@ -1709,6 +2629,13 @@ async def is_equip_array_message(event: MessageEvent) -> bool:
     return is_equip_array_command_text(normalized_plain_text(event))
 
 
+async def is_doudizhu_message(event: MessageEvent) -> bool:
+    if not isinstance(event, GroupMessageEvent):
+        return False
+    text = normalized_plain_text(event)
+    return is_doudizhu_entry_text(text) or (doudizhu_group_key(event) in doudizhu_tables and is_doudizhu_command_text(text))
+
+
 async def is_duel_message(event: MessageEvent) -> bool:
     return isinstance(event, GroupMessageEvent) and is_duel_command_text(normalized_plain_text(event))
 
@@ -1729,11 +2656,16 @@ shop_cmd = on_message(rule=Rule(is_shop_message), priority=10, block=True)
 alchemy_cmd = on_message(rule=Rule(is_alchemy_message), priority=10, block=True)
 talisman_draw_cmd = on_message(rule=Rule(is_talisman_draw_message), priority=10, block=True)
 tianji_mystic_cmd = on_message(rule=Rule(is_tianji_mystic_message), priority=10, block=True)
+divination_cmd = on_message(rule=Rule(is_divination_message), priority=10, block=True)
+tianji_sit_cmd = on_message(rule=Rule(is_tianji_sit_message), priority=10, block=True)
 dual_cultivation_cmd = on_message(rule=Rule(is_dual_cultivation_message), priority=10, block=True)
 equip_puppet_cmd = on_message(rule=Rule(is_equip_puppet_message), priority=10, block=True)
 plant_cmd = on_message(rule=Rule(is_plant_message), priority=10, block=True)
 item_use_cmd = on_message(rule=Rule(is_item_use_message), priority=10, block=True)
+acquired_root_cmd = on_message(rule=Rule(is_acquired_root_message), priority=10, block=True)
+spirit_liquid_use_cmd = on_message(rule=Rule(is_spirit_liquid_use_message), priority=10, block=True)
 mystic_entry_reply = on_message(rule=Rule(is_mystic_entry_reply), priority=8, block=True)
+divination_reply = on_message(rule=Rule(is_divination_reply), priority=8, block=True)
 mystic_entry = on_message(rule=Rule(is_mystic_entry_message), priority=10, block=True)
 mystic_explore = on_message(rule=Rule(is_mystic_explore_message), priority=10, block=True)
 fishing = on_message(rule=Rule(is_fishing_message), priority=10, block=True)
@@ -1749,9 +2681,11 @@ normal_duel_apply = on_message(rule=Rule(is_normal_duel_apply_message), priority
 normal_duel_chat = on_message(rule=Rule(is_normal_duel_chat_message), priority=8, block=False)
 array_list = on_message(rule=Rule(is_array_list_message), priority=10, block=True)
 equip_artifact_cmd = on_message(rule=Rule(is_equip_artifact_message), priority=10, block=True)
+equip_talisman_cmd = on_message(rule=Rule(is_equip_talisman_message), priority=10, block=True)
 equip_method_cmd = on_message(rule=Rule(is_equip_method_message), priority=10, block=True)
 equip_array_cmd = on_message(rule=Rule(is_equip_array_message), priority=10, block=True)
 duel = on_message(rule=Rule(is_duel_message), priority=10, block=True)
+doudizhu_cmd = on_message(rule=Rule(is_doudizhu_message), priority=10, block=True)
 chat_rank_counter = on_message(rule=Rule(is_group_chat_for_rank), priority=99, block=False)
 
 
@@ -1823,6 +2757,32 @@ async def handle_item_list(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
     await finish_panel(matcher, "背包道具", format_item_list(record), record, icon="bag")
+
+
+@acquired_root_cmd.handle()
+async def handle_acquired_root(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    parsed = parse_acquired_root_command(normalized_plain_text(event))
+    if parsed is None or parsed[0] == "status":
+        await finish_panel(matcher, "后天灵根", acquired_root_text(record), record, icon="realm")
+    kind, index = parsed
+    if index is None:
+        await finish_panel(matcher, "后天灵根", acquired_root_text(record), record, icon="realm")
+    if kind == "dan":
+        changed, message = refine_dan_root(record, int(index))
+    else:
+        changed, message = refine_artifact_root(record, int(index))
+    if changed:
+        await store.save_user(record)
+    summary_line = acquired_root_text(record).splitlines()[1].replace("当前：", "")
+    await finish_panel(
+        matcher,
+        "后天灵根炼化" if changed else "操作失败",
+        f"{message}\n当前后天灵根：{summary_line}",
+        record,
+        icon="realm" if changed else "warning",
+    )
 
 
 @special_ability_cmd.handle()
@@ -1984,6 +2944,96 @@ async def handle_tianji_mystic(matcher: Matcher, event: MessageEvent) -> None:
     )
 
 
+@tianji_sit_cmd.handle()
+async def handle_tianji_sit(matcher: Matcher, event: GroupMessageEvent) -> None:
+    await remember_group_member(event)
+    user_id = event.get_user_id()
+    record = await store.get_user(user_id)
+    if not is_tianji_hall_identity(record):
+        await finish_panel(matcher, "天机阁坐堂", "只有天机阁弟子、长老或太上长老可以坐堂分润占卜收益。", record, icon="warning")
+    hall = await store.get_tianji_hall(str(event.group_id), local_today().isoformat())
+    if not hall:
+        await finish_panel(
+            matcher,
+            "天机阁坐堂",
+            "今日尚无首位天机阁门人签到开堂。\n请先由任意天机阁门人完成今日签到，再发送“坐堂”加入分润。",
+            record,
+            icon="warning",
+        )
+    joined, updated_hall = await store.join_tianji_sitter(
+        str(event.group_id),
+        user_id,
+        local_today().isoformat(),
+        nickname_from_event(event) or f"QQ {user_id}",
+    )
+    updated_hall = updated_hall or hall
+    title = "坐堂成功" if joined else "已在坐堂"
+    message = (
+        f"当前坐堂天机阁门人：{tianji_sitter_names(updated_hall, limit=8)}\n"
+        f"人数：{len(tianji_sitters(updated_hall))}人。本群今日占卜收益将按次平分，不可整除时由先坐堂者优先得一枚余数灵石。\n"
+        f"今日已占：{int(updated_hall.get('divination_count', 0))}卦，累计润资：{spirit_stone_text(int(updated_hall.get('income', 0)))}。"
+    )
+    await finish_panel(matcher, title, message, record, icon="divination")
+
+@divination_cmd.handle()
+async def handle_divination_cmd(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    hall = await require_tianji_hall(matcher, event, record)
+    question = parse_divination_question(normalized_plain_text(event))
+    if question:
+        income_text = await settle_divination_income(event, record)
+        await finish_panel(
+            matcher,
+            "\u5929\u673a\u5360\u535c",
+            tianji_divination_text(record, question, local_today()) + income_text,
+            record,
+            icon="divination",
+        )
+    key = divination_pending_key(event)
+    expires_at = time.monotonic() + DIVINATION_PENDING_TTL
+    pending_divinations[key] = {
+        "expires_at": expires_at,
+        "group_id": str(event.group_id) if isinstance(event, GroupMessageEvent) else "",
+        "sitter_id": str(hall.get("sitter_id") or ""),
+    }
+    asyncio.create_task(
+        send_divination_timeout_notice(
+            key,
+            expires_at,
+            event.get_user_id(),
+            str(event.group_id) if isinstance(event, GroupMessageEvent) else None,
+        )
+    )
+    sitter_name = tianji_sitter_names(hall)
+    await finish_panel(
+        matcher,
+        "\u5929\u673a\u5360\u535c",
+        f"\u4eca\u65e5\u5750\u5802\uff1a{sitter_name}\n\u5929\u673a\u672a\u660e\uff0c\u8bf7\u5bbf\u4e3b\u5728 60 \u79d2\u5185\u8bf4\u51fa\u6240\u95ee\u4e4b\u4e8b\u3002\n\u793a\u4f8b\uff1a\u4eca\u65e5\u4fee\u884c\u662f\u5426\u987a\u5229\uff1f\n\u4e5f\u53ef\u76f4\u63a5\u53d1\u9001\uff1a\u5360\u535c \u4eca\u65e5\u8fd0\u52bf",
+        record,
+        subtitle="60\u79d2\u5185\u56de\u590d\u95ee\u9898",
+        icon="divination",
+    )
+
+
+@divination_reply.handle()
+async def handle_divination_reply(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    key = divination_pending_key(event)
+    pending_divinations.pop(key, None)
+    record = await store.get_user(event.get_user_id())
+    await require_tianji_hall(matcher, event, record)
+    question = normalized_plain_text(event)
+    income_text = await settle_divination_income(event, record)
+    await finish_panel(
+        matcher,
+        "\u5929\u673a\u5360\u535c",
+        tianji_divination_text(record, question, local_today()) + income_text,
+        record,
+        icon="divination",
+    )
+
+
 @dual_cultivation_cmd.handle()
 async def handle_dual_cultivation(matcher: Matcher, event: GroupMessageEvent) -> None:
     await remember_group_member(event)
@@ -2052,7 +3102,7 @@ async def handle_item_use(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(event.get_user_id())
     parsed = parse_item_use(normalized_plain_text(event))
     if parsed is None:
-        await finish_panel(matcher, "操作提示", "请发送“使用丹药 1 / 使用符箓 1 / 炼化灵石 1 / 使用奇物 1”等格式。", record, icon="bag")
+        await finish_panel(matcher, "操作提示", "请发送“使用丹药 1 / 使用符箓 1 / 炼化灵石 1 / 炼化灵液 / 使用奇物 1”等格式。", record, icon="bag")
     category, item_index = parsed
     handlers = {
         "丹药": use_pill,
@@ -2073,6 +3123,22 @@ async def handle_item_use(matcher: Matcher, event: MessageEvent) -> None:
         icon=item_icon_for_category(category) if success else "warning",
     )
 
+
+@spirit_liquid_use_cmd.handle()
+async def handle_spirit_liquid_use(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    amount = parse_spirit_liquid_use(normalized_plain_text(event))
+    success, message = refine_spirit_liquid(record, amount, local_today())
+    if success:
+        await store.save_user(record)
+    await finish_panel(
+        matcher,
+        "灵液炼化" if success else "炼化失败",
+        f"{message}\n剩余精纯灵液：{record.spirit_liquid}\n当前境界：{record.realm if record.root else '未入门'}",
+        record,
+        icon="stone" if success else "warning",
+    )
 
 @mystic_entry.handle()
 async def handle_mystic_entry(matcher: Matcher, event: MessageEvent) -> None:
@@ -2152,6 +3218,28 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(user_id)
     result = apply_signin(record, local_today())
     await store.save_user(result.record)
+
+    if not result.already_signed and isinstance(event, GroupMessageEvent) and is_tianji_hall_identity(result.record):
+        sitter_name = nickname_from_event(event) or f"QQ {user_id}"
+        created, hall = await store.register_tianji_sitter(
+            str(event.group_id),
+            user_id,
+            local_today().isoformat(),
+            sitter_name,
+        )
+        if created:
+            await send_panel(
+                matcher,
+                "\u5929\u673a\u9601\u5750\u5802",
+                (
+                    f"\u4eca\u65e5\u7b2c\u4e00\u4f4d\u5929\u673a\u9601\u95e8\u4eba\u5df2\u5750\u5802\uff1a{sitter_name}\u3002\n"
+                    f"\u672c\u7fa4\u4eca\u65e5\u5929\u673a\u5360\u535c\u5c06\u7531\u5176\u6267\u638c\uff0c"
+                    f"\u6bcf\u5b8c\u6210\u4e00\u5366\u83b7\u5f97 {spirit_stone_text(DIVINATION_SITTER_INCOME)} \u6da6\u8d44\u3002\n"
+                    f"\u5f53\u524d\u5750\u5802\u8bb0\u5f55\uff1a{tianji_sitter_names(hall)}"
+                ),
+                result.record,
+                icon="divination",
+            )
 
     if result.is_first and not result.already_signed:
         root = result.record.root
@@ -2363,17 +3451,36 @@ async def handle_equip_artifact(matcher: Matcher, event: MessageEvent) -> None:
     user_id = event.get_user_id()
     record = await store.get_user(user_id)
     text = normalized_plain_text(event)
-    if text in UNEQUIP_TEXTS:
-        message = unequip_artifact(record)
+    if text in UNEQUIP_TEXTS or any(text.startswith(f"{prefix} ") or text.startswith(f"{prefix}　") for prefix in UNEQUIP_TEXTS):
+        message = unequip_artifact(record, parse_unequip_artifact_slot(text))
     else:
-        artifact_index = parse_equip_index(text)
+        artifact_index, slot = parse_equip_artifact_command(text)
         if artifact_index is None:
-            await finish_panel(matcher, "操作提示", "请发送“装备灵器 编号”，例如：装备灵器 1。", record, icon="artifact")
-        success, message = equip_artifact(record, artifact_index)
+            await finish_panel(matcher, "操作提示", "请发送“装备灵器 编号 槽位”，例如：装备灵器 1 主手 / 装备灵器 2 副手 / 装备灵器 3 护甲。", record, icon="artifact")
+        success, message = equip_artifact(record, artifact_index, slot)
         if not success:
             await finish_panel(matcher, "操作失败", message, record, icon="warning")
     await store.save_user(record)
     await finish_panel(matcher, "灵器装备", f"{message}\n当前战力：{battle_power(record)}", record, icon="artifact")
+
+
+@equip_talisman_cmd.handle()
+async def handle_equip_talisman(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    user_id = event.get_user_id()
+    record = await store.get_user(user_id)
+    text = normalized_plain_text(event)
+    if text in TALISMAN_UNEQUIP_TEXTS:
+        message = unequip_talisman(record)
+    else:
+        talisman_index = parse_equip_talisman_index(text)
+        if talisman_index is None:
+            await finish_panel(matcher, "操作提示", "请发送“装备符箓 编号”，例如：装备符箓 1；卸下则发送“卸下符箓”。", record, icon="talisman")
+        success, message = equip_talisman(record, talisman_index)
+        if not success:
+            await finish_panel(matcher, "操作失败", message, record, icon="warning")
+    await store.save_user(record)
+    await finish_panel(matcher, "符箓栏", f"{message}\n当前战力：{battle_power(record)}", record, icon="talisman")
 
 
 @equip_method_cmd.handle()
@@ -2420,6 +3527,293 @@ async def handle_duel(matcher: Matcher, event: GroupMessageEvent) -> None:
     attacker_name = nickname_from_event(event) or await group_member_display_name(event, event.get_user_id())
     defender_name = await group_member_display_name(event, target_id)
     await finish_panel(matcher, "历练切磋", format_duel_result(attacker_name, defender_name, result), attacker, icon="duel")
+
+
+@doudizhu_cmd.handle()
+async def handle_doudizhu(matcher: Matcher, event: GroupMessageEvent) -> None:
+    await remember_group_member(event)
+    group_id = doudizhu_group_key(event)
+    user_id = event.get_user_id()
+    text_value = normalized_plain_text(event)
+    record = await store.get_user(user_id)
+
+    if text_value in DOUDIZHU_HELP_TEXTS:
+        await finish_panel(matcher, "\u6597\u5730\u4e3b\u5e2e\u52a9", doudizhu_help_text(), record, icon="poker")
+
+    table = doudizhu_tables.get(group_id)
+    if table and table.get("phase") == "lobby" and float(table.get("expires_at", 0)) < time.monotonic():
+        doudizhu_tables.pop(group_id, None)
+        table = None
+
+    if text_value == "\u6597\u5730\u4e3b" and not table:
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", doudizhu_help_text(), record, icon="poker")
+
+    if text_value == "\u6597\u5730\u4e3b\u5f00\u684c":
+        if table:
+            content = ddz_table_text(table) if table.get("phase") != "lobby" else ddz_lobby_text(table)
+            await finish_panel(matcher, "\u6597\u5730\u4e3b", content, record, icon="poker")
+        table = {
+            "phase": "lobby",
+            "phase_text": "\u7b49\u4eba",
+            "host_id": user_id,
+            "host_name": nickname_from_event(event) or f"QQ {user_id}",
+            "players": [ddz_create_human_player(event)],
+            "created_at": time.monotonic(),
+            "expires_at": time.monotonic() + DDZ_HUMAN_WAIT_SECONDS,
+        }
+        doudizhu_tables[group_id] = table
+        await finish_panel(matcher, "\u6597\u5730\u4e3b\u5f00\u684c", ddz_lobby_text(table), record, icon="poker")
+
+    if text_value == "\u4eba\u673a\u6597\u5730\u4e3b":
+        if table:
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u672c\u7fa4\u5df2\u6709\u6597\u5730\u4e3b\u724c\u684c\uff0c\u8bf7\u5148\u7ed3\u675f\u6597\u5730\u4e3b\u3002", record, icon="warning")
+        table = {
+            "phase": "lobby",
+            "phase_text": "\u7b49\u4eba",
+            "host_id": user_id,
+            "host_name": nickname_from_event(event) or f"QQ {user_id}",
+            "players": [ddz_create_human_player(event), ddz_create_bot_player(1), ddz_create_bot_player(2)],
+            "created_at": time.monotonic(),
+        }
+        doudizhu_tables[group_id] = table
+        ddz_deal(table)
+        await ddz_send_all_hands(table, group_id)
+        logs = ["\u4eba\u673a\u6597\u5730\u4e3b\u5df2\u5f00\u5c40", ddz_bid_status(table)]
+        logs.extend(await ddz_process_bot_bidding(group_id, table))
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", "\n".join(logs), record, icon="poker")
+
+    if not table:
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", "\u6682\u65e0\u6597\u5730\u4e3b\u724c\u684c\uff0c\u53ef\u53d1\u9001 \u6597\u5730\u4e3b\u5f00\u684c \u6216 \u4eba\u673a\u6597\u5730\u4e3b\u3002", record, icon="poker")
+
+    player = ddz_player(table, user_id)
+
+    if text_value == "\u6597\u5730\u4e3b":
+        content = ddz_lobby_text(table) if table.get("phase") == "lobby" else ddz_table_text(table)
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", content, record, icon="poker")
+
+    if text_value == "\u7ed3\u675f\u6597\u5730\u4e3b":
+        if not player and str(table.get("host_id")) != user_id:
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u53ea\u6709\u724c\u5c40\u73a9\u5bb6\u6216\u684c\u4e3b\u53ef\u4ee5\u7ed3\u675f\u6597\u5730\u4e3b\u3002", record, icon="warning")
+        doudizhu_tables.pop(group_id, None)
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", "\u724c\u684c\u5df2\u7ed3\u675f\u3002", record, icon="poker")
+
+    if text_value == "\u52a0\u5165\u6597\u5730\u4e3b":
+        if table.get("phase") != "lobby":
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u724c\u5c40\u5df2\u5f00\u59cb\uff0c\u65e0\u6cd5\u4e2d\u9014\u5165\u5ea7\u3002", record, icon="warning")
+        if player:
+            await finish_panel(matcher, "\u6597\u5730\u4e3b", "\u4f60\u5df2\u7ecf\u5728\u8fd9\u5f20\u724c\u684c\u4e0a\u3002", record, icon="poker")
+        if len(table.get("players", [])) >= 3:
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u724c\u684c\u5df2\u6ee1\u5458\u3002", record, icon="warning")
+        table["players"].append(ddz_create_human_player(event))
+        hint = "\n\u4eba\u6ee1\u4e86\uff0c\u53ef\u7531\u684c\u4e3b\u53d1\u9001 \u5f00\u59cb\u6597\u5730\u4e3b\u3002" if len(table["players"]) == 3 else ""
+        await finish_panel(matcher, "\u52a0\u5165\u6597\u5730\u4e3b", ddz_lobby_text(table) + hint, record, icon="poker")
+
+    if text_value == "\u9000\u51fa\u6597\u5730\u4e3b":
+        if table.get("phase") != "lobby":
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u724c\u5c40\u5df2\u5f00\u59cb\uff0c\u4e0d\u80fd\u9000\u51fa\uff0c\u53ef\u53d1\u9001\u6258\u7ba1\u3002", record, icon="warning")
+        if not player:
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u4f60\u4e0d\u5728\u8fd9\u5f20\u724c\u684c\u4e0a\u3002", record, icon="warning")
+        table["players"] = [item for item in table["players"] if str(item.get("id")) != user_id]
+        if not table["players"]:
+            doudizhu_tables.pop(group_id, None)
+            await finish_panel(matcher, "\u6597\u5730\u4e3b", "\u724c\u684c\u5df2\u89e3\u6563\u3002", record, icon="poker")
+        if str(table.get("host_id")) == user_id:
+            table["host_id"] = str(table["players"][0].get("id"))
+            table["host_name"] = str(table["players"][0].get("name"))
+        await finish_panel(matcher, "\u6597\u5730\u4e3b\u7b49\u5f85\u623f", ddz_lobby_text(table), record, icon="poker")
+
+    if text_value == "\u5f00\u59cb\u6597\u5730\u4e3b":
+        if table.get("phase") != "lobby":
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u724c\u5c40\u5df2\u7ecf\u5f00\u59cb\u3002", record, icon="warning")
+        if str(table.get("host_id")) != user_id:
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u53ea\u6709\u684c\u4e3b\u53ef\u4ee5\u5f00\u59cb\u724c\u5c40\u3002", record, icon="warning")
+        if len(table.get("players", [])) != 3:
+            await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u9700\u8981 3 \u4f4d\u73a9\u5bb6\u624d\u80fd\u5f00\u59cb\u3002", record, icon="warning")
+        ddz_deal(table)
+        await ddz_send_all_hands(table, group_id)
+        logs = ["\u6597\u5730\u4e3b\u5f00\u5c40", ddz_bid_status(table)]
+        logs.extend(await ddz_process_bot_bidding(group_id, table))
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", "\n".join(logs), record, icon="poker")
+
+    if not player:
+        await finish_panel(matcher, "\u64cd\u4f5c\u5931\u8d25", "\u4f60\u8fd8\u6ca1\u6709\u5165\u5ea7\u8fd9\u5f20\u6597\u5730\u4e3b\u724c\u684c\u3002", record, icon="warning")
+
+    if text_value == "\u624b\u724c":
+        await ddz_send_hand(player, table, group_id)
+        await finish_panel(matcher, "\u6597\u5730\u4e3b\u624b\u724c", "\u5df2\u5c1d\u8bd5\u79c1\u804a\u53d1\u9001\u624b\u724c\u3002", record, icon="poker")
+
+    if text_value == "\u6258\u7ba1":
+        player["bot"] = True
+        logs = [f"{player.get('name')} \u5df2\u8fdb\u5165\u6258\u7ba1"]
+        logs.extend(await ddz_process_bot_steps(group_id, table))
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", "\n".join(logs), record, icon="poker")
+
+    if table.get("phase") == "bidding" and is_doudizhu_bid_text(text_value):
+        if not ddz_user_can_act(table, user_id):
+            await finish_panel(matcher, "\u7b49\u5f85\u51fa\u624b", f"\u5f53\u524d\u8f6e\u5230 {ddz_current_player(table).get('name')} \u53eb\u5206\u3002", record, icon="warning")
+        bid = ddz_parse_bid(text_value, int(table.get("highest_bid", 0)))
+        if bid is None or bid < 0 or bid > 3:
+            await finish_panel(matcher, "\u53eb\u5206\u5931\u8d25", "\u8bf7\u53d1\u9001\uff1a\u53eb\u5206 1 / \u53eb\u5206 2 / \u53eb\u5206 3 / \u53eb\u5730\u4e3b / \u4e0d\u53eb", record, icon="warning")
+        if bid and bid <= int(table.get("highest_bid", 0)):
+            await finish_panel(matcher, "\u53eb\u5206\u5931\u8d25", f"\u5fc5\u987b\u9ad8\u4e8e\u5f53\u524d\u6700\u9ad8\u5206 {table.get('highest_bid', 0)}\u3002", record, icon="warning")
+        logs = [ddz_apply_bid(table, player, bid)]
+        result = ddz_after_bid(table)
+        if result:
+            logs.append(result)
+        else:
+            logs.append(ddz_bid_status(table))
+        logs.extend(await ddz_process_bot_bidding(group_id, table))
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", "\n".join(logs), record, icon="poker")
+
+    if table.get("phase") == "rob" and text_value in {"\u62a2\u5730\u4e3b", "\u4e0d\u62a2", "\u65bd\u52a0\u5a01\u538b"}:
+        candidate_id = str(table.get("landlord_candidate"))
+        if user_id == candidate_id:
+            await finish_panel(matcher, "\u62a2\u5730\u4e3b", "\u5019\u9009\u5730\u4e3b\u4e0d\u80fd\u81ea\u5df1\u62a2\u81ea\u5df1\u3002", record, icon="warning")
+        if user_id in set(table.get("rob_passes", set())):
+            await finish_panel(matcher, "\u62a2\u5730\u4e3b", "\u4f60\u5df2\u7ecf\u8868\u6001\u8fc7\u4e86\u3002", record, icon="warning")
+        if text_value == "\u4e0d\u62a2":
+            table.setdefault("rob_passes", set()).add(user_id)
+            logs = [f"{player.get('name')} \u4e0d\u62a2"]
+            if ddz_rob_needed_done(table):
+                logs.append(await ddz_finalize_and_advance(group_id, table, candidate_id))
+            else:
+                logs.append(ddz_begin_rob_text(table))
+            logs.extend(await ddz_process_bot_rob(group_id, table))
+            await finish_panel(matcher, "\u62a2\u5730\u4e3b", "\n".join(logs), record, icon="poker")
+        pressure = text_value == "\u65bd\u52a0\u5a01\u538b"
+        candidate = ddz_player(table, candidate_id)
+        challenger_record = await store.get_user(user_id)
+        candidate_record = await store.get_user(candidate_id) if candidate and not candidate.get("bot") else None
+        actor_power = battle_power(challenger_record)
+        target_power = battle_power(candidate_record) if candidate_record else 1
+        chance = ddz_pressure_chance(actor_power, target_power, pressure)
+        success = random.random() < chance
+        action_name = "\u65bd\u52a0\u5a01\u538b\u62a2\u5730\u4e3b" if pressure else "\u62a2\u5730\u4e3b"
+        logs = [f"{player.get('name')} {action_name}\uff0c\u6210\u529f\u7387 {int(chance * 100)}%\u3002"]
+        if success:
+            if pressure:
+                table["phase"] = "retain"
+                table["phase_text"] = "\u5a01\u538b\u4fdd\u7559"
+                table["pending_pressure"] = {
+                    "original_id": candidate_id,
+                    "original_name": candidate.get("name") if candidate else candidate_id,
+                    "challenger_id": user_id,
+                    "challenger_name": player.get("name"),
+                }
+                logs.append(f"\u5a01\u538b\u6210\u529f\uff01{candidate.get('name') if candidate else candidate_id} \u53ef\u56de\u590d \u4fdd\u7559\u5730\u4e3b / \u653e\u5f03\u5730\u4e3b\u3002")
+            else:
+                table["landlord_candidate"] = user_id
+                table["original_landlord"] = table.get("original_landlord") or candidate_id
+                logs.append(await ddz_finalize_and_advance(group_id, table, user_id))
+        else:
+            table.setdefault("rob_passes", set()).add(user_id)
+            logs.append("\u62a2\u5730\u4e3b\u5931\u8d25\u3002")
+            if ddz_rob_needed_done(table):
+                logs.append(await ddz_finalize_and_advance(group_id, table, candidate_id))
+            else:
+                logs.append(ddz_begin_rob_text(table))
+            logs.extend(await ddz_process_bot_rob(group_id, table))
+        await finish_panel(matcher, "\u62a2\u5730\u4e3b", "\n".join(logs), record, icon="poker")
+
+    if table.get("phase") == "retain" and text_value in {"\u4fdd\u7559\u5730\u4e3b", "\u653e\u5f03\u5730\u4e3b"}:
+        pending = dict(table.get("pending_pressure") or {})
+        if user_id != str(pending.get("original_id")):
+            await finish_panel(matcher, "\u5a01\u538b\u4fdd\u7559", "\u53ea\u6709\u539f\u5b9a\u5730\u4e3b\u53ef\u4ee5\u51b3\u5b9a\u662f\u5426\u4fdd\u7559\u3002", record, icon="warning")
+        if text_value == "\u4fdd\u7559\u5730\u4e3b":
+            table["pressure_duel"] = {
+                "left_id": pending.get("original_id"),
+                "left_name": pending.get("original_name"),
+                "right_id": pending.get("challenger_id"),
+                "right_name": pending.get("challenger_name"),
+            }
+            content = await ddz_finalize_and_advance(group_id, table, str(pending.get("original_id")))
+            await finish_panel(matcher, "\u4fdd\u7559\u5730\u4e3b", content + "\n\u724c\u5c40\u7ed3\u675f\u540e\u5c06\u5f3a\u5236\u89e6\u53d1\u666e\u901a\u6597\u6cd5\u3002", record, icon="poker")
+        content = await ddz_finalize_and_advance(group_id, table, str(pending.get("challenger_id")))
+        await finish_panel(matcher, "\u653e\u5f03\u5730\u4e3b", content, record, icon="poker")
+
+    if table.get("phase") == "double" and text_value in {"\u52a0\u500d", "\u4e0d\u52a0\u500d"}:
+        responses = table.setdefault("double_responses", set())
+        if user_id in responses:
+            await finish_panel(matcher, "\u52a0\u500d\u9636\u6bb5", "\u4f60\u5df2\u7ecf\u8868\u6001\u8fc7\u4e86\u3002", record, icon="warning")
+        responses.add(user_id)
+        logs = []
+        if text_value == "\u52a0\u500d":
+            table.setdefault("double_votes", set()).add(user_id)
+            table["multiplier"] = int(table.get("multiplier", 1)) * 2
+            logs.append(f"{player.get('name')} \u9009\u62e9\u52a0\u500d")
+        else:
+            logs.append(f"{player.get('name')} \u4e0d\u52a0\u500d")
+        logs.extend(await ddz_process_bot_steps(group_id, table))
+        if table.get("phase") == "double" and len(table.get("double_responses", set())) >= len(table.get("players", [])):
+            ddz_start_play(table)
+            await ddz_send_all_hands(table, group_id)
+            logs.append("\u52a0\u500d\u9636\u6bb5\u7ed3\u675f\uff0c\u5730\u4e3b\u5148\u51fa\u724c\u3002")
+        logs.extend(await ddz_process_bot_steps(group_id, table))
+        if group_id in doudizhu_tables:
+            logs.append(ddz_table_text(table))
+        await finish_panel(matcher, "\u52a0\u500d\u9636\u6bb5", "\n".join(logs), record, icon="poker")
+
+    if table.get("phase") == "playing" and text_value == "\u63d0\u793a":
+        if not ddz_user_can_act(table, user_id):
+            await finish_panel(matcher, "\u7b49\u5f85\u51fa\u624b", f"\u5f53\u524d\u8f6e\u5230 {ddz_current_player(table).get('name')}\u3002", record, icon="warning")
+        last_play = table.get("last_play") if str(table.get("last_player")) != user_id else None
+        hint = ddz_find_hint(list(player.get("hand", [])), last_play)
+        await finish_panel(matcher, "\u51fa\u724c\u63d0\u793a", f"\u5efa\u8bae\uff1a{''.join(hint) if hint else '\u6682\u65e0\u53ef\u538b\u8fc7\u7684\u724c\uff0c\u53ef\u53d1\u9001 \u4e0d\u8981'}", record, icon="poker")
+
+    if table.get("phase") == "playing" and (is_doudizhu_play_text(text_value) or text_value == "\u4e0d\u8981"):
+        if not ddz_user_can_act(table, user_id):
+            await finish_panel(matcher, "\u7b49\u5f85\u51fa\u624b", f"\u5f53\u524d\u8f6e\u5230 {ddz_current_player(table).get('name')}\u3002", record, icon="warning")
+        logs = []
+        if text_value == "\u4e0d\u8981":
+            if not table.get("last_play") or str(table.get("last_player")) == user_id:
+                await finish_panel(matcher, "\u51fa\u724c\u5931\u8d25", "\u4f60\u662f\u5f53\u524d\u9886\u724c\u8005\uff0c\u5fc5\u987b\u51fa\u724c\u3002", record, icon="warning")
+            table["pass_count"] = int(table.get("pass_count", 0)) + 1
+            logs.append(f"{player.get('name')} \u4e0d\u8981")
+            if int(table.get("pass_count", 0)) >= 2:
+                last = ddz_player(table, str(table.get("last_player")))
+                logs.append(f"\u4e00\u8f6e\u8ddf\u724c\u7ed3\u675f\uff0c{last.get('name') if last else '\u4e0a\u5bb6'} \u91cd\u65b0\u9886\u724c\u3002")
+                for idx, candidate in enumerate(table["players"]):
+                    if str(candidate.get("id")) == str(table.get("last_player")):
+                        table["current"] = idx
+                        break
+                table["last_play"] = None
+                table["pass_count"] = 0
+            else:
+                ddz_next_turn(table)
+        else:
+            cards = ddz_parse_cards(text_value)
+            if not cards:
+                await finish_panel(matcher, "\u51fa\u724c\u5931\u8d25", "\u672a\u8bc6\u522b\u724c\u9762\uff0c\u4f8b\u5982\uff1a\u51fa\u724c 34567 / \u51fa\u724c 3334 / \u51fa\u724c \u5c0f\u738b\u5927\u738b\u3002", record, icon="warning")
+            if not ddz_has_cards(list(player.get("hand", [])), cards):
+                await finish_panel(matcher, "\u51fa\u724c\u5931\u8d25", f"\u624b\u724c\u4e2d\u6ca1\u6709\uff1a{ddz_cards_text(cards)}", record, icon="warning")
+            analyzed = ddz_analyze_cards(cards)
+            if not analyzed:
+                await finish_panel(matcher, "\u51fa\u724c\u5931\u8d25", "\u8fd9\u7ec4\u724c\u4e0d\u7b26\u5408\u5f53\u524d\u6597\u5730\u4e3b\u724c\u578b\u3002", record, icon="warning")
+            last_play = table.get("last_play") if str(table.get("last_player")) != user_id else None
+            if not ddz_can_beat(analyzed, last_play):
+                await finish_panel(matcher, "\u51fa\u724c\u5931\u8d25", "\u538b\u4e0d\u8fc7\u4e0a\u4e00\u624b\u724c\u3002", record, icon="warning")
+            ddz_remove_cards(player["hand"], cards)
+            table["last_play"] = {**analyzed, "cards": cards}
+            table["last_player"] = user_id
+            table["pass_count"] = 0
+            if analyzed["type"] in {"bomb", "rocket"}:
+                table["multiplier"] = int(table.get("multiplier", 1)) * 2
+                logs.append("\u96f7\u52ab\u964d\u4e34\uff01\u5f53\u524d\u500d\u6570\u7ffb\u500d\u3002")
+            if user_id == str(table.get("landlord")):
+                table["landlord_play_count"] = int(table.get("landlord_play_count", 0)) + 1
+            else:
+                table["farmer_play_count"] = int(table.get("farmer_play_count", 0)) + 1
+            logs.append(f"{player.get('name')} \u6253\u51fa {analyzed['label']}\uff1a{ddz_cards_text(cards)}")
+            if not player.get("hand"):
+                logs.append(await ddz_finish_game(group_id, table, user_id))
+                await finish_panel(matcher, "\u6597\u5730\u4e3b\u7ed3\u7b97", "\n".join(logs), record, icon="poker")
+            ddz_next_turn(table)
+        logs.extend(await ddz_process_bot_steps(group_id, table))
+        if group_id in doudizhu_tables:
+            logs.append(ddz_table_text(table))
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", "\n".join(logs), record, icon="poker")
+
+    await finish_panel(matcher, "\u6597\u5730\u4e3b", ddz_table_text(table), record, icon="poker")
 
 
 @chat_rank_counter.handle()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import random
 import re
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -26,6 +27,7 @@ GRADE_POOL = [
 TIER_ORDER = ["凡品", "黄阶", "玄阶", "地阶", "天阶"]
 GRADE_ORDER = ["下品", "中品", "上品", "极品"]
 TIER_RANKS = {name: rank for name, rank, _ in QUALITY_TIER_POOL}
+TIER_RANKS["\u53d8\u5f02\u7075\u6839"] = 5
 GRADE_RANKS = {name: rank for name, rank, _ in GRADE_POOL}
 
 ATTRIBUTES = ["金", "木", "水", "火", "土", "雷", "冰"]
@@ -48,6 +50,72 @@ ATTRIBUTE_NAMES = {
     "土": "土灵根",
     "雷": "雷灵根",
     "冰": "冰灵根",
+}
+
+BASE_FIVE_ELEMENTS = ("金", "木", "水", "火", "土")
+MUTATION_ROOT_SOURCES = {
+    "雷": (("金", "水"), ("火", "水")),
+    "冰": (("水", "木"),),
+    "风": (("木", "火"),),
+    "暗": (("金", "土"),),
+    "光": (("火", "土"),),
+}
+SPECIAL_ROOT_SOURCES = {
+    "剑": ("金",),
+    "药": ("木",),
+    "玄阴": ("水",),
+    "玄阳": ("火",),
+    "空": (),
+    "时": (),
+    "先天道体": BASE_FIVE_ELEMENTS,
+}
+ROOT_ATTRIBUTES = list(dict.fromkeys(list(ATTRIBUTES) + list(MUTATION_ROOT_SOURCES) + list(SPECIAL_ROOT_SOURCES)))
+ATTRIBUTE_COLORS.update(
+    {
+        "风": "#58b88f",
+        "暗": "#5b4b73",
+        "光": "#f2c84b",
+        "剑": "#c8d3df",
+        "药": "#58b46f",
+        "玄阴": "#5b8ccf",
+        "玄阳": "#e66a3d",
+        "空": "#6d8be8",
+        "时": "#b58adf",
+        "先天道体": "#e0b85a",
+    }
+)
+ATTRIBUTE_NAMES.update(
+    {
+        "风": "风灵根",
+        "暗": "暗灵根",
+        "光": "光灵根",
+        "剑": "剑灵根",
+        "药": "药灵根",
+        "玄阴": "玄阴灵根",
+        "玄阳": "玄阳灵根",
+        "空": "空灵根",
+        "时": "时灵根",
+        "先天道体": "先天道体",
+    }
+)
+ROOT_TRAITS = {
+    "金": "锋锐：灵器与剑诀威力提高",
+    "木": "生息：灵植、丹道与恢复更稳",
+    "水": "绵长：修炼续航与神魂韧性提高",
+    "火": "炽烈：爆发术式与炼丹火候更强",
+    "土": "厚载：护甲、阵盘与体魄更稳",
+    "雷": "迅疾：速度与暴击率提高",
+    "冰": "凝霜：效果命中、闪避与控制提高",
+    "风": "御风：先手、身法与追击提高",
+    "暗": "匿影：陷阱识破与偷袭伤害提高",
+    "光": "明净：破邪、治疗与抗心魔提高",
+    "剑": "极锋：剑类灵器与剑诀大幅契合",
+    "药": "药心：炼丹、灵植与丹药吸收提高",
+    "玄阴": "阴极：神魂、控制与冰水功法契合",
+    "玄阳": "阳极：气血、火法与锻体功法契合",
+    "空": "空间：秘境探索与闪避更有优势",
+    "时": "时间：冷却与修炼沉淀更有优势",
+    "先天道体": "道体：全属性兼容，功法契合极高",
 }
 
 REALMS = [
@@ -117,7 +185,7 @@ REWARD_CATEGORY_WEIGHT_RATIO = {
     "阵盘": 0.9,
     "灵材": 0.9,
     "奇物": 0.95,
-    "特殊能力": 0.42,
+    "特殊能力": 0.22,
 }
 REWARD_DESCRIPTIONS = {
     "仙缘": "天地机缘凝成的{name}，可为修行添一线逆天命数。",
@@ -385,12 +453,24 @@ FISHING_REWARD_NAMES["灵材"] = {
 
 
 
+for _tier, _names in {
+    "天阶": ["准圣妖丹", "仙殿青铜锈", "道源矿髓", "虚神魂晶", "太古兽骨"],
+    "地阶": ["金丹妖丹", "元婴妖丹", "蛟龙脊骨", "太古源石", "青铜仙纹"],
+    "玄阶": ["筑基妖丹", "妖兽精血", "残破兽骨", "虚神魂砂", "古矿石胆"],
+    "黄阶": ["练气妖丹", "妖兽利爪", "矿脉源砂", "旧宗木简", "兽巢骨粉"],
+    "凡品": ["残碎妖丹", "幼兽乳牙", "灰矿砂", "断裂兽爪", "残破碑屑"],
+}.items():
+    _pool = FISHING_REWARD_NAMES["灵材"].setdefault(_tier, [])
+    for _name in _names:
+        if _name not in _pool:
+            _pool.append(_name)
+
 FISHING_REWARD_NAMES["特殊能力"] = {
-    "天阶": ["九秘残页", "八禁感悟", "神禁烙印", "他化自在影", "因果断线真箓", "牧天九歌玉简", "天问一式法旨", "元婴天兆星痕"],
-    "地阶": ["九秘残页", "八禁感悟", "神禁烙印", "至尊骨符文", "以身为种道痕", "十洞天神环碎光", "杀戮本源血符", "梦道轮回沙"],
-    "玄阶": ["九秘残页", "八禁感悟", "神禁烙印", "道经轮海残章", "斗战圣法残卷", "鲲鹏极速羽痕", "古神一指骨纹", "神藏开阖残图"],
-    "黄阶": ["九秘残页", "八禁感悟", "神禁烙印", "掌天瓶影拓片", "青帝莲相旧纹", "柳神法相枝影", "青元剑芒手札", "岁月意境残砂"],
-    "凡品": ["九秘残页", "八禁感悟", "神禁烙印", "凡骨战意札", "问道旧简", "小神藏残图", "青元剑芒残页", "掌天瓶影碎片"],
+    "天阶": ["九秘残页", "神禁烙印", "他化自在影", "因果断线真箓", "牧天九歌玉简", "天问一式法旨", "元婴天兆星痕", "九禁感悟"],
+    "地阶": ["九秘残页", "九禁感悟", "神禁烙印", "至尊骨符文", "以身为种道痕", "十洞天神环碎光", "杀戮本源血符", "梦道轮回沙"],
+    "玄阶": ["八禁感悟", "九禁感悟", "九秘残页", "道经轮海残章", "斗战圣法残卷", "鲲鹏极速羽痕", "古神一指骨纹", "神藏开阖残图"],
+    "黄阶": ["八禁感悟", "掌天瓶影拓片", "青帝莲相旧纹", "柳神法相枝影", "青元剑芒手札", "岁月意境残砂", "九秘残页", "问道旧简"],
+    "凡品": ["八禁感悟", "凡骨战意札", "问道旧简", "小神藏残图", "青元剑芒残页", "掌天瓶影碎片", "九秘残页", "九禁感悟"]
 }
 ITEM_ATTRIBUTE_BY_NAME = {}
 for _tier, _items in ARTIFACT_NAMES_BY_TIER_ATTR.items():
@@ -485,6 +565,7 @@ COMBAT_PHYSIQUES = (
 )
 SPECIAL_ABILITY_POOL = (
     "八禁",
+    "九禁",
     "神禁领域",
     "九秘-临字秘",
     "九秘-兵字秘",
@@ -519,10 +600,45 @@ SPECIAL_ABILITY_POOL = (
 )
 
 NINE_SECRET_ABILITIES = tuple(ability for ability in SPECIAL_ABILITY_POOL if ability.startswith("九秘"))
+FORBIDDEN_REALM_ABILITIES = ("八禁", "九禁", "神禁领域")
+SPECIAL_ABILITY_RARITIES = {
+    "八禁": ("玄阶", "极品"),
+    "九禁": ("地阶", "中品"),
+    "神禁领域": ("天阶", "下品"),
+    "掌天瓶影": ("地阶", "上品"),
+    "青元剑芒": ("玄阶", "极品"),
+    "元婴天兆": ("地阶", "极品"),
+    "道经轮海": ("地阶", "中品"),
+    "斗战圣法": ("天阶", "下品"),
+    "荒古圣血": ("天阶", "中品"),
+    "青帝莲相": ("天阶", "下品"),
+    "至尊骨符文": ("天阶", "上品"),
+    "以身为种": ("天阶", "极品"),
+    "他化自在影": ("天阶", "极品"),
+    "十洞天神环": ("天阶", "中品"),
+    "鲲鹏极速": ("天阶", "上品"),
+    "柳神法相": ("天阶", "中品"),
+    "古神一指": ("地阶", "极品"),
+    "岁月意境": ("地阶", "上品"),
+    "杀戮本源": ("地阶", "极品"),
+    "梦道轮回": ("天阶", "下品"),
+    "因果断线": ("天阶", "中品"),
+    "牧天九歌": ("地阶", "极品"),
+    "天问一式": ("天阶", "下品"),
+    "神藏开阖": ("玄阶", "极品"),
+    **{ability: ("天阶", "极品") for ability in NINE_SECRET_ABILITIES},
+}
+SPECIAL_ABILITY_MATERIAL_DIFFICULTY = {
+    "八禁感悟": 0.75,
+    "九禁感悟": 0.36,
+    "神禁烙印": 0.16,
+    "九秘残页": 0.18,
+}
 
 SPECIAL_ABILITY_INFOS = {
-    "八禁": {"material": "八禁感悟", "source": "战境极限", "effect": "斗法时战意暴涨，伤害和防御同步提升。", "aliases": ["八禁", "开启八禁"], "combat": (0.12, 0.04, 0)},
-    "神禁领域": {"material": "神禁烙印", "source": "禁域升华", "effect": "短时间踏入极限状态，伤害、防御和速度一并提升。", "aliases": ["神禁", "神禁领域"], "combat": (0.18, 0.08, 8)},
+    "八禁": {"material": "八禁感悟", "source": "战境极限", "effect": "以战意踏入八禁，斗法时伤害和防御同步提升。", "aliases": ["八禁", "开启八禁"], "combat": (0.12, 0.04, 0)},
+    "九禁": {"material": "九禁感悟", "source": "八禁进阶", "effect": "在八禁之上再破一线，攻防与速度获得更稳定的提升。", "aliases": ["九禁", "开启九禁"], "combat": (0.15, 0.06, 4)},
+    "神禁领域": {"material": "神禁烙印", "source": "九禁升华", "effect": "九禁之后触及神禁领域，短时间踏入极限状态。", "aliases": ["神禁", "神禁领域", "开启神禁"], "combat": (0.18, 0.08, 8)},
     "九秘-临字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "稳定神魂与气机，拉高攻守下限。", "aliases": ["临字秘", "九秘"], "combat": (0.08, 0.08, 2)},
     "九秘-兵字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "牵引灵器与法宝共鸣，提升攻伐威势。", "aliases": ["兵字秘", "九秘"], "combat": (0.10, 0.05, 0)},
     "九秘-斗字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "演化斗战法则，以战养战。", "aliases": ["斗字秘", "九秘"], "combat": (0.13, 0.03, 0)},
@@ -557,6 +673,7 @@ SPECIAL_ABILITY_INFOS = {
 
 SPECIAL_ABILITY_MATERIAL_TO_ABILITY = {
     "八禁感悟": "八禁",
+    "九禁感悟": "九禁",
     "神禁烙印": "神禁领域",
     "掌天瓶影拓片": "掌天瓶影",
     "掌天瓶影碎片": "掌天瓶影",
@@ -620,8 +737,38 @@ MISC_CATEGORY = "杂物"
 CURIO_CATEGORY = "奇物"
 FOOD_CATEGORY = "灵食"
 SPECIAL_ABILITY_CATEGORY = "特殊能力"
+ACQUIRED_ROOT_DAN = "\u4e39\u7075\u6839"
+ACQUIRED_ROOT_ARTIFACT = "\u5668\u7075\u6839"
+ACQUIRED_ROOT_KINDS = (ACQUIRED_ROOT_DAN, ACQUIRED_ROOT_ARTIFACT)
+DEMON_CORE_REALM_PURITY = {
+    "\u6b8b\u788e": 34,
+    "\u70bc\u4f53": 42,
+    "\u7ec3\u6c14": 52,
+    "\u70bc\u6c14": 52,
+    "\u7b51\u57fa": 63,
+    "\u91d1\u4e39": 76,
+    "\u5143\u5a74": 84,
+    "\u5316\u795e": 91,
+}
+DEMON_CORE_TIER_BASE_PURITY = {"\u51e1\u54c1": 36, "\u9ec4\u9636": 48, "\u7384\u9636": 62, "\u5730\u9636": 78, "\u5929\u9636": 88}
+ARTIFACT_ROOT_TIER_BASE_PURITY = {"\u51e1\u54c1": 30, "\u9ec4\u9636": 42, "\u7384\u9636": 56, "\u5730\u9636": 68, "\u5929\u9636": 76}
+DAN_ROOT_MAX_PURITY = 91
+ARTIFACT_ROOT_MAX_PURITY = 78
+ARTIFACT_ROOT_SUCCESS_RATE = 0.35
+ARTIFACT_SLOTS = ("主手", "副手", "护甲")
+ARTIFACT_SLOT_ALIASES = {
+    "主手": "主手",
+    "武器": "主手",
+    "副手": "副手",
+    "护手": "副手",
+    "护甲": "护甲",
+    "护盾": "护甲",
+    "盾": "护甲",
+    "甲": "护甲",
+}
+ARTIFACT_SLOT_POWER_RATE = {"主手": 1.0, "副手": 0.65, "护甲": 0.85}
 
-MYSTIC_REALM_TYPES = ("上古宗门遗址", "兽潮", "上古大能洞府")
+MYSTIC_REALM_TYPES = ("上古宗门遗址", "兽潮", "上古大能洞府", "太古矿区", "虚神界残域", "青铜仙殿")
 MYSTIC_REALM_MAX_STEPS = 10
 BEAST_NAME_PREFIXES = [
     "赤焰", "玄霜", "碧鳞", "噬月", "裂山", "幽冥", "金瞳", "雷角", "青翼", "血纹",
@@ -635,55 +782,120 @@ BEAST_NAME_SUFFIXES = [
 ]
 
 MYSTIC_EVENT_THEMES = {
-    "上古宗门遗址": {
-        "places": [
-            "藏经阁残楼", "断剑石阶", "荒废丹房", "祖师殿前", "问心石林", "传功玉璧", "灵兽园废墟", "山门铜钟",
-            "剑冢深处", "试炼石塔", "外门讲法台", "护山阵眼", "掌门闭关室", "灵田枯井", "符堂灰烬", "炼器地火口",
-            "云桥断处", "执法堂旧案台", "功德碑背面", "禁地石门",
+    '上古宗门遗址': {
+        'places': ['断碑林', '讲经台', '废弃丹房', '护山残阵', '问心石阶', '藏经地宫', '剑冢深处', '祖师神像', '弟子名册', '灵植药园'],
+        'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
+        'omens': ['耳边似有万人诵经', '残阵倒转星光', '地下传来祖师叹息', '断剑震颤如闻雷音', '丹香从灰烬里回甘', '石阶映出你的道心', '木牌浮出灵光', '经书自行翻页', '药园土壤仍藏生机', '山门外的风像故人低语'],
+        'empty': ['石门无声合拢，只留一地尘灰。', '残经一触即碎，你只得收回神识。', '阵纹忽明忽暗，暂时没有显出生门。'],
+        'reward_lines': [
+            ('功法', '青木长生功', '残经与你的气机相合，化作一门可修的功法。'),
+            ('丹药', '培元丹', '丹炉余热未散，灰烬里滚出一枚丹药。'),
+            ('阵盘', '小五行聚灵盘', '阵眼暗格弹开，残阵核心被你取走。'),
+            ('灵植', '凝露灵草', '药园残土裂开，一株灵植仍有生机。'),
+            (SPECIAL_ABILITY_CATEGORY, '青元剑芒手札', '祖师残念在你掌心留下剑芒手札。'),
+            ('灵材', '旧宗木简', '弟子名册最后一页化作可入器的木简。'),
+            ('仙缘', '残碑悟道', '问心石认可了你的道心，一缕悟道灵机直入丹田。'),
         ],
-        "actions": [
-            "推开", "叩问", "绕行", "踏入", "静坐感应", "以灵力试探", "沿裂痕追索", "拂去尘灰查看", "布下简阵护身后靠近", "屏息倾听",
-        ],
-        "omens": [
-            "残页自行翻动", "剑痕泛起冷光", "丹香忽然复燃", "石像眼中有泪", "心魔低声问道", "玉璧浮出古字", "兽骨叩击地面", "铜钟无风自鸣", "阵纹明灭如星", "灰烬中生出青芽",
-        ],
+        'bad': '问心石骤然翻转，昔年宗门覆灭的怨念如潮压来。你强行脱身，却被残阵浊气封住经脉。',
+        'intro': '残碑半埋，山门无声，深处仍有经卷气息流转。',
     },
-    "兽潮": {
-        "places": [
-            "黑雾谷口", "碎骨河滩", "兽巢外环", "坍塌山脊", "血月林间", "雷暴沼泽", "寒潭边缘", "赤砂荒丘",
-            "妖云深处", "古战场裂隙", "灵矿塌洞", "枯木巢穴", "风吼峡道", "石林伏击点", "毒瘴洼地", "断崖兽道",
-            "兽王祭坛", "潮湿洞窟", "残破营地", "月影坡前",
+    '兽潮': {
+        'places': ['血雾山谷', '万兽骨堆', '幼兽巢穴', '妖云深处', '裂山河畔', '兽王爪痕', '雷火焦土', '古林残道', '鳄血石潭', '散修防线'],
+        'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
+        'omens': ['首领竖瞳里有丹光浮沉', '巢穴深处传来幼兽低啼', '妖风卷起灰黑骨粉', '血泥里有灵草不倒', '兽群忽然朝一点伏下', '一枚妖丹在尸骨间明灭', '裂山声中掉落异骨', '老兽把爪下灵物推出血线', '散修抛来储物符', '妖云被天雷撕开一线'],
+        'empty': ['兽群忽然回涌，你稳住气息退回安全处。', '首领威压扫过山谷，你伏身不动。', '妖兽足印在乱石中断绝，只留一片焦黑血泥。'],
+        'reward_lines': [
+            ('灵材', '妖丹', '你剖开首领残躯，取出一枚尚在跳动的妖丹。'),
+            ('灵材', '兽骨', '裂山之后，一截兽骨带着血煎灵光被你收起。'),
+            ('灵材', '妖兽精血', '你以玉瓶承住兽血，血中妖力犹在汹涌。'),
+            ('灵食', '火枣灵酥', '兽巢旁藏着温热灵食，似是散修逃难时遗落。'),
+            ('符箓', '金甲护身符', '一名散修被你救下，他留下一道护身符作谢。'),
+            ('灵石', '中品灵石袋', '兽潮冲破矿脉，你在乱石间收到一袋灵石。'),
+            ('仙缘', '山神馈赠', '老兽没有扑来，反而将一缕山神馈赠送到你面前。'),
         ],
-        "actions": [
-            "正面压上", "绕后探查", "设阵固守", "救下散修", "追踪足印", "潜入巢穴", "采集残留灵材", "以傀儡引开兽群", "屏息观察首领", "趁乱夺取妖核",
-        ],
-        "omens": [
-            "兽吼震得山石滚落", "妖云压低三尺", "首领气血如炉", "地底传来爪刨声", "幼兽忽然噤声", "腥风里夹着雷光", "白骨堆中有灵火", "远处散修阵旗折断", "兽群退开一条血路", "巢穴深处响起心跳",
-        ],
+        'bad': '兽王忽然睁开竖瞳，万兽同声嘶吼，血色妖云瞬间压下。你撕开缺口逃出，却被妖煞侵入经脉。',
+        'intro': '远处妖云翻涌，兽群如潮，一头首领的气息正在巢穴深处起伏。',
     },
-    "上古大能洞府": {
-        "places": [
-            "洞府石门", "长明古灯旁", "白玉阶尽头", "静室蒲团前", "沉默宝匣", "残缺阵眼", "水镜回廊", "青铜仙棺侧",
-            "星砂沙漏前", "无字碑下", "血色莲池", "倒悬丹炉", "虚空裂缝边", "古镜照影处", "问道棋盘", "封魔铁索旁",
-            "枯坐骸骨前", "天井月光中", "壁画深处", "石胎呼吸处",
+    '上古大能洞府': {
+        'places': ['青灯石室', '白玉棋盘', '三重丹库', '水镜问心台', '青铜古棺', '星河石阶', '封魔链洞', '幻音长廊', '传道壁画', '洞府阵眼'],
+        'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
+        'omens': ['宝匣内传出一声叹息', '古灯映出不属此界的影子', '棋子落下时星河倒卷', '壁画中的古修正在看你', '水镜碎成一地清辉', '丹库里有药香未散', '链洞深处传来低笑', '星阶尽头浮出古印', '阵眼吐出精纯清光', '心魔声音像极故人'],
+        'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
+        'reward_lines': [
+            ('奇物', '星砂沙漏', '棋盘胜负已定，一枚星砂沙漏从桌角滚落。'),
+            (SPECIAL_ABILITY_CATEGORY, '古神一指骨纹', '壁画古修抬手，一道指意骨纹落入识海。'),
+            ('灵器', '玄都镇魂铃', '青灯灭去后，灯座下露出一件灵器。'),
+            ('丹药', '紫府养魂丹', '丹库禁制退开，一枚养魂丹仍有药香。'),
+            ('阵盘', '水月镜花盘', '水镜破碎后，镜底一方阵盘显出真形。'),
+            ('灵材', '青铜仙纹', '古棺外壁剥落一片青铜仙纹。'),
+            ('仙缘', '古洞机缘', '洞府残念认可你未贪的一念，赐下一线机缘。'),
         ],
-        "actions": [
-            "触碰", "点亮", "翻看", "踏上", "以神识试探", "闭目感应", "检查", "逆转阵纹", "祭出护身符箓", "默念清心口诀靠近",
+        'bad': '洞府传承顷刻化作杀局，古灯映出的不是大道，而是借壳归来的邪影。',
+        'intro': '洞府石门半启，禁制明灭不定，像是传承，也像是请君入瓮。',
+    },
+    '太古矿区': {
+        'places': ['黑渊矿道', '源石矿壁', '地火裂缝', '古矿祭坛', '矿奴废营', '星陨石坑', '玄铁暗河', '断龙石门', '残灯矿廊', '混沌石胎'],
+        'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
+        'omens': ['矿壁中像有古老心脏跳动', '源石裂缝里流出紫金光', '地火化作莲花形', '矿廊深处传来铁链声', '一枚石胆在掌心滚烫', '矿灯照出不属你的影子', '星陨石坑中有金铁轻鸣', '黑渊下涌起浑浊道韵', '矿锄指向一处暗壁', '石门上龙纹渐渐复苏'],
+        'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
+        'reward_lines': [
+            ('灵材', '太古源石', '你剖开源石，一块太古源石在掌心发热。'),
+            ('灵材', '古矿石胆', '矿壁中的石胆被你取出，仍有地火灵机。'),
+            ('灵材', '星陨玄铁', '星陨石坑裂开，露出一段可炼器的玄铁。'),
+            ('灵石', '上品灵石匣', '矿奴废营里藏着一只封存完好的灵石匣。'),
+            ('奇物', '无名石片', '石胎外壳剥落一片无名石片。'),
+            ('杂物', '破旧丹炉盖', '矿廊尽头有旧炉残件，似能抵挡地火。'),
+            ('仙缘', '玄黄命砂', '混沌石胎轻震，一缕玄黄命砂融入气海。'),
         ],
-        "omens": [
-            "禁制明灭不定", "古灯照出前世影", "阶上浮现血脚印", "蒲团传出讲道声", "宝匣内有心跳", "阵眼吞吐星辉", "镜中人先你一步抬头", "棺盖轻轻震动", "沙漏倒流一息", "碑面映出你的名字",
+        'bad': '黑渊矿道突然整片塌落，石胎中传出不似人声的低笑。',
+        'intro': '太古矿区石门半塌，地火与源气交织，深处似有石胎轻响。',
+    },
+    '虚神界残域': {
+        'places': ['魂海断桥', '虚神战台', '石碑通道', '梦道雾林', '万族试炼场', '断裂神宫', '风雷骨路', '魂砂海滩', '重瞳镜湖', '古老门户'],
+        'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
+        'omens': ['虚空中有少年独战万族的残影', '石碑上名字一个个熄灭', '梦雾里传来远古钟声', '战台残血在脚下发光', '神宫上空有十洞天虚影', '魂砂像星河流动', '镜湖映出你未来一次败局', '风雷残音把符文刻入虚空', '古门后的世界忽然翻面', '你听见自己的神魂在鸣唱'],
+        'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
+        'reward_lines': [
+            (SPECIAL_ABILITY_CATEGORY, '十洞天神环碎光', '战台虚影被你击散，十洞天神环碎光融入掌心。'),
+            (SPECIAL_ABILITY_CATEGORY, '鲲鹏极速羽痕', '风雷残音沉入脚下，留下一道鲲鹏极速羽痕。'),
+            ('灵材', '虚神魂砂', '魂砂海滩上的光点被你收拢，化作虚神魂砂。'),
+            ('功法', '太虚观想篇', '石碑残名里藏着观想之法，被你拓入识海。'),
+            ('符箓', '御风疾影符', '风雷骨路尽头落下一张疾影符。'),
+            ('奇物', '低语玉佩', '重瞳镜湖底沉着一枚低语玉佩。'),
+            ('仙缘', '灵台清光', '虚神界残域与你的神魂短暂共鸣，灵台清光洗过识海。'),
         ],
+        'bad': '虚神战台突然反转，万族残影同时向你杀来。',
+        'intro': '虚神界残域忽明忽暗，这里像一片未散的神魂战场。',
+    },
+    '青铜仙殿': {
+        'places': ['青铜长阶', '仙殿前庭', '荒古壁画', '九重铜门', '断裂仙池', '天罚雷痕', '空悬石棺', '经文铜柱', '归墟残桥', '无声帝座'],
+        'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
+        'omens': ['青铜墙面上浮出一朵青莲', '帝座前的空气像被大手抚平', '铜门后传来诵经声', '天罚雷痕在脚下化作细线', '石棺轻震却未开启', '仙池残液映出一条古路', '壁画中有无名强者背对众生', '铜柱经文像活了过来', '残桥下是看不到底的黑暗', '仙殿似乎在判断你的重量'],
+        'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
+        'reward_lines': [
+            (SPECIAL_ABILITY_CATEGORY, '九秘残页', '铜柱经文中飞出一页残篇，上有九秘气息。'),
+            ('灵材', '仙殿青铜锈', '你从壁画剥落处取下仙殿青铜锈。'),
+            ('奇物', '昆仑镜碎光', '断裂仙池中浮起一点昆仑镜碎光。'),
+            ('灵器', '太虚斩星剑', '青铜门后剑光一闪，一件灵器自行落入你手中。'),
+            ('功法', '万象归元经', '荒古壁画上的经文亮起，化成一部古经。'),
+            ('灵材', '天髓玉露', '仙池断口还有一滴天髓玉露，被你以玉瓶收起。'),
+            ('仙缘', '青莲仙引', '青莲虚影在仙殿中一闪，引来一缕仙缘清光。'),
+        ],
+        'bad': '青铜仙殿深处忽然传来审判般的威压，九重铜门同时闭合。',
+        'intro': '青铜仙殿悬于虚空，铜锈与仙光交织，每一步都像走进古史。',
     },
 }
 
 
-def build_mystic_event_pool(realm_type: str) -> list[str]:
+def build_mystic_event_pool(realm_type: str) -> list[dict[str, Any]]:
     theme = MYSTIC_EVENT_THEMES[realm_type]
-    events: list[str] = []
+    events: list[dict[str, Any]] = []
+    reward_lines = list(theme.get("reward_lines", []))
     for place in theme["places"]:
         for action in theme["actions"]:
             omen = theme["omens"][(len(events) + len(place) + len(action)) % len(theme["omens"])]
-            events.append(f"{action}{place}，{omen}")
+            category, reward_hint, success = reward_lines[len(events) % len(reward_lines)]
+            events.append({"text": f"{action}{place}，{omen}", "category": category, "reward_hint": reward_hint, "success": success})
             if len(events) >= 100:
                 return events
     return events
@@ -825,7 +1037,17 @@ DUEL_ACTIONS = {
     "火": "烈焰成环，炽意冲霄",
     "土": "厚土为垒，稳如山岳",
     "雷": "雷光乍裂，瞬息破势",
-    "冰": "寒霜封路，寸步难移",
+    "\u51b0": "\u5bd2\u971c\u5c01\u8def\uff0c\u5bf8\u6b65\u96be\u79fb",
+    "\u98ce": "\u98ce\u5f71\u65e0\u5b9a\uff0c\u5148\u624b\u593a\u52bf",
+    "\u6697": "\u5e7d\u5f71\u5165\u5c40\uff0c\u6740\u673a\u85cf\u950b",
+    "\u5149": "\u660e\u5149\u7834\u90aa\uff0c\u7167\u5f7b\u5fc3\u9b54",
+    "\u5251": "\u5251\u9aa8\u5929\u6210\uff0c\u4e00\u7ebf\u65a9\u5c40",
+    "\u836f": "\u836f\u9999\u5316\u6d77\uff0c\u751f\u673a\u4e0d\u7edd",
+    "\u7384\u9634": "\u7384\u9634\u5982\u6f6e\uff0c\u5bd2\u610f\u9501\u9b42",
+    "\u7384\u9633": "\u7384\u9633\u70bc\u8840\uff0c\u70bd\u706b\u51b2\u9704",
+    "\u7a7a": "\u7a7a\u95f4\u8f6c\u6298\uff0c\u8eab\u5f62\u96be\u5bfb",
+    "\u65f6": "\u65f6\u5149\u4e00\u7f13\uff0c\u80dc\u8d1f\u5df2\u5206",
+    "\u5148\u5929\u9053\u4f53": "\u9053\u97f5\u81ea\u751f\uff0c\u4e07\u6cd5\u76f8\u968f",
 }
 
 CONFIRM_WORDS = {
@@ -861,36 +1083,83 @@ class Root:
     grade: str
     grade_rank: int
     attribute: str
+    purity: int = 100
+    sources: Optional[list[str]] = None
+    mutated: bool = False
+    trait: str = ""
+    source_purities: Optional[dict[str, int]] = None
 
     @property
     def display_name(self) -> str:
-        return f"{self.tier}{self.grade}{ATTRIBUTE_NAMES[self.attribute]}"
+        attr_name = ATTRIBUTE_NAMES.get(self.attribute, self.attribute + "\u7075\u6839")
+        if self.tier == "\u53d8\u5f02\u7075\u6839":
+            return f"\u53d8\u5f02\u7075\u6839{self.grade}{attr_name}"
+        return f"{self.tier}{self.grade}{attr_name}"
 
     @property
     def color(self) -> str:
-        return ATTRIBUTE_COLORS[self.attribute]
+        return ATTRIBUTE_COLORS.get(self.attribute, "#8f8a83")
+
+    @property
+    def source_attributes(self) -> set[str]:
+        if self.attribute == "\u5148\u5929\u9053\u4f53":
+            return set(BASE_FIVE_ELEMENTS)
+        sources = set(str(item) for item in (self.sources or []) if item)
+        if sources:
+            return sources
+        if self.attribute in BASE_FIVE_ELEMENTS:
+            return {self.attribute}
+        if self.attribute in MUTATION_ROOT_SOURCES:
+            return set(MUTATION_ROOT_SOURCES[self.attribute][0])
+        if self.attribute in SPECIAL_ROOT_SOURCES:
+            return set(SPECIAL_ROOT_SOURCES[self.attribute])
+        return {self.attribute}
+
+    @property
+    def is_mutation(self) -> bool:
+        return bool(self.mutated or self.tier == "\u53d8\u5f02\u7075\u6839" or self.attribute not in BASE_FIVE_ELEMENTS)
+
+    @property
+    def detail_name(self) -> str:
+        suffix = f"\u7eaf\u5ea6{max(1, min(100, int(self.purity)))}%"
+        if self.is_mutation and self.sources:
+            parts = []
+            purities = self.source_purities or {}
+            for source in self.sources:
+                source_purity = int(purities.get(source, self.purity))
+                parts.append(f"{source}{source_purity}%")
+            suffix += f"\uff0c\u7531{'+'.join(parts)}\u5148\u5929\u5f02\u53d8"
+        return f"{self.display_name}\uff08{suffix}\uff09"
 
     @property
     def progress_required(self) -> int:
         tier_base = {
-            "天阶": 100,
-            "地阶": 115,
-            "玄阶": 135,
-            "黄阶": 155,
-            "凡品": 180,
+            "\u53d8\u5f02\u7075\u6839": 82,
+            "\u5929\u9636": 100,
+            "\u5730\u9636": 115,
+            "\u7384\u9636": 135,
+            "\u9ec4\u9636": 155,
+            "\u51e1\u54c1": 180,
         }.get(self.tier, 155)
         grade_extra = {
-            "极品": 0,
-            "上品": 10,
-            "中品": 20,
-            "下品": 30,
-        }.get(self.grade, 20)
-        return tier_base + grade_extra
+            "\u6781\u54c1": 0,
+            "\u4e0a\u54c1": 8,
+            "\u4e2d\u54c1": 18,
+            "\u4e0b\u54c1": 28,
+        }.get(self.grade, 18)
+        purity_adjust = int((80 - max(1, min(100, int(self.purity)))) * 0.55)
+        return max(55, tier_base + grade_extra + purity_adjust)
 
     @property
     def exp_gain_range(self) -> tuple[int, int]:
         low = 6 + self.tier_rank * 3 + self.grade_rank
         high = 10 + self.tier_rank * 5 + self.grade_rank * 2
+        if self.tier == "\u53d8\u5f02\u7075\u6839":
+            low += 3
+            high += 6
+        purity_bonus = int((max(1, min(100, int(self.purity))) - 70) / 10)
+        low = max(1, low + purity_bonus)
+        high = max(low, high + purity_bonus * 2)
         return low, high
 
     def to_dict(self) -> dict[str, Any]:
@@ -900,19 +1169,44 @@ class Root:
             "grade": self.grade,
             "grade_rank": self.grade_rank,
             "attribute": self.attribute,
+            "purity": max(1, min(100, int(self.purity))),
+            "sources": list(self.sources or []),
+            "mutated": bool(self.is_mutation),
+            "trait": self.trait or ROOT_TRAITS.get(self.attribute, ""),
+            "source_purities": {str(key): max(1, min(100, int(value))) for key, value in dict(self.source_purities or {}).items()},
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Root:
         tier = str(data["tier"])
-        if tier == "路人甲":
-            tier = "凡品"
+        if tier == "\u8def\u4eba\u7532":
+            tier = "\u51e1\u54c1"
+        attribute = str(data.get("attribute", "\u91d1"))
+        is_mutated = bool(data.get("mutated", False)) or attribute not in BASE_FIVE_ELEMENTS or tier == "\u53d8\u5f02\u7075\u6839"
+        if is_mutated:
+            tier = "\u53d8\u5f02\u7075\u6839"
+        grade = str(data.get("grade", "\u6781\u54c1" if is_mutated else "\u4e2d\u54c1"))
+        sources = data.get("sources")
+        if not isinstance(sources, list) or not sources:
+            sources = root_default_sources(attribute)
+        source_purities = data.get("source_purities")
+        if not isinstance(source_purities, dict):
+            source_purities = {}
+        purity = max(1, min(100, int(data.get("purity", 96 if is_mutated else 72))))
+        if is_mutated:
+            purity = max(92, purity)
+            source_purities = {str(source): max(90, int(source_purities.get(source, purity))) for source in sources}
         return cls(
             tier=tier,
-            tier_rank=TIER_RANKS.get(tier, int(data["tier_rank"])),
-            grade=str(data["grade"]),
-            grade_rank=int(data["grade_rank"]),
-            attribute=str(data["attribute"]),
+            tier_rank=TIER_RANKS.get(tier, int(data.get("tier_rank", TIER_RANKS.get(tier, 0)))),
+            grade=grade,
+            grade_rank=int(data.get("grade_rank", GRADE_RANKS.get(grade, 1))),
+            attribute=attribute,
+            purity=purity,
+            sources=[str(item) for item in sources if item],
+            mutated=is_mutated,
+            trait=str(data.get("trait") or ROOT_TRAITS.get(attribute, "")),
+            source_purities={str(key): max(1, min(100, int(value))) for key, value in dict(source_purities).items()},
         )
 
 
@@ -938,7 +1232,7 @@ class RankReward:
     def label(self) -> str:
         parts = [f"+{self.exp} 修为"]
         if self.fishing_chances:
-            parts.append(f"+{self.fishing_chances} 垂钓")
+            parts.append(f"+{self.fishing_chances} 次垂钓")
         if self.pending:
             parts.append("暂存")
         return "，".join(parts)
@@ -973,6 +1267,7 @@ class ExpApplyResult:
 class UserRecord:
     user_id: str
     root: Optional[Root] = None
+    acquired_roots: Optional[list[dict[str, Any]]] = None
     sign_count: int = 0
     total_exp: int = 0
     realm_index: int = 0
@@ -988,6 +1283,8 @@ class UserRecord:
     last_bottleneck_date: Optional[str] = None
     rewards: Optional[list[dict[str, Any]]] = None
     equipped_artifact: Optional[dict[str, Any]] = None
+    equipped_artifacts: Optional[dict[str, dict[str, Any]]] = None
+    equipped_talisman: Optional[dict[str, Any]] = None
     equipped_method: Optional[dict[str, Any]] = None
     equipped_array: Optional[dict[str, Any]] = None
     equipped_puppet: Optional[dict[str, Any]] = None
@@ -1011,6 +1308,7 @@ class UserRecord:
     physique: Optional[str] = None
     special_abilities: Optional[list[str]] = None
     method_layers: Optional[dict[str, int]] = None
+    method_proficiency: Optional[dict[str, int]] = None
 
     @property
     def realm_name(self) -> str:
@@ -1026,9 +1324,7 @@ class UserRecord:
 
     @property
     def progress_required(self) -> int:
-        if self.root is None:
-            return 100
-        return self.root.progress_required
+        return realm_progress_required(self.root, self.realm_index)
 
     @property
     def roots(self) -> list[Root]:
@@ -1040,20 +1336,33 @@ class UserRecord:
 
     @property
     def root_attributes(self) -> set[str]:
-        return {root.attribute for root in self.roots}
+        attrs = {root.attribute for root in self.roots}
+        for root in self.roots:
+            attrs.update(root.source_attributes)
+        for root in normalize_acquired_roots(self):
+            attr = str(root.get("attribute") or "")
+            if attr:
+                attrs.add(attr)
+        return attrs
 
     @property
     def root_summary(self) -> str:
         if self.root is None:
             return "\u672a\u89c9\u9192\u7075\u6839"
-        extras = [ATTRIBUTE_NAMES[root.attribute] for root in self.extra_roots or []]
-        if not extras:
-            return self.root.display_name
-        return f"{self.root.display_name} + {'/'.join(extras)}"
+        if self.root.tier == "\u53d8\u5f02\u7075\u6839":
+            return f"{self.root.detail_name}\uff5c\u5148\u5929\u5f02\u7980"
+        parts = [root.detail_name for root in self.roots]
+        return f"{' + '.join(parts)}\uff5c\u4e94\u884c{len(self.roots)}\u7075\u6839\u91cf\u5316\u8bc4\u5b9a"
 
     @property
     def is_peak_aptitude(self) -> bool:
-        return bool(self.root and self.root.tier == "\u5929\u9636" and self.root.grade == "\u6781\u54c1")
+        return bool(
+            self.root
+            and (
+                (self.root.tier == "\u5929\u9636" and self.root.grade == "\u6781\u54c1")
+                or self.root.tier == "\u53d8\u5f02\u7075\u6839"
+            )
+        )
 
     @property
     def is_bottleneck(self) -> bool:
@@ -1080,6 +1389,7 @@ class UserRecord:
         return {
             "user_id": self.user_id,
             "root": self.root.to_dict() if self.root else None,
+            "acquired_roots": self.acquired_roots or [],
             "sign_count": self.sign_count,
             "total_exp": self.total_exp,
             "realm_index": self.realm_index,
@@ -1095,6 +1405,8 @@ class UserRecord:
             "last_bottleneck_date": self.last_bottleneck_date,
             "rewards": self.rewards or [],
             "equipped_artifact": self.equipped_artifact or None,
+            "equipped_artifacts": self.equipped_artifacts or {},
+            "equipped_talisman": self.equipped_talisman or None,
             "equipped_method": self.equipped_method or None,
             "equipped_array": self.equipped_array or None,
             "equipped_puppet": self.equipped_puppet or None,
@@ -1118,6 +1430,7 @@ class UserRecord:
             "physique": self.physique,
             "special_abilities": self.special_abilities or [],
             "method_layers": self.method_layers or {},
+            "method_proficiency": self.method_proficiency or {},
         }
 
     @classmethod
@@ -1126,6 +1439,11 @@ class UserRecord:
         return cls(
             user_id=str(data["user_id"]),
             root=Root.from_dict(root_data) if root_data else None,
+            acquired_roots=[
+                dict(root)
+                for root in data.get("acquired_roots", [])
+                if isinstance(root, dict)
+            ],
             sign_count=int(data.get("sign_count", 0)),
             total_exp=int(data.get("total_exp", 0)),
             realm_index=int(data.get("realm_index", 0)),
@@ -1165,6 +1483,20 @@ class UserRecord:
                 str(key): int(value)
                 for key, value in dict(data.get("method_layers") or {}).items()
             },
+            method_proficiency={
+                str(key): int(value)
+                for key, value in dict(data.get("method_proficiency") or {}).items()
+            },
+            equipped_artifacts={
+                str(key): dict(value)
+                for key, value in dict(data.get("equipped_artifacts") or {}).items()
+                if isinstance(value, dict)
+            },
+            equipped_talisman=(
+                dict(data["equipped_talisman"])
+                if isinstance(data.get("equipped_talisman"), dict)
+                else None
+            ),
             equipped_artifact=(
                 dict(data["equipped_artifact"])
                 if isinstance(data.get("equipped_artifact"), dict)
@@ -1240,20 +1572,256 @@ def weighted_choice(items: Sequence[tuple[T, float]]) -> T:
     return items[-1][0]
 
 
-def make_root(tier: str, grade: str, attribute: str) -> Root:
+def root_default_sources(attribute: str) -> list[str]:
+    if attribute == "\u5148\u5929\u9053\u4f53":
+        return list(BASE_FIVE_ELEMENTS)
+    if attribute in BASE_FIVE_ELEMENTS:
+        return [attribute]
+    if attribute in MUTATION_ROOT_SOURCES:
+        return list(random.choice(MUTATION_ROOT_SOURCES[attribute]))
+    if attribute in SPECIAL_ROOT_SOURCES:
+        return list(SPECIAL_ROOT_SOURCES[attribute])
+    return [attribute]
+
+
+def root_grade_from_score(score: int) -> str:
+    if score >= 92:
+        return "\u6781\u54c1"
+    if score >= 78:
+        return "\u4e0a\u54c1"
+    if score >= 62:
+        return "\u4e2d\u54c1"
+    return "\u4e0b\u54c1"
+
+
+def ordinary_root_rating(purities: Sequence[int]) -> tuple[str, str]:
+    values = [max(1, min(100, int(value))) for value in purities] or [50]
+    count = len(values)
+    avg_purity = sum(values) / count
+    max_purity = max(values)
+    score = int(avg_purity + (max_purity - avg_purity) * 0.35 - max(0, count - 1) * 8)
+    if score >= 92:
+        tier = "\u5929\u9636"
+    elif score >= 78:
+        tier = "\u5730\u9636"
+    elif score >= 64:
+        tier = "\u7384\u9636"
+    elif score >= 48:
+        tier = "\u9ec4\u9636"
+    else:
+        tier = "\u51e1\u54c1"
+    return tier, root_grade_from_score(score)
+
+
+def root_purity_for(tier: str, grade: str, count: int = 1, primary: bool = True, attribute: str = "") -> int:
+    if tier == "\u53d8\u5f02\u7075\u6839" or attribute not in BASE_FIVE_ELEMENTS:
+        low, high = 94, 100
+    else:
+        base_ranges = {
+            "\u5929\u9636": (88, 100),
+            "\u5730\u9636": (76, 92),
+            "\u7384\u9636": (62, 82),
+            "\u9ec4\u9636": (46, 68),
+            "\u51e1\u54c1": (30, 56),
+        }
+        low, high = base_ranges.get(tier, (45, 72))
+        low += GRADE_RANKS.get(grade, 1) * 2
+        high += GRADE_RANKS.get(grade, 1) * 2
+        penalty = max(0, count - 1) * (7 if primary else 10)
+        if not primary:
+            low -= 8
+            high -= 6
+        low -= penalty
+        high -= penalty
+    return max(18, min(100, random.randint(max(18, low), max(20, high))))
+
+
+def make_root(
+    tier: str,
+    grade: str,
+    attribute: str,
+    purity: Optional[int] = None,
+    sources: Optional[list[str]] = None,
+    mutated: Optional[bool] = None,
+    source_purities: Optional[dict[str, int]] = None,
+) -> Root:
+    source_list = list(sources) if sources is not None else root_default_sources(attribute)
+    is_mutated = bool(mutated if mutated is not None else tier == "\u53d8\u5f02\u7075\u6839" or attribute not in BASE_FIVE_ELEMENTS)
+    if is_mutated:
+        tier = "\u53d8\u5f02\u7075\u6839"
+    root_purity = purity if purity is not None else root_purity_for(tier, grade, attribute=attribute)
+    if is_mutated:
+        root_purity = max(92, int(root_purity))
+        source_purities = {source: max(90, int((source_purities or {}).get(source, root_purity))) for source in source_list}
     return Root(
         tier=tier,
         tier_rank=TIER_RANKS[tier],
         grade=grade,
-        grade_rank=GRADE_RANKS[grade],
+        grade_rank=GRADE_RANKS.get(grade, 1),
         attribute=attribute,
+        purity=root_purity,
+        sources=source_list,
+        mutated=is_mutated,
+        trait=ROOT_TRAITS.get(attribute, ""),
+        source_purities=source_purities or {},
     )
 
 
+def draw_mutation_root() -> Root:
+    attribute = weighted_choice(
+        [
+            ("\u96f7", 24),
+            ("\u51b0", 20),
+            ("\u98ce", 18),
+            ("\u6697", 8),
+            ("\u5149", 8),
+            ("\u5251", 5),
+            ("\u836f", 5),
+            ("\u7384\u9634", 4),
+            ("\u7384\u9633", 4),
+            ("\u7a7a", 1.2),
+            ("\u65f6", 1.0),
+            ("\u5148\u5929\u9053\u4f53", 0.6),
+        ]
+    )
+    sources = root_default_sources(attribute)
+    purity = random.randint(95, 100) if attribute in {"\u7a7a", "\u65f6", "\u5148\u5929\u9053\u4f53"} else random.randint(92, 100)
+    source_purities = {source: random.randint(max(90, purity - 3), 100) for source in sources}
+    grade = root_grade_from_score(purity)
+    return make_root("\u53d8\u5f02\u7075\u6839", grade, attribute, purity=purity, sources=sources, mutated=True, source_purities=source_purities)
+
+
+def ordinary_root_count() -> int:
+    return weighted_choice([(1, 11), (2, 24), (3, 32), (4, 23), (5, 10)])
+
+
+def ordinary_purity_values(count: int) -> list[int]:
+    ranges = {
+        1: (82, 99),
+        2: (68, 92),
+        3: (54, 82),
+        4: (40, 68),
+        5: (28, 58),
+    }
+    low, high = ranges.get(max(1, min(5, count)), (45, 72))
+    values = [random.randint(low, high) for _ in range(count)]
+    values.sort(reverse=True)
+    return values
+
+
+def draw_ordinary_roots() -> list[Root]:
+    count = ordinary_root_count()
+    attributes = random.sample(list(BASE_FIVE_ELEMENTS), k=count)
+    purities = ordinary_purity_values(count)
+    tier, grade = ordinary_root_rating(purities)
+    return [
+        make_root(tier, grade, attribute, purity=purity, sources=[attribute], mutated=False, source_purities={attribute: purity})
+        for attribute, purity in zip(attributes, purities)
+    ]
+
+
+def draw_roots() -> list[Root]:
+    if random.random() < 0.075:
+        return [draw_mutation_root()]
+    return draw_ordinary_roots()
+
+
 def draw_root() -> Root:
-    tier, _, _ = weighted_choice([(item, item[2]) for item in QUALITY_TIER_POOL])
-    grade, _, _ = weighted_choice([(item, item[2]) for item in GRADE_POOL])
-    return make_root(tier, grade, random.choice(ATTRIBUTES))
+    return draw_roots()[0]
+
+
+def normalize_root_profile(record: UserRecord) -> bool:
+    if not record.root:
+        return False
+    changed = False
+    roots = record.roots
+    mutation_roots = [root for root in roots if root.attribute not in BASE_FIVE_ELEMENTS or root.tier == "\u53d8\u5f02\u7075\u6839" or root.mutated]
+    if mutation_roots:
+        root = mutation_roots[0]
+        root.tier = "\u53d8\u5f02\u7075\u6839"
+        root.tier_rank = TIER_RANKS[root.tier]
+        root.grade = root.grade if root.grade in GRADE_RANKS else root_grade_from_score(max(92, int(root.purity)))
+        root.grade_rank = GRADE_RANKS.get(root.grade, 3)
+        root.purity = max(92, int(root.purity or 96))
+        root.sources = root.sources or root_default_sources(root.attribute)
+        root.source_purities = {source: max(90, int((root.source_purities or {}).get(source, root.purity))) for source in root.sources}
+        root.mutated = True
+        root.trait = root.trait or ROOT_TRAITS.get(root.attribute, "")
+        record.root = root
+        if record.extra_roots:
+            record.extra_roots = []
+            changed = True
+        return True or changed
+
+    seen: set[str] = set()
+    clean_roots: list[Root] = []
+    for root in roots:
+        if root.attribute not in BASE_FIVE_ELEMENTS or root.attribute in seen:
+            changed = True
+            continue
+        seen.add(root.attribute)
+        root.sources = [root.attribute]
+        root.source_purities = {root.attribute: max(1, min(100, int(root.purity or 60)))}
+        root.mutated = False
+        clean_roots.append(root)
+    if not clean_roots:
+        clean_roots = [make_root("\u51e1\u54c1", "\u4e0b\u54c1", random.choice(BASE_FIVE_ELEMENTS), purity=45)]
+        changed = True
+    tier, grade = ordinary_root_rating([int(root.purity) for root in clean_roots])
+    for root in clean_roots:
+        if root.tier != tier or root.grade != grade:
+            changed = True
+        root.tier = tier
+        root.tier_rank = TIER_RANKS[tier]
+        root.grade = grade
+        root.grade_rank = GRADE_RANKS[grade]
+    record.root = clean_roots[0]
+    record.extra_roots = clean_roots[1:]
+    return changed
+
+
+def ensure_legacy_extra_roots(record: UserRecord) -> bool:
+    return normalize_root_profile(record)
+
+
+def max_root_purity(record: UserRecord, attribute: Optional[str] = None) -> int:
+    if not record.root:
+        return 0
+    acquired = normalize_acquired_roots(record)
+    if attribute is None:
+        innate = [int(root.purity) for root in record.roots]
+        postnatal = [int(root.get("purity", 0)) for root in acquired]
+        return max(innate + postnatal, default=0)
+    candidates = []
+    for root in record.roots:
+        if root.attribute == "先天道体" or root.attribute == attribute or attribute in root.source_attributes:
+            if root.source_purities and attribute in root.source_purities:
+                candidates.append(int(root.source_purities[attribute]))
+            else:
+                candidates.append(int(root.purity))
+    for root in acquired:
+        if root.get("attribute") == attribute:
+            candidates.append(int(root.get("purity", 0)))
+    return max(candidates, default=0)
+
+def root_purity_multiplier(record: UserRecord, attribute: Optional[str] = None) -> float:
+    purity = max_root_purity(record, attribute)
+    if purity <= 0:
+        return 1.0
+    base = 0.85 + purity / 100
+    if record.root and record.root.tier == "\u53d8\u5f02\u7075\u6839":
+        base += 0.18
+    return base
+
+
+def realm_progress_required(root: Optional[Root], realm_index: int) -> int:
+    base = root.progress_required if root is not None else 100
+    multiplier = 2 ** max(0, int(realm_index))
+    return max(1, int(base) * multiplier)
+
+
+def cumulative_realm_exp(root: Optional[Root], realm_index: int) -> int:
+    return sum(realm_progress_required(root, index) for index in range(max(0, int(realm_index))))
 
 
 def current_breakthrough_requirement(record: UserRecord) -> Optional[dict[str, Any]]:
@@ -1339,15 +1907,22 @@ def cultivation_lock_text(record: UserRecord, today: Optional[Any] = None) -> st
     return f"禁修至 {record.cultivation_lock_until}"
 
 
-def lock_cultivation(record: UserRecord, today: Optional[Any] = None, days: int = 1, hours: Optional[int] = None) -> str:
-    if hours is not None:
+def lock_cultivation(
+    record: UserRecord,
+    today: Optional[Any] = None,
+    days: int = 1,
+    hours: Optional[int] = None,
+    minutes: Optional[int] = None,
+) -> str:
+    if minutes is not None or hours is not None:
         if isinstance(today, datetime):
             now = today
         elif isinstance(today, date):
             now = datetime.combine(today, datetime.now().time())
         else:
             now = datetime.now()
-        until = now + timedelta(hours=max(1, hours))
+        delta = timedelta(minutes=max(1, int(minutes))) if minutes is not None else timedelta(hours=max(1, int(hours or 1)))
+        until = now + delta
         record.cultivation_lock_until = until.isoformat(timespec="minutes")
         return cultivation_lock_text(record, now)
     lock_date = today.date() if isinstance(today, datetime) else (today or date.today())
@@ -1540,7 +2115,15 @@ def sell_reward(record: UserRecord, category: str, item_index: int) -> tuple[boo
         return False, f"没有找到这个编号的{category}。"
     price = max(1, int(reward_price(result) * 0.6))
     record.spirit_stones += price
-    return True, f"出售 {reward_display_name(result)}，获得 {spirit_stone_text(price)}，当前共有 {spirit_stone_text(record.spirit_stones)}。"
+    extra = ""
+    if category == ARTIFACT_CATEGORY:
+        signature = reward_signature(result)
+        source_uid = reward_instance_uid(result)
+        remove_equipped_artifact_by_signature(record, signature, source_uid)
+        removed = prune_broken_artifact_roots(record, signature, source_uid)
+        if removed:
+            extra = f"\n该灵器所系 {removed} 条器灵根随器离身而失效。"
+    return True, f"出售 {reward_display_name(result)}，获得 {spirit_stone_text(price)}，当前共有 {spirit_stone_text(record.spirit_stones)}。{extra}"
 
 
 def reward_category(reward: Optional[dict[str, Any]]) -> str:
@@ -2000,6 +2583,383 @@ def realm_quality_power(record: UserRecord) -> int:
     return total
 
 
+def reward_element_hint(reward: Optional[dict[str, Any]]) -> Optional[str]:
+    if not reward:
+        return None
+    required = reward_required_attribute(reward)
+    if required in BASE_FIVE_ELEMENTS:
+        return required
+    name = reward_name(reward)
+    for attr in BASE_FIVE_ELEMENTS:
+        if f"{attr}\u7cfb" in name or f"{attr}\u884c" in name or f"{attr}\u5c5e\u6027" in name:
+            return attr
+    if reward_category(reward) == "\u7075\u6750" and "\u5996\u4e39" in name:
+        return stable_choice(BASE_FIVE_ELEMENTS, f"core-element:{reward_signature(reward)}")
+    return None
+
+def acquired_root_tier_grade(purity: int) -> tuple[str, str]:
+    purity = max(1, min(100, int(purity)))
+    if purity >= 88:
+        return "\u5730\u9636", "\u6781\u54c1"
+    if purity >= 80:
+        return "\u5730\u9636", "\u4e0a\u54c1"
+    if purity >= 72:
+        return "\u5730\u9636", "\u4e2d\u54c1"
+    if purity >= 64:
+        return "\u7384\u9636", "\u4e0a\u54c1"
+    if purity >= 56:
+        return "\u7384\u9636", "\u4e2d\u54c1"
+    if purity >= 48:
+        return "\u9ec4\u9636", "\u4e0a\u54c1"
+    if purity >= 40:
+        return "\u9ec4\u9636", "\u4e2d\u54c1"
+    return "\u51e1\u54c1", "\u4e0b\u54c1"
+
+
+def normalize_acquired_root(root: dict[str, Any]) -> Optional[dict[str, Any]]:
+    kind = str(root.get("kind") or "")
+    attribute = str(root.get("attribute") or "")
+    if kind not in ACQUIRED_ROOT_KINDS or attribute not in BASE_FIVE_ELEMENTS:
+        return None
+    max_purity = DAN_ROOT_MAX_PURITY if kind == ACQUIRED_ROOT_DAN else ARTIFACT_ROOT_MAX_PURITY
+    purity = max(1, min(max_purity, int(root.get("purity", 1))))
+    tier, grade = acquired_root_tier_grade(purity)
+    return {
+        "kind": kind,
+        "attribute": attribute,
+        "purity": purity,
+        "tier": tier,
+        "grade": grade,
+        "source_name": str(root.get("source_name") or "\u65e0\u540d\u7075\u7269"),
+        "source_tier": str(root.get("source_tier") or "\u51e1\u54c1"),
+        "source_grade": str(root.get("source_grade") or "\u4e2d\u54c1"),
+        "source_signature": str(root.get("source_signature") or ""),
+        "source_uid": str(root.get("source_uid") or ""),
+    }
+
+
+def reward_instance_uid(reward: Optional[dict[str, Any]]) -> str:
+    return str((reward or {}).get("instance_uid") or (reward or {}).get("source_uid") or "")
+
+
+def ensure_reward_instance_uid(reward: dict[str, Any]) -> str:
+    current = reward_instance_uid(reward)
+    if current:
+        reward["instance_uid"] = current
+        return current
+    current = uuid.uuid4().hex
+    reward["instance_uid"] = current
+    return current
+
+
+def record_has_artifact_signature(record: UserRecord, signature: str, source_uid: str = "") -> bool:
+    if not signature and not source_uid:
+        return False
+    for reward in record.rewards or []:
+        if reward_category(reward) != ARTIFACT_CATEGORY:
+            continue
+        if source_uid:
+            if reward_instance_uid(reward) == source_uid:
+                return True
+        elif signature and reward_signature(reward) == signature:
+            return True
+    for item in artifact_slots(record).values():
+        if source_uid:
+            if reward_instance_uid(item) == source_uid:
+                return True
+        elif signature and reward_signature(item) == signature:
+            return True
+    return False
+
+def prune_broken_artifact_roots(record: UserRecord, broken_signature: str = "", broken_uid: str = "") -> int:
+    roots = []
+    removed = 0
+    for raw in record.acquired_roots or []:
+        root = normalize_acquired_root(raw) if isinstance(raw, dict) else None
+        if root is None:
+            continue
+        if root.get("kind") == ACQUIRED_ROOT_ARTIFACT:
+            signature = str(root.get("source_signature") or "")
+            source_uid = str(root.get("source_uid") or "")
+            explicitly_broken = bool(
+                (broken_uid and source_uid and broken_uid == source_uid)
+                or (broken_signature and signature == broken_signature and not source_uid)
+            )
+            if explicitly_broken or not record_has_artifact_signature(record, signature, source_uid):
+                removed += 1
+                continue
+        roots.append(root)
+    record.acquired_roots = roots
+    return removed
+
+def normalize_acquired_roots(record: UserRecord) -> list[dict[str, Any]]:
+    best: dict[str, dict[str, Any]] = {}
+    for raw in record.acquired_roots or []:
+        if not isinstance(raw, dict):
+            continue
+        root = normalize_acquired_root(raw)
+        if root is None:
+            continue
+        if root.get("kind") == ACQUIRED_ROOT_ARTIFACT and not record_has_artifact_signature(
+            record,
+            str(root.get("source_signature") or ""),
+            str(root.get("source_uid") or ""),
+        ):
+            continue
+        old = best.get(str(root["attribute"]))
+        if old is None or int(root["purity"]) > int(old.get("purity", 0)):
+            best[str(root["attribute"])] = root
+    ordered = sorted(best.values(), key=lambda item: BASE_FIVE_ELEMENTS.index(str(item["attribute"])))
+    record.acquired_roots = ordered
+    return ordered
+
+
+def acquired_root_display(root: dict[str, Any]) -> str:
+    root = normalize_acquired_root(root) or root
+    attribute = str(root.get("attribute") or "")
+    kind = str(root.get("kind") or "\u540e\u5929\u7075\u6839")
+    attr_name = ATTRIBUTE_NAMES.get(attribute, attribute + "\u7075\u6839")
+    return (
+        f"{kind}{attr_name}\uff08{root.get('tier', '')}{root.get('grade', '')}\uff0c"
+        f"\u7eaf\u5ea6{int(root.get('purity', 0))}%\uff0c\u6765\u6e90{root.get('source_name', '\u65e0\u540d\u7075\u7269')}\uff09"
+    )
+
+
+def acquired_root_summary(record: UserRecord, limit: int = 2) -> str:
+    roots = normalize_acquired_roots(record)
+    if not roots:
+        return "\u672a\u70bc\u6210"
+    shown = [acquired_root_display(root) for root in roots[:max(1, limit)]]
+    if len(roots) > limit:
+        shown.append(f"+{len(roots) - limit}\u6761")
+    return "\uff1b".join(shown)
+
+
+def acquired_root_power_total(record: UserRecord) -> int:
+    total = 0
+    for root in normalize_acquired_roots(record):
+        purity = int(root.get("purity", 0))
+        kind_bonus = 160 if root.get("kind") == ACQUIRED_ROOT_DAN else 110
+        total += kind_bonus + purity * 4
+    return total
+
+
+def innate_five_elements(record: UserRecord) -> set[str]:
+    elements = set()
+    for root in record.roots:
+        elements.update(attr for attr in root.source_attributes if attr in BASE_FIVE_ELEMENTS)
+    return elements
+
+
+def acquired_root_for_attribute(record: UserRecord, attribute: str) -> Optional[dict[str, Any]]:
+    for root in normalize_acquired_roots(record):
+        if root.get("attribute") == attribute:
+            return root
+    return None
+
+
+def demon_core_realm_name(reward: dict[str, Any]) -> Optional[str]:
+    name = reward_name(reward)
+    for key in ("\u5316\u795e", "\u5143\u5a74", "\u91d1\u4e39", "\u7b51\u57fa", "\u7ec3\u6c14", "\u70bc\u6c14", "\u70bc\u4f53", "\u6b8b\u788e"):
+        if key in name:
+            return key
+    return None
+
+
+def is_demon_core_item(reward: dict[str, Any]) -> bool:
+    return reward_category(reward) == "\u7075\u6750" and "\u5996\u4e39" in reward_name(reward)
+
+
+def demon_core_attribute(reward: dict[str, Any]) -> str:
+    explicit = str(reward.get("element") or reward.get("attribute") or "")
+    if explicit in BASE_FIVE_ELEMENTS:
+        return explicit
+    hinted = reward_element_hint(reward)
+    if hinted in BASE_FIVE_ELEMENTS:
+        return hinted
+    return stable_choice(BASE_FIVE_ELEMENTS, f"dan-root-attr:{reward_signature(reward)}")
+
+
+def demon_core_purity(reward: dict[str, Any]) -> int:
+    realm_name = demon_core_realm_name(reward)
+    realm_base = DEMON_CORE_REALM_PURITY.get(str(realm_name or ""), 0)
+    tier_base = DEMON_CORE_TIER_BASE_PURITY.get(str(reward.get("tier")), 45)
+    grade_bonus = GRADE_RANKS.get(str(reward.get("grade")), 1) * 3
+    purity = max(realm_base, tier_base) + grade_bonus + random.randint(0, 4)
+    return max(25, min(DAN_ROOT_MAX_PURITY, purity))
+
+
+def artifact_root_attribute(reward: dict[str, Any]) -> Optional[str]:
+    required = reward_required_attribute(reward)
+    if required in BASE_FIVE_ELEMENTS:
+        return required
+    hinted = reward_element_hint(reward)
+    return hinted if hinted in BASE_FIVE_ELEMENTS else None
+
+
+def artifact_root_purity(reward: dict[str, Any]) -> int:
+    tier_base = ARTIFACT_ROOT_TIER_BASE_PURITY.get(str(reward.get("tier")), 38)
+    grade_bonus = GRADE_RANKS.get(str(reward.get("grade")), 1) * 3
+    purity = tier_base + grade_bonus + random.randint(0, 4)
+    return max(18, min(ARTIFACT_ROOT_MAX_PURITY, purity))
+
+
+def make_acquired_root(kind: str, attribute: str, purity: int, source: dict[str, Any]) -> dict[str, Any]:
+    tier, grade = acquired_root_tier_grade(purity)
+    return {
+        "kind": kind,
+        "attribute": attribute,
+        "purity": purity,
+        "tier": tier,
+        "grade": grade,
+        "source_name": reward_name(source),
+        "source_tier": str(source.get("tier", "\u51e1\u54c1")),
+        "source_grade": str(source.get("grade", "\u4e2d\u54c1")),
+        "source_signature": reward_signature(source),
+        "source_uid": reward_instance_uid(source),
+    }
+
+
+def add_acquired_root(record: UserRecord, root: dict[str, Any]) -> tuple[bool, str]:
+    root = normalize_acquired_root(root) or root
+    attribute = str(root.get("attribute") or "")
+    if attribute in innate_five_elements(record):
+        return False, f"\u4f60\u5df2\u5177\u5907\u5148\u5929{attribute}\u7075\u6839\uff0c\u65e0\u9700\u518d\u70bc\u6210\u540e\u5929\u7075\u6839\u3002"
+    roots = normalize_acquired_roots(record)
+    old = acquired_root_for_attribute(record, attribute)
+    if old and int(old.get("purity", 0)) >= int(root.get("purity", 0)):
+        return False, f"\u5df2\u6709\u66f4\u7a33\u7684{acquired_root_display(old)}\uff0c\u6b64\u6b21\u4e0d\u5efa\u8bae\u66ff\u6362\u3002"
+    record.acquired_roots = [item for item in roots if item.get("attribute") != attribute]
+    record.acquired_roots.append(root)
+    normalize_acquired_roots(record)
+    if old:
+        return True, f"\u540e\u5929\u7075\u6839\u5df2\u66ff\u6362\uff1a{acquired_root_display(old)} -> {acquired_root_display(root)}"
+    return True, f"\u540e\u5929\u7075\u6839\u5df2\u70bc\u6210\uff1a{acquired_root_display(root)}"
+
+
+def refine_dan_root(record: UserRecord, material_index: int) -> tuple[bool, str]:
+    if record.root is None:
+        return False, "\u5c1a\u672a\u8e0f\u5165\u4fee\u884c\u8def\uff0c\u53d1\u9001\u201c\u7b7e\u5230\u201d\u5148\u89c9\u9192\u7075\u6839\u3002"
+    result = reward_position_by_category_index(record, "\u7075\u6750", material_index)
+    if result is None:
+        return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u7075\u6750\u3002"
+    list_index, material = result
+    if not is_demon_core_item(material):
+        return False, f"{reward_display_name(material)} \u4e0d\u662f\u5996\u4e39\uff0c\u65e0\u6cd5\u70bc\u6210\u4e39\u7075\u6839\u3002"
+    attribute = demon_core_attribute(material)
+    purity = demon_core_purity(material)
+    new_root = make_acquired_root(ACQUIRED_ROOT_DAN, attribute, purity, material)
+    allowed, reason = add_acquired_root(record, new_root)
+    if not allowed:
+        return False, reason
+    if record.rewards is None or list_index >= len(record.rewards):
+        return False, "\u7075\u6750\u4f4d\u7f6e\u53d1\u751f\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u6253\u5f00\u80cc\u5305\u786e\u8ba4\u7f16\u53f7\u3002"
+    consumed = normalize_reward(record.rewards.pop(list_index), record)
+    return True, f"\u70bc\u5316 {reward_display_name(consumed)} \u6210\u529f\u3002\n{reason}\n\u4e39\u7075\u6839\u4e3a\u540e\u5929\u6240\u6210\uff0c\u7cbe\u7eaf\u5ea6\u4e0a\u9650\u4e0e\u5730\u7075\u6839\u6301\u5e73\uff0c\u53ef\u7528\u4e8e\u4e94\u884c\u8865\u5168\u3001\u529f\u6cd5\u4e0e\u7075\u5668\u5951\u5408\u3002"
+
+
+def remove_equipped_artifact_by_signature(record: UserRecord, signature: str, source_uid: str = "") -> None:
+    if not signature and not source_uid:
+        return
+    slots = artifact_slots(record)
+    kept = {}
+    for slot, item in slots.items():
+        item_uid = reward_instance_uid(item)
+        if source_uid:
+            if item_uid == source_uid or (not item_uid and signature and reward_signature(item) == signature):
+                continue
+        elif signature and reward_signature(item) == signature:
+            continue
+        kept[slot] = item
+    record.equipped_artifacts = kept
+    record.equipped_artifact = kept.get("主手") if kept else None
+
+def refine_artifact_root(record: UserRecord, artifact_index: int) -> tuple[bool, str]:
+    if record.root is None:
+        return False, "尚未踏入修行路，发送“签到”先觉醒灵根。"
+    result = reward_position_by_category_index(record, ARTIFACT_CATEGORY, artifact_index)
+    if result is None:
+        return False, "没有找到这个编号的灵器。"
+    list_index, artifact = result
+    attribute = artifact_root_attribute(artifact)
+    if attribute is None:
+        return False, f"{reward_display_name(artifact)} 没有明确五行适配属性，不能作为器灵根。"
+    test_root = make_acquired_root(ACQUIRED_ROOT_ARTIFACT, attribute, artifact_root_purity(artifact), artifact)
+    old = acquired_root_for_attribute(record, attribute)
+    if attribute in innate_five_elements(record):
+        return False, f"你已具备先天{attribute}灵根，无需再炼器为根。"
+    if old and int(old.get("purity", 0)) >= int(test_root.get("purity", 0)):
+        return False, f"已有更稳的{acquired_root_display(old)}，此次不建议冒险替换。"
+    if record.rewards is None or list_index >= len(record.rewards):
+        return False, "灵器位置发生变化，请重新打开灵器面板确认编号。"
+    source = normalize_reward(record.rewards[list_index], record)
+    source_uid = ensure_reward_instance_uid(source)
+    record.rewards[list_index] = source
+    signature = reward_signature(source)
+    if random.random() >= ARTIFACT_ROOT_SUCCESS_RATE:
+        destroyed = normalize_reward(record.rewards.pop(list_index), record)
+        remove_equipped_artifact_by_signature(record, signature, source_uid)
+        prune_broken_artifact_roots(record, signature, source_uid)
+        return True, f"祭炼 {reward_display_name(destroyed)} 失败，器纹崩解，灵器已毁。\n器灵根成功率仅 {int(ARTIFACT_ROOT_SUCCESS_RATE * 100)}%，器毁则根无，建议优先使用对应妖丹炼成丹灵根。"
+    new_root = make_acquired_root(ACQUIRED_ROOT_ARTIFACT, attribute, artifact_root_purity(source), source)
+    allowed, reason = add_acquired_root(record, new_root)
+    if not allowed:
+        return True, f"祭炼 {reward_display_name(source)} 后，{reason}"
+    return True, f"祭炼 {reward_display_name(source)} 成功。\n{reason}\n器灵根依托此器而成：器在则根在，器毁则根无。请勿出售或损毁该灵器。"
+
+
+def acquired_root_text(record: UserRecord) -> str:
+    lines = ["\u3010\u540e\u5929\u7075\u6839\u3011", f"\u5f53\u524d\uff1a{acquired_root_summary(record, limit=5)}"]
+    missing = [attr for attr in BASE_FIVE_ELEMENTS if attr not in (set(record.root_attributes) & set(BASE_FIVE_ELEMENTS))]
+    lines.append("\u4e94\u884c\u72b6\u6001\uff1a" + ("\u5df2\u9f50" if not missing else f"\u5c1a\u7f3a{'/'.join(missing)}"))
+    lines.append("\u4e39\u7075\u6839\uff1a\u4ee5\u5bf9\u5e94\u5c5e\u6027\u5996\u4e39\u70bc\u6210\uff0c\u7cbe\u7eaf\u5ea6\u53d7\u5996\u517d\u4fee\u4e3a\u4e0e\u5996\u4e39\u54c1\u9636\u5f71\u54cd\uff0c\u4e0a\u9650\u4e0e\u5730\u7075\u6839\u6301\u5e73\u3002")
+    lines.append(f"\u5668\u7075\u6839\uff1a\u4ee5\u7075\u5668\u9002\u914d\u5c5e\u6027\u4f5c\u6839\uff0c\u6210\u529f\u7387 {int(ARTIFACT_ROOT_SUCCESS_RATE * 100)}%\uff0c\u5668\u5728\u5219\u6839\u5728\uff0c\u5668\u6bc1\u6216\u51fa\u552e\u5219\u7075\u6839\u5931\u6548\u3002")
+    lines.append("\u7528\u6cd5\uff1a\u80cc\u5305 -> \u7075\u6750\u4e2d\u627e\u5996\u4e39\uff0c\u53d1\u9001\u201c\u70bc\u5316\u4e39\u7075\u6839 \u7f16\u53f7\u201d\uff1b\u7075\u5668\u9762\u677f\u4e2d\u53d1\u9001\u201c\u70bc\u5316\u5668\u7075\u6839 \u7f16\u53f7\u201d\u3002")
+    materials = available_materials(record)
+    cores = [item for item in materials if is_demon_core_item(item)]
+    if cores:
+        lines.append("\u3010\u53ef\u7528\u5996\u4e39\u3011")
+        for index, item in enumerate(materials, start=1):
+            if is_demon_core_item(item):
+                lines.append(f"{index}. {reward_display_name(item)} -> {demon_core_attribute(item)}\u7075\u6839\uff0c\u9884\u4f30\u7cbe\u7eaf\u5ea6\u2264{DAN_ROOT_MAX_PURITY}%")
+    artifacts = available_artifacts(record)
+    compatible_artifacts = [(index, item) for index, item in enumerate(artifacts, start=1) if artifact_root_attribute(item)]
+    if compatible_artifacts:
+        lines.append("\u3010\u53ef\u796d\u70bc\u7075\u5668\u3011")
+        for index, item in compatible_artifacts[:8]:
+            lines.append(f"{index}. {reward_display_name(item)} -> {artifact_root_attribute(item)}\u7075\u6839\uff0c\u6210\u529f\u7387{int(ARTIFACT_ROOT_SUCCESS_RATE * 100)}%")
+    return "\n".join(lines)
+
+
+def supplemental_root_elements(record: UserRecord) -> dict[str, list[int]]:
+    return {attr: [] for attr in BASE_FIVE_ELEMENTS}
+
+def effective_five_elements(record: UserRecord) -> set[str]:
+    return set(record.root_attributes) & set(BASE_FIVE_ELEMENTS)
+
+def missing_five_elements(record: UserRecord) -> list[str]:
+    return [attr for attr in BASE_FIVE_ELEMENTS if attr not in effective_five_elements(record)]
+
+
+def needs_five_element_completion(record: UserRecord) -> bool:
+    requirement = current_breakthrough_requirement(record)
+    return bool(requirement and requirement.get("target") == "炼虚期")
+
+
+def five_element_requirement_text(record: UserRecord) -> str:
+    missing = missing_five_elements(record)
+    if not missing:
+        return "五行已齐，可感天地元气与空间法则。"
+    return (
+        f"化神破炼虚需五行合一，当前缺{'/'.join(missing)}。"
+        "需先把对应属性妖丹炼成丹灵根，"
+        "或借对应属性灵器炼作器灵根补全；单纯持有材料不能直接破关。"
+    )
+
+
+def consume_five_element_supplements(record: UserRecord) -> list[dict[str, Any]]:
+    return []
+
 def breakthrough_status(record: UserRecord) -> str:
     if record.root is None:
         return "尚未踏入修行路，发送“签到”先觉醒灵根。"
@@ -2011,14 +2971,15 @@ def breakthrough_status(record: UserRecord) -> str:
     target = str(requirement["target"])
     needed = list(requirement["items"])
     count_text = "，".join(f"{name}x{reward_count_by_names(record, [name])}" for name in needed)
+    five_text = f"\n{five_element_requirement_text(record)}" if needs_five_element_completion(record) else ""
     if record.realm_exp < record.progress_required:
         return (
             f"当前{record.realm}进度 {record.realm_exp}/{record.progress_required}，"
-            f"圆满后可凭 {breakthrough_required_text(record)} 突破至{target}。"
+            f"圆满后可凭 {breakthrough_required_text(record)} 突破至{target}。{five_text}"
         )
     return (
         f"当前已达{record.realm}，可突破至{target}。"
-        f"所需道具：{breakthrough_required_text(record)}；背包：{count_text or '暂无'}。"
+        f"所需道具：{breakthrough_required_text(record)}；背包：{count_text or '暂无'}。{five_text}"
     )
 
 BREAKTHROUGH_FLAVOR_BY_REALM = {
@@ -2109,12 +3070,15 @@ def breakthrough_realm(record: UserRecord) -> tuple[bool, str]:
         return False, breakthrough_status(record)
     if record.realm_exp < record.progress_required:
         return False, breakthrough_status(record)
+    if needs_five_element_completion(record) and missing_five_elements(record):
+        return False, f"突破失败：{five_element_requirement_text(record)}"
     item = consume_reward_by_names(record, list(requirement["items"]))
     if item is None:
         return (
             False,
             f"\u7a81\u7834\u5931\u8d25\uff1a\u9700\u8981 {breakthrough_required_text(record)}\u3002\u5883\u754c\u5706\u6ee1\u65f6\uff0c\u6bcf\u6b21\u7b7e\u5230\u6216\u5782\u9493\u90fd\u6709 50% \u6982\u7387\u989d\u5916\u83b7\u5f97\u5f53\u524d\u7a81\u7834\u9053\u5177\u3002",
         )
+    consumed_supplements = consume_five_element_supplements(record) if needs_five_element_completion(record) else []
     old_realm = record.realm
     record.realm_index += 1
     record.realm_exp = 0
@@ -2123,6 +3087,9 @@ def breakthrough_realm(record: UserRecord) -> tuple[bool, str]:
     mark = foundation_quality(item) if requirement.get("kind") == "foundation" else breakthrough_quality(item, record.realm_index)
     set_realm_mark(record, record.realm_index, mark)
     message = breakthrough_flavor_text(old_realm, target_realm, mark, item)
+    if consumed_supplements:
+        names = "、".join(reward_display_name(reward) for reward in consumed_supplements)
+        message += f"\n五行补全：炼化{names}，丹/器灵根归入己身，助你掌握天地元气。"
     special_reward = maybe_grant_special_ability_material(record, chance=0.35, source="突破余韵")
     if special_reward:
         message += f"\n突破余韵中落下一份{reward_display_name(special_reward)}，可发送“领悟特殊能力 编号”参悟。"
@@ -2143,7 +3110,7 @@ def regress_cultivation(record: UserRecord) -> tuple[bool, str]:
         record.foundation_type = None
     record.realm_index = old_index - 1
     record.realm_exp = max(0, int(record.progress_required * 0.6))
-    record.total_exp = max(0, record.realm_index * record.progress_required + record.realm_exp)
+    record.total_exp = max(0, cumulative_realm_exp(record.root, record.realm_index) + record.realm_exp)
     reset_bottleneck_state(record)
     new_realm = record.realm
     return (
@@ -2187,6 +3154,114 @@ def weighted_choice_stable(items: Sequence[tuple[T, int]], seed: str) -> T:
     return items[-1][0]
 
 
+DIVINATION_HEXAGRAMS = [
+    "乾为天", "坤为地", "水雷屯", "山水蒙", "水天需", "天水讼", "地水师", "水地比",
+    "风天小畜", "天泽履", "地天泰", "天地否", "天火同人", "火天大有", "地山谦", "雷地豫",
+    "泽雷随", "山风蛊", "地泽临", "风地观", "火雷噬嗑", "山火贲", "山地剥", "地雷复",
+    "天雷无妄", "山天大畜", "山雷颐", "泽风大过", "坎为水", "离为火", "泽山咸", "雷风恒",
+    "天山遁", "雷天大壮", "火地晋", "地火明夷", "风火家人", "火泽睽", "水山蹇", "雷水解",
+    "山泽损", "风雷益", "泽天夬", "天风姤", "泽地萃", "地风升", "泽水困", "水风井",
+    "泽火革", "火风鼎", "震为雷", "艮为山", "风山渐", "雷泽归妹", "雷火丰", "火山旅",
+    "巽为风", "兑为泽", "风水涣", "水泽节", "风泽中孚", "雷山小过", "水火既济", "火水未济",
+]
+
+DIVINATION_TRIGRAMS = [
+    ("乾", "天", "健"), ("坤", "地", "顺"), ("震", "雷", "动"), ("巽", "风", "入"),
+    ("坎", "水", "险"), ("离", "火", "丽"), ("艮", "山", "止"), ("兑", "泽", "悦"),
+]
+
+DIVINATION_YAO = ("初爻", "二爻", "三爻", "四爻", "五爻", "上爻")
+DIVINATION_IMAGES = (
+    "阳气初生，宜先正心而后行事。",
+    "阴阳相薄，动中有待，待中有机。",
+    "风过松间，所问之事贵在顺势而不强求。",
+    "水火相济，前路有阻，亦有解法藏于其中。",
+    "山泽通气，外静内动，须辨别虚实。",
+    "雷动于地，先有震惊，后有生机。",
+)
+DIVINATION_FORTUNES = (
+    ("大吉", "云开月明，所谋有成，但忌得意忘形。"),
+    ("中吉", "溪水渐涨，积少成多，此事利于稳行。"),
+    ("小吉", "春草初萌，尚需时日，勿急于求成。"),
+    ("平", "水面无波，吉凶未定，一念一行皆是变数。"),
+    ("先阻后通", "前有关隘，不可硬闯，待机而动反见生路。"),
+    ("小凶", "此事有虚火与暗耗，宜收敛锋芒，先保本心。"),
+)
+DIVINATION_YI = ("闭关", "问道", "结善缘", "清点因果", "稳守", "先礼后兵", "择吉时", "积蓄资粮")
+DIVINATION_JI = ("贪功", "急进", "轻信他言", "夜行险地", "强破瓶颈", "与人争锋", "心神散乱", "资财外露")
+DIVINATION_TOPIC_ADVICES = {
+    "修行": ("若问修行，当先固本培元，不宜为一时进境损了道基。", "若问破境，可先备齐灵丹符令，待气机圆融再动。", "若问秘境，此行有得有失，贪念起则陷阱近。"),
+    "情缘": ("若问情缘，宜真诚相告，不宜借势试心。", "若问和合，先解旧结，后谈新缘。", "若问缘分，此象贵在相待，不贵追逼。"),
+    "财事": ("若问财事，宜分散风险，小利可取，大贪则伤。", "若问买卖，先看契约，再论灵石。", "若问机缘，当以正道取之，暗财多带因果。"),
+    "通用": ("所问之事不宜只看一时吉凶，先正心，再正事。", "此象有变，一变在心，二变在时，三变在人和。", "若心中犹疑，可缓一步；若机已至，当留三分余地。"),
+}
+
+
+def divination_topic(question: str) -> str:
+    text = question.strip()
+    if any(token in text for token in ("修行", "突破", "境界", "功法", "秘境", "渡劫", "签到")):
+        return "修行"
+    if any(token in text for token in ("情", "缘", "爱", "复合", "姻", "双修")):
+        return "情缘"
+    if any(token in text for token in ("财", "钱", "灵石", "买", "卖", "商店", "事业", "工作")):
+        return "财事"
+    return "通用"
+
+
+def divination_pick_pair(options: Sequence[str], seed: str) -> str:
+    if len(options) <= 1:
+        return "、".join(options)
+    first = stable_int(seed + ":a") % len(options)
+    second = stable_int(seed + ":b") % len(options)
+    if second == first:
+        second = (second + 1) % len(options)
+    return f"{options[first]}、{options[second]}"
+
+
+def tianji_divination_text(record: UserRecord, question: str, today: Optional[date] = None) -> str:
+    clean_question = " ".join(str(question or "").strip().split())[:80] or "未言之事"
+    today = today or date.today()
+    seed = f"divination:{record.user_id}:{today.isoformat()}:{clean_question}:{record.realm_index}:{record.sign_count}"
+    hexagram = stable_choice(DIVINATION_HEXAGRAMS, seed + ":hexagram")
+    upper = stable_choice(DIVINATION_TRIGRAMS, seed + ":upper")
+    lower = stable_choice(DIVINATION_TRIGRAMS, seed + ":lower")
+    changed_yao = stable_choice(DIVINATION_YAO, seed + ":yao")
+    image = stable_choice(DIVINATION_IMAGES, seed + ":image")
+    fortune, fortune_text = stable_choice(DIVINATION_FORTUNES, seed + ":fortune")
+    topic = divination_topic(clean_question)
+    advice = stable_choice(DIVINATION_TOPIC_ADVICES[topic], seed + ":advice")
+    yi = divination_pick_pair(DIVINATION_YI, seed + ":yi")
+    ji = divination_pick_pair(DIVINATION_JI, seed + ":ji")
+    realm = record.realm if record.root else "未入门"
+    root_text = record.root_summary if record.root else "未觉醒灵根"
+    lines = [
+        "【天机占卜】",
+        f"所问：{clean_question}",
+        f"命盘：{realm}，{root_text}",
+        f"起卦：{hexagram}；变爻：{changed_yao}；签等：{fortune}",
+        f"卦象：{upper[0]}{upper[1]}在上，{lower[0]}{lower[1]}在下；{image}",
+        f"签语：{fortune_text}",
+        f"断曰：上卦为{upper[2]}，下卦为{lower[2]}，此事须看时、势、心三处是否相合。",
+        f"宜：{yi}",
+        f"忌：{ji}",
+        f"修士建议：{advice}",
+        "注：此为趣味占卜，天机只露一线，取舍仍在宿主自心。",
+    ]
+    return "\n".join(lines)
+
+
+def method_max_layer(method: Optional[dict[str, Any]]) -> int:
+    if not method:
+        return 0
+    tier_rank = TIER_RANKS.get(str(method.get("tier", "\u51e1\u54c1")), 0)
+    grade_rank = GRADE_RANKS.get(str(method.get("grade", "\u4e2d\u54c1")), 1)
+    return max(3, min(12, 3 + tier_rank * 2 + grade_rank // 2))
+
+
+def method_layer_required(layer: int) -> int:
+    return max(80, int(80 * max(1, layer) ** 1.35))
+
+
 def method_layer(record: UserRecord, method: Optional[dict[str, Any]]) -> int:
     if not method:
         return 0
@@ -2194,10 +3269,16 @@ def method_layer(record: UserRecord, method: Optional[dict[str, Any]]) -> int:
     layers = record.method_layers or {}
     current = int(layers.get(key, 0))
     if current > 0:
-        return max(1, min(9, current))
+        return max(1, min(method_max_layer(method), current))
     tier_rank = TIER_RANKS.get(str(method.get("tier", "\u51e1\u54c1")), 0)
     grade_rank = GRADE_RANKS.get(str(method.get("grade", "\u4e2d\u54c1")), 1)
-    return max(1, min(9, 1 + tier_rank // 2 + grade_rank // 2))
+    return max(1, min(method_max_layer(method), 1 + tier_rank // 2 + grade_rank // 2))
+
+
+def method_proficiency_value(record: UserRecord, method: Optional[dict[str, Any]]) -> int:
+    if not method:
+        return 0
+    return max(0, int((record.method_proficiency or {}).get(reward_signature(method), 0)))
 
 
 def set_method_layer(record: UserRecord, method: Optional[dict[str, Any]], layer: int) -> None:
@@ -2205,7 +3286,33 @@ def set_method_layer(record: UserRecord, method: Optional[dict[str, Any]], layer
         return
     if record.method_layers is None:
         record.method_layers = {}
-    record.method_layers[reward_signature(method)] = max(1, min(9, int(layer)))
+    record.method_layers[reward_signature(method)] = max(1, min(method_max_layer(method), int(layer)))
+
+
+def increase_method_proficiency(record: UserRecord, amount: int = 1, method: Optional[dict[str, Any]] = None) -> int:
+    method_item = method or record.equipped_method
+    if not method_item or amount <= 0:
+        return 0
+    if record.method_layers is None:
+        record.method_layers = {}
+    if record.method_proficiency is None:
+        record.method_proficiency = {}
+    key = reward_signature(method_item)
+    layer = method_layer(record, method_item)
+    max_layer = method_max_layer(method_item)
+    if layer >= max_layer:
+        record.method_layers[key] = max_layer
+        record.method_proficiency[key] = min(method_layer_required(max_layer), int(record.method_proficiency.get(key, 0)) + amount)
+        return 0
+    gained_layers = 0
+    proficiency = int(record.method_proficiency.get(key, 0)) + amount
+    while layer < max_layer and proficiency >= method_layer_required(layer):
+        proficiency -= method_layer_required(layer)
+        layer += 1
+        gained_layers += 1
+    record.method_layers[key] = layer
+    record.method_proficiency[key] = proficiency
+    return gained_layers
 
 
 def method_kind(method: Optional[dict[str, Any]]) -> str:
@@ -2301,6 +3408,8 @@ def method_profile(method: Optional[dict[str, Any]], record: Optional[UserRecord
             "kind": "\u65e0",
             "layer": 0,
             "max_layer": 0,
+            "proficiency": 0,
+            "proficiency_required": 0,
             "origin": "",
             "content": "",
             "sign_speed": 0,
@@ -2312,10 +3421,14 @@ def method_profile(method: Optional[dict[str, Any]], record: Optional[UserRecord
         }
     kind = method_kind(method)
     layer = method_layer(record, method) if record is not None else 1
+    max_layer = method_max_layer(method)
+    proficiency = method_proficiency_value(record, method) if record is not None else 0
+    proficiency_required = method_layer_required(layer) if layer < max_layer else method_layer_required(max_layer)
     tier = str(method.get("tier", "\u51e1\u54c1"))
     grade = str(method.get("grade", "\u4e2d\u54c1"))
-    sign_speed = int(10 * METHOD_SIGN_RATE.get(tier, 0.08) * grade_ratio(grade) * max(1, layer))
-    chat_speed = METHOD_CHAT_BASE.get(tier, 0.35) * grade_ratio(grade) * max(1.0, layer / 2)
+    purity_mult = root_purity_multiplier(record, reward_required_attribute(method)) if record is not None else 1.0
+    sign_speed = int(10 * METHOD_SIGN_RATE.get(tier, 0.08) * grade_ratio(grade) * max(1, layer) * purity_mult)
+    chat_speed = METHOD_CHAT_BASE.get(tier, 0.35) * grade_ratio(grade) * max(1.0, layer / 2) * purity_mult
     hp_bonus = 0
     if kind == "\u953b\u4f53\u7c7b":
         hp_bonus = max(60, int(method_power(method, record) * (0.18 + layer * 0.035)))
@@ -2326,7 +3439,9 @@ def method_profile(method: Optional[dict[str, Any]], record: Optional[UserRecord
         "display": reward_display_name(method),
         "kind": kind,
         "layer": layer,
-        "max_layer": 9,
+        "max_layer": max_layer,
+        "proficiency": proficiency,
+        "proficiency_required": proficiency_required,
         "origin": method_origin_text(method, kind),
         "content": method_content_text(method, kind),
         "sign_speed": sign_speed,
@@ -2385,7 +3500,7 @@ def ensure_combat_profile(record: UserRecord) -> bool:
     if not record.physique:
         record.physique = weighted_choice_stable(COMBAT_PHYSIQUES, f"physique:{record.user_id}")
         changed = True
-    abilities = list(dict.fromkeys(record.special_abilities or []))
+    abilities = normalize_special_abilities(record.special_abilities)
     if abilities != list(record.special_abilities or []):
         record.special_abilities = abilities
         changed = True
@@ -2536,16 +3651,16 @@ def combat_special_power(record: UserRecord, ability: str, kind: str) -> tuple[i
     power = battle_power(record)
     info = special_ability_info(ability)
     damage_rate, defense_rate, speed_bonus = info.get("combat", (0.08, 0.04, 0))
-    damage = int(power * float(damage_rate))
-    defense = int(power * float(defense_rate))
-    speed = int(speed_bonus)
-    if kind == "eight":
-        return damage, defense, speed, "\u6210\u529f\u5f00\u542f\u516b\u7981\uff0c\u6218\u610f\u66b4\u6da8"
-    if kind == "god":
-        return damage, defense, speed, "\u8e0f\u5165\u795e\u7981\u9886\u57df\uff0c\u77ed\u6682\u538b\u4f4f\u6218\u5c40"
+    multiplier = nine_secret_set_multiplier(record) if kind == "secret" else 1
+    damage = int(power * float(damage_rate) * multiplier)
+    defense = int(power * float(defense_rate) * multiplier)
+    speed = int(speed_bonus) * multiplier
+    rarity = special_ability_rarity_text(ability)
+    if ability in FORBIDDEN_REALM_ABILITIES:
+        return damage, defense, speed, f"触发{rarity}【{ability}】，禁域气机展开。"
     if kind == "secret":
-        return damage, defense, speed, f"\u5f15\u52a8{ability}\uff0c\u4e5d\u79d8\u6cd5\u5219\u95ea\u73b0"
-    return damage, defense, speed, f"\u5f15\u52a8{ability}\uff0c{info.get('effect', '\u6c14\u673a\u9aa4\u7136\u62d4\u5347')}"
+        return damage, defense, speed, f"触发{rarity}【{ability}】，九秘套装共鸣{multiplier}倍，已悟九秘同步增强{multiplier}倍。"
+    return damage, defense, speed, f"触发{rarity}【{ability}】：{info.get('effect', '神通气机展开。')}"
 
 
 def sanitize_combat_text(text: str) -> str:
@@ -2555,7 +3670,7 @@ def sanitize_combat_text(text: str) -> str:
 def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]], side_seed: str = "") -> dict[str, Any]:
     ensure_combat_profile(record)
     available = available_battle_techniques(record)
-    abilities = list(record.special_abilities or [])
+    abilities = normalize_special_abilities(record.special_abilities)
     triggered: list[str] = []
     logs: list[str] = []
     damage = int(battle_power(record) * 0.18)
@@ -2568,6 +3683,15 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
     mana_spent = 0
     physical_hits = 0
     trait_triggers = 0
+    equipped_talisman = record.equipped_talisman
+    equipped_talisman_power = talisman_power(equipped_talisman, record)
+    equipped_talisman_name_text = equipped_talisman_name(record) if equipped_talisman_power > 0 else ""
+    if equipped_talisman_power > 0:
+        damage += int(equipped_talisman_power * 0.72)
+        defense += int(equipped_talisman_power * 0.52)
+        logs.append(f"\u7b26\u7b93\u680f\u3010{equipped_talisman_name_text}\u3011\u62a4\u6301\u672c\u573a\u6597\u6cd5\uff0c\u4e0d\u6d88\u8017")
+    elif equipped_talisman:
+        logs.append(f"\u7b26\u7b93\u680f\u3010{equipped_talisman_name(record)}\u3011\u54c1\u9636\u8fc7\u9ad8\uff0c\u5f53\u524d\u5883\u754c\u5c1a\u65e0\u6cd5\u50ac\u52a8")
 
     def tick_cooldowns() -> None:
         for key in list(cooldowns):
@@ -2631,30 +3755,36 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
         if not matched:
             matched = [tech for tech in GENERAL_TECHNIQUE_NAMES if sanitize_combat_text(tech) in text]
         used_special = False
-        if "\u516b\u7981" in text:
+        forbidden_terms = {
+            "神禁领域": "神禁领域",
+            "开启神禁": "神禁领域",
+            "神禁": "神禁领域",
+            "九禁": "九禁",
+            "开启九禁": "九禁",
+            "八禁": "八禁",
+            "开启八禁": "八禁",
+        }
+        requested_forbidden = None
+        for term, canonical in forbidden_terms.items():
+            if term in text:
+                requested_forbidden = canonical
+                break
+        if requested_forbidden:
             used_special = True
-            if "\u516b\u7981" in abilities:
-                add_damage, add_defense, add_speed, message = combat_special_power(record, "\u516b\u7981", "eight")
+            owned_forbidden = highest_forbidden_ability(abilities)
+            if not owned_forbidden:
+                logs.append("尚未领悟禁域，强行开启只惊起一缕战意。")
+            elif forbidden_rank(owned_forbidden) < forbidden_rank(requested_forbidden):
+                logs.append(f"尝试开启【{requested_forbidden}】失败，当前只能维持【{owned_forbidden}】。")
+            else:
+                add_damage, add_defense, add_speed, message = combat_special_power(record, owned_forbidden, "forbidden")
                 damage += add_damage
                 defense += add_defense
                 speed += add_speed
-                triggered.append("\u516b\u7981")
+                triggered.append(owned_forbidden)
                 logs.append(message)
-            else:
-                logs.append("\u5c1d\u8bd5\u5f00\u542f\u516b\u7981\uff0c\u4f46\u672a\u638c\u63e1\u6b64\u80fd\u529b")
-        if "\u795e\u7981" in text:
-            used_special = True
-            if "\u795e\u7981\u9886\u57df" in abilities:
-                add_damage, add_defense, add_speed, message = combat_special_power(record, "\u795e\u7981\u9886\u57df", "god")
-                damage += add_damage
-                defense += add_defense
-                speed += add_speed
-                triggered.append("\u795e\u7981\u9886\u57df")
-                logs.append(message)
-            else:
-                logs.append("\u51b2\u51fb\u795e\u7981\u5931\u8d25\uff0c\u6c14\u673a\u53ea\u662f\u4e00\u9707")
-        if "\u4e5d\u79d8" in text or any(secret.split("-", 1)[-1] in text for secret in abilities if secret.startswith("\u4e5d\u79d8")):
-            secrets = [secret for secret in abilities if secret.startswith("\u4e5d\u79d8")]
+        if "九秘" in text or any(secret.split("-", 1)[-1] in text for secret in abilities if secret.startswith("九秘")):
+            secrets = [secret for secret in abilities if secret.startswith("九秘")]
             used_special = True
             if secrets:
                 secret = stable_choice(secrets, f"secret:{side_seed}:{idx}:{text}")
@@ -2665,9 +3795,9 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
                 triggered.append(secret)
                 logs.append(message)
             else:
-                logs.append("\u5c1d\u8bd5\u5f15\u52a8\u4e5d\u79d8\uff0c\u4f46\u8bc6\u6d77\u4e2d\u6ca1\u6709\u56de\u5e94")
+                logs.append("尚未悟得九秘残篇，天机一闪而逝。")
         for ability in abilities:
-            if ability in triggered or ability in {"\u516b\u7981", "\u795e\u7981\u9886\u57df"} or ability.startswith("\u4e5d\u79d8"):
+            if ability in triggered or ability in FORBIDDEN_REALM_ABILITIES or ability.startswith("\u4e5d\u79d8"):
                 continue
             info = special_ability_info(ability)
             terms = [ability, *list(info.get("aliases", []) or [])]
@@ -2706,6 +3836,8 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
         "cooldowns": dict(cooldowns),
         "physical_hits": physical_hits,
         "trait_triggers": trait_triggers,
+        "talisman": equipped_talisman_name_text or equipped_talisman_name(record),
+        "talisman_power": equipped_talisman_power,
     }
 
 def normal_duel_fighter(record: UserRecord, nickname: str, actions: Sequence[dict[str, Any]], side_seed: str) -> dict[str, Any]:
@@ -2720,9 +3852,11 @@ def normal_duel_fighter(record: UserRecord, nickname: str, actions: Sequence[dic
         "root": combat_root_text(record),
         "race": record.combat_race or "\u672a\u8bb0\u5f55",
         "physique": record.physique or "\u672a\u8bb0\u5f55",
-        "abilities": list(record.special_abilities or []),
+        "abilities": normalize_special_abilities(record.special_abilities),
         "method": profile.get("display", "\u672a\u53c2\u609f\u529f\u6cd5"),
         "method_kind": profile.get("kind", "\u65e0"),
+        "talisman": action_result.get("talisman", equipped_talisman_name(record)),
+        "talisman_power": int(action_result.get("talisman_power", talisman_power(record.equipped_talisman, record))),
         "available_techniques": available_battle_techniques(record),
         "triggered_techniques": action_result["triggered"],
         "logs": action_result["logs"],
@@ -2798,7 +3932,9 @@ def simulate_normal_duel(
 
 def item_is_compatible(record: UserRecord, item: dict[str, Any]) -> bool:
     required_attribute = reward_required_attribute(item)
-    return not required_attribute or required_attribute in record.root_attributes
+    if not required_attribute:
+        return True
+    return required_attribute in record.root_attributes
 
 
 def array_multiplier(record: UserRecord, method: Optional[dict[str, Any]] = None) -> float:
@@ -2828,7 +3964,7 @@ def method_sign_bonus(record: UserRecord, base_exp: int) -> int:
     if not method or not item_is_compatible(record, method):
         return 0
     rate = METHOD_SIGN_RATE.get(str(method.get("tier")), 0.0)
-    bonus = int(base_exp * rate * grade_ratio(str(method.get("grade"))) * array_multiplier(record, method))
+    bonus = int(base_exp * rate * grade_ratio(str(method.get("grade"))) * array_multiplier(record, method) * root_purity_multiplier(record, reward_required_attribute(method)))
     return max(1, bonus) if rate > 0 else 0
 
 
@@ -2840,6 +3976,7 @@ def method_chat_exp(record: UserRecord, count: int = 1) -> int:
         METHOD_CHAT_BASE.get(str(method.get("tier")), 0.0)
         * grade_ratio(str(method.get("grade")))
         * array_multiplier(record, method)
+        * root_purity_multiplier(record, reward_required_attribute(method))
         * count
     )
     gained = int(raw)
@@ -2855,6 +3992,7 @@ def apply_chat_cultivation(record: UserRecord, count: int = 1) -> tuple[int, int
     applied_exp, leveled = apply_exp(record, gained_exp)
     if applied_exp:
         increase_array_proficiency(record, count)
+        increase_method_proficiency(record, max(1, count))
     return applied_exp, leveled
 
 
@@ -2898,7 +4036,7 @@ def choose_cultivation_route(record: UserRecord, route: str) -> tuple[bool, str]
 def choose_evil_cultivation(record: UserRecord, enabled: bool = True) -> tuple[bool, str]:
     record.evil_cultivator = enabled
     if enabled:
-        return True, "已同修邪修路线。秘境中不会因邪修陷阱直接落入坏结局，但所有坏结局禁修期变为12小时。"
+        return True, "已同修邪修路线。秘境中不会因邪修陷阱直接落入坏结局，若真正反噬则进入5分钟禁修期。"
     return True, "已暂离邪修路线。"
 
 
@@ -3208,15 +4346,15 @@ def refine_pill_by_recipe(record: UserRecord, pill_name: str) -> tuple[bool, str
     )
 
 def improve_root_once(root: Root) -> Root:
-    grade_index = GRADE_ORDER.index(root.grade)
-    if grade_index < len(GRADE_ORDER) - 1:
-        return make_root(root.tier, GRADE_ORDER[grade_index + 1], root.attribute)
-
-    tier_index = TIER_ORDER.index(root.tier)
-    if tier_index < len(TIER_ORDER) - 1:
-        return make_root(TIER_ORDER[tier_index + 1], "下品", root.attribute)
-
-    return root
+    if root.tier == "\u53d8\u5f02\u7075\u6839":
+        root.purity = min(100, int(root.purity) + random.randint(1, 3))
+        if root.source_purities:
+            root.source_purities = {key: min(100, int(value) + random.randint(1, 2)) for key, value in root.source_purities.items()}
+        root.grade = root_grade_from_score(root.purity)
+        root.grade_rank = GRADE_RANKS.get(root.grade, root.grade_rank)
+        return root
+    new_purity = min(100, int(root.purity) + random.randint(4, 9))
+    return make_root(root.tier, root.grade, root.attribute, purity=new_purity, sources=[root.attribute], mutated=False)
 
 
 def maybe_apply_encounter(record: UserRecord, today: date) -> EncounterResult:
@@ -3224,50 +4362,46 @@ def maybe_apply_encounter(record: UserRecord, today: date) -> EncounterResult:
     if record.root is None or record.last_encounter_date == today_text:
         return EncounterResult()
 
+    normalize_root_profile(record)
     record.last_encounter_date = today_text
-    if not record.is_peak_aptitude:
-        if random.randint(1, 365) != 1:
+    if record.root and record.root.tier == "\u53d8\u5f02\u7075\u6839":
+        if random.randint(1, 999) > 1 + max(0, record.sign_count // 30):
             return EncounterResult()
-        old_root = record.root
-        if random.random() >= 0.5:
-            return EncounterResult(
-                happened=True,
-                success=False,
-                message="今日忽逢山中古洞，可惜机缘一闪而逝，资质未有变化。",
-                old_root=old_root,
-            )
-        new_root = improve_root_once(old_root)
+        old_root = Root.from_dict(record.root.to_dict())
+        new_root = improve_root_once(record.root)
         record.root = new_root
+        record.extra_roots = []
         return EncounterResult(
             happened=True,
             success=True,
-            message=f"今日奇遇入梦，资质由{old_root.display_name}提升为{new_root.display_name}！",
+            message=f"\u4eca\u65e5\u5148\u5929\u5f02\u8c61\u56de\u54cd\uff0c{new_root.display_name}\u7cbe\u7eaf\u5ea6\u63d0\u5347\u81f3{new_root.purity}%\u3002",
             old_root=old_root,
             new_root=new_root,
         )
 
-    extra_count = len(record.extra_roots or [])
-    if random.randint(1, 999) > 1 + extra_count:
-        return EncounterResult()
-
-    owned = record.root_attributes
-    candidates = [attribute for attribute in ATTRIBUTES if attribute not in owned]
-    if not candidates:
+    if not record.is_peak_aptitude:
+        if random.randint(1, 365) != 1:
+            return EncounterResult()
+        old_root = Root.from_dict(record.root.to_dict()) if record.root else None
+        if random.random() >= 0.5:
+            return EncounterResult(
+                happened=True,
+                success=False,
+                message="\u4eca\u65e5\u5ffd\u9022\u5c71\u4e2d\u53e4\u6d1e\uff0c\u53ef\u60dc\u673a\u7f18\u4e00\u95ea\u800c\u901d\uff0c\u8d44\u8d28\u672a\u6709\u53d8\u5316\u3002",
+                old_root=old_root,
+            )
+        if record.root:
+            record.root = improve_root_once(record.root)
+            normalize_root_profile(record)
         return EncounterResult(
             happened=True,
-            success=False,
-            message="今日灵台七窍同明，可惜七系灵根已全，机缘化作一缕清气。",
+            success=True,
+            message=f"\u4eca\u65e5\u5947\u9047\u5165\u68a6\uff0c\u7075\u6839\u7cbe\u7eaf\u5ea6\u63d0\u5347\uff0c\u8d44\u8d28\u8bc4\u5b9a\u4e3a{record.root.tier}{record.root.grade}\uff01",
+            old_root=old_root,
+            new_root=record.root,
         )
-    extra_root = make_root("天阶", "极品", random.choice(candidates))
-    if record.extra_roots is None:
-        record.extra_roots = []
-    record.extra_roots.append(extra_root)
-    return EncounterResult(
-        happened=True,
-        success=True,
-        message=f"今日天门洞开，额外觉醒{extra_root.display_name}！",
-        added_root=extra_root,
-    )
+
+    return EncounterResult()
 
 
 
@@ -3278,7 +4412,12 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
 
     is_first = record.root is None
     if record.root is None:
-        record.root = draw_root()
+        roots = draw_roots()
+        record.root = roots[0]
+        record.extra_roots = [] if roots[0].tier == "\u53d8\u5f02\u7075\u6839" else roots[1:]
+        normalize_root_profile(record)
+    else:
+        ensure_legacy_extra_roots(record)
 
     low, high = record.root.exp_gain_range
     base_exp = random.randint(low, high)
@@ -3294,6 +4433,7 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
     applied_exp, leveled_realms = exp_result
     if applied_exp:
         increase_array_proficiency(record, 1)
+        increase_method_proficiency(record, 2)
     encounter = maybe_apply_encounter(record, today)
     breakthrough_reward = maybe_grant_breakthrough_item(record)
     record_identity_sign_day(record, today)
@@ -3436,49 +4576,145 @@ def available_special_ability_items(record: UserRecord) -> list[dict[str, Any]]:
     return rewards_by_category(record, SPECIAL_ABILITY_CATEGORY)
 
 
+def normalize_special_abilities(abilities: Sequence[str] | None) -> list[str]:
+    result = list(dict.fromkeys(str(item) for item in (abilities or []) if item))
+    owned = set(result)
+    if "\u795e\u7981\u9886\u57df" in owned:
+        result = [item for item in result if item not in {"\u516b\u7981", "\u4e5d\u7981"}]
+    elif "\u4e5d\u7981" in owned:
+        result = [item for item in result if item != "\u516b\u7981"]
+    return result
+
+
+def forbidden_rank(ability: Optional[str]) -> int:
+    if ability == "\u516b\u7981":
+        return 1
+    if ability == "\u4e5d\u7981":
+        return 2
+    if ability == "\u795e\u7981\u9886\u57df":
+        return 3
+    return 0
+
+
+def highest_forbidden_ability(abilities: Sequence[str] | None) -> Optional[str]:
+    owned = set(abilities or [])
+    for ability in reversed(FORBIDDEN_REALM_ABILITIES):
+        if ability in owned:
+            return ability
+    return None
+
+
+def nine_secret_count(record: UserRecord) -> int:
+    return len([ability for ability in normalize_special_abilities(record.special_abilities) if ability.startswith("\u4e5d\u79d8")])
+
+
+def nine_secret_set_multiplier(record: UserRecord) -> int:
+    return max(1, nine_secret_count(record))
+
+
+def special_ability_rarity(ability: str) -> tuple[str, str]:
+    return SPECIAL_ABILITY_RARITIES.get(str(ability), ("\u7384\u9636", "\u4e0a\u54c1"))
+
+
+def special_ability_rarity_text(ability: str) -> str:
+    tier, grade = special_ability_rarity(ability)
+    return f"{tier}{grade}"
+
+
+def special_ability_power_value(ability: str) -> int:
+    tier, grade = special_ability_rarity(ability)
+    tier_rank = TIER_ORDER.index(tier) if tier in TIER_ORDER else 2
+    grade_rank = GRADE_ORDER.index(grade) if grade in GRADE_ORDER else 2
+    return 120 + tier_rank * 170 + grade_rank * 55
+
+
+def special_ability_power_total(record: UserRecord) -> int:
+    abilities = normalize_special_abilities(record.special_abilities)
+    secret_count = len([ability for ability in abilities if ability.startswith("\u4e5d\u79d8")])
+    total = sum(special_ability_power_value(ability) for ability in abilities)
+    if secret_count:
+        total += secret_count * max(0, secret_count - 1) * 90
+    return total
+
+
 def special_ability_info(ability: str) -> dict[str, Any]:
-    return dict(SPECIAL_ABILITY_INFOS.get(ability, {
+    info = dict(SPECIAL_ABILITY_INFOS.get(ability, {
         "material": ability,
-        "source": "失落传承",
-        "effect": "一段尚未完全明悟的特殊能力。",
+        "source": "\u5931\u843d\u4f20\u627f",
+        "effect": "\u4e00\u6bb5\u5c1a\u672a\u5b8c\u5168\u660e\u609f\u7684\u7279\u6b8a\u80fd\u529b\u3002",
         "aliases": [ability],
         "combat": (0.08, 0.04, 0),
     }))
+    info["rarity"] = special_ability_rarity_text(ability)
+    return info
+
+
+def special_ability_material_requirement_text(record: UserRecord, material_name: str) -> str:
+    material_name = str(material_name or "").strip()
+    abilities = set(normalize_special_abilities(record.special_abilities))
+    highest = highest_forbidden_ability(abilities)
+    if material_name in {"\u516b\u7981\u611f\u609f", "\u51e1\u9aa8\u6218\u610f\u672d"} and highest:
+        return f"\u5df2\u638c\u63e1\u3010{highest}\u3011\uff0c\u7981\u57df\u8def\u7ebf\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002"
+    if material_name == "\u4e5d\u7981\u611f\u609f":
+        if "\u795e\u7981\u9886\u57df" in abilities or "\u4e5d\u7981" in abilities:
+            return "\u4f60\u5df2\u638c\u63e1\u4e5d\u7981\u6216\u66f4\u9ad8\u7981\u57df\u3002"
+        if "\u516b\u7981" not in abilities:
+            return "\u9700\u5148\u9886\u609f\u516b\u7981\uff0c\u624d\u80fd\u501f\u4e5d\u7981\u611f\u609f\u8fdb\u9636\u3002"
+    if material_name == "\u795e\u7981\u70d9\u5370":
+        if "\u795e\u7981\u9886\u57df" in abilities:
+            return "\u4f60\u5df2\u638c\u63e1\u795e\u7981\u9886\u57df\u3002"
+        if "\u4e5d\u7981" not in abilities:
+            return "\u9700\u5148\u5c06\u516b\u7981\u63a8\u81f3\u4e5d\u7981\uff0c\u624d\u80fd\u627f\u8f7d\u795e\u7981\u70d9\u5370\u3002"
+    return "\u5df2\u65e0\u53ef\u9886\u609f\u76ee\u6807"
 
 
 def special_ability_material_target(record: UserRecord, material_name: str, seed: str = "") -> Optional[str]:
     material_name = str(material_name or "").strip()
-    owned = set(record.special_abilities or [])
-    if material_name == "九秘残页":
+    owned = set(normalize_special_abilities(record.special_abilities))
+    highest = highest_forbidden_ability(owned)
+    if material_name == "\u4e5d\u79d8\u6b8b\u9875":
         candidates = [ability for ability in NINE_SECRET_ABILITIES if ability not in owned]
         if not candidates:
             return None
         return stable_choice(candidates, seed or f"nine-secret:{record.user_id}:{len(owned)}")
+    if material_name in {"\u516b\u7981\u611f\u609f", "\u51e1\u9aa8\u6218\u610f\u672d"}:
+        return None if highest else "\u516b\u7981"
+    if material_name == "\u4e5d\u7981\u611f\u609f":
+        if "\u516b\u7981" in owned and "\u4e5d\u7981" not in owned and "\u795e\u7981\u9886\u57df" not in owned:
+            return "\u4e5d\u7981"
+        return None
+    if material_name == "\u795e\u7981\u70d9\u5370":
+        if "\u4e5d\u7981" in owned and "\u795e\u7981\u9886\u57df" not in owned:
+            return "\u795e\u7981\u9886\u57df"
+        return None
     if material_name in SPECIAL_ABILITY_POOL:
-        return material_name
+        return None if material_name in owned else material_name
     target = SPECIAL_ABILITY_MATERIAL_TO_ABILITY.get(material_name)
     if target:
-        return target
+        return None if target in owned else target
     for ability, info in SPECIAL_ABILITY_INFOS.items():
         if material_name == str(info.get("material", "")):
-            return ability
+            return None if ability in owned else ability
     return None
 
 
 def draw_special_ability_material(record: Optional[UserRecord] = None) -> dict[str, Any]:
     pool = [reward for reward in FISHING_REWARDS if reward[2] == SPECIAL_ABILITY_CATEGORY]
     if record is not None:
-        unowned = set(SPECIAL_ABILITY_POOL) - set(record.special_abilities or [])
         preferred = [
             reward
             for reward in pool
-            if special_ability_material_target(record, reward[3], f"draw:{record.user_id}:{reward[3]}") in unowned
+            if special_ability_material_target(record, reward[3], f"draw:{record.user_id}:{reward[3]}") is not None
         ]
         if preferred:
             pool = preferred
     if not pool:
-        return make_reward("玄阶", "上品", SPECIAL_ABILITY_CATEGORY, "九秘残页")
-    tier, grade, category, name, description, _ = weighted_choice([(reward, float(reward[5])) for reward in pool])
+        return make_reward("\u7384\u9636", "\u4e0a\u54c1", SPECIAL_ABILITY_CATEGORY, "\u4e5d\u79d8\u6b8b\u9875")
+    weighted_pool = [
+        (reward, float(reward[5]) * SPECIAL_ABILITY_MATERIAL_DIFFICULTY.get(str(reward[3]), 1.0))
+        for reward in pool
+    ]
+    tier, grade, category, name, description, _ = weighted_choice(weighted_pool)
     return normalize_reward({"tier": tier, "grade": grade, "category": category, "name": name, "description": description})
 
 
@@ -3487,7 +4723,8 @@ def maybe_grant_special_ability_material(
     chance: float = 0.18,
     source: str = "",
 ) -> Optional[dict[str, Any]]:
-    if not SPECIAL_ABILITY_POOL or random.random() >= chance:
+    effective_chance = max(0.0, min(1.0, chance * 0.55))
+    if not SPECIAL_ABILITY_POOL or random.random() >= effective_chance:
         return None
     reward = draw_special_ability_material(record)
     reward["special_ability_bonus"] = True
@@ -3498,84 +4735,149 @@ def maybe_grant_special_ability_material(
 
 
 def learn_special_ability(record: UserRecord, item_index: int) -> tuple[bool, str]:
+    record.special_abilities = normalize_special_abilities(record.special_abilities)
     result = reward_position_by_category_index(record, SPECIAL_ABILITY_CATEGORY, item_index)
     if result is None:
-        return False, "没有找到这个编号的特殊能力传承材料。"
+        return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u7279\u6b8a\u80fd\u529b\u4f20\u627f\u6750\u6599\u3002"
     list_index, item = result
+    material = reward_name(item)
     seed = f"learn-special:{record.user_id}:{reward_signature(item)}:{item_index}:{len(record.special_abilities or [])}"
-    target = special_ability_material_target(record, reward_name(item), seed)
+    target = special_ability_material_target(record, material, seed)
     if not target:
-        return False, f"{reward_display_name(item)} 暂时无法继续领悟：可解锁的九秘或特殊能力已全部掌握。"
-    abilities = list(dict.fromkeys(record.special_abilities or []))
+        return False, f"{reward_display_name(item)} \u6682\u65f6\u65e0\u6cd5\u9886\u609f\uff1a{special_ability_material_requirement_text(record, material)}"
+    abilities = normalize_special_abilities(record.special_abilities)
     if target in abilities:
-        return False, f"你已掌握【{target}】，这份{reward_name(item)}可暂时留存或出售给其他修士。"
+        return False, f"\u4f60\u5df2\u638c\u63e1\u3010{target}\u3011\uff0c\u8fd9\u4efd{material}\u53ef\u6682\u65f6\u7559\u5b58\u6216\u51fa\u552e\u7ed9\u5176\u4ed6\u4fee\u58eb\u3002"
     if record.rewards is None or list_index >= len(record.rewards):
-        return False, "传承材料位置发生变化，请重新打开背包确认编号。"
+        return False, "\u4f20\u627f\u6750\u6599\u4f4d\u7f6e\u53d1\u751f\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u6253\u5f00\u80cc\u5305\u786e\u8ba4\u7f16\u53f7\u3002"
     record.rewards.pop(list_index)
+    if target == "\u4e5d\u7981":
+        abilities = [ability for ability in abilities if ability != "\u516b\u7981"]
+    elif target == "\u795e\u7981\u9886\u57df":
+        abilities = [ability for ability in abilities if ability not in {"\u516b\u7981", "\u4e5d\u7981"}]
     abilities.append(target)
-    record.special_abilities = abilities
+    record.special_abilities = normalize_special_abilities(abilities)
     info = special_ability_info(target)
+    extra = ""
+    if target.startswith("\u4e5d\u79d8"):
+        count = nine_secret_count(record)
+        extra = f"\n\u4e5d\u79d8\u5957\u88c5\uff1a\u5df2\u83b7{count}/9\u4ef6\uff0c\u5df2\u83b7\u4e5d\u79d8\u6548\u679c\u5728\u6597\u6cd5\u4e2d\u63d0\u5347{max(1, count)}\u500d\u3002"
+    elif target in FORBIDDEN_REALM_ABILITIES:
+        extra = "\n\u7981\u57df\u8def\u7ebf\uff1a\u516b\u7981 -> \u4e5d\u7981 -> \u795e\u7981\uff0c\u5347\u7ea7\u540e\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002"
     return (
         True,
         "\n".join(
             [
-                f"叮！参悟 {reward_display_name(item)} 成功。",
-                f"领悟特殊能力【{target}】。",
-                f"来源：{info.get('source', '失落传承')}",
-                f"效果：{info.get('effect', '一段尚未完全明悟的特殊能力。')}",
-                "斗法中直接发送能力名或别名即可尝试触发；未命中战技时仍会按即兴术式处理。",
+                f"\u53ee\uff01\u53c2\u609f {reward_display_name(item)} \u6210\u529f\u3002",
+                f"\u9886\u609f{special_ability_rarity_text(target)}\u7279\u6b8a\u80fd\u529b\u3010{target}\u3011\u3002",
+                f"\u6765\u6e90\uff1a{info.get('source', '\u5931\u843d\u4f20\u627f')}",
+                f"\u6548\u679c\uff1a{info.get('effect', '\u4e00\u6bb5\u5c1a\u672a\u5b8c\u5168\u660e\u609f\u7684\u7279\u6b8a\u80fd\u529b\u3002')}{extra}",
+                "\u6597\u6cd5\u4e2d\u76f4\u63a5\u53d1\u9001\u80fd\u529b\u540d\u6216\u522b\u540d\u5373\u53ef\u5c1d\u8bd5\u89e6\u53d1\u3002",
             ]
         ),
     )
 
 
 def special_ability_list_text(record: UserRecord) -> str:
-    abilities = list(dict.fromkeys(record.special_abilities or []))
+    record.special_abilities = normalize_special_abilities(record.special_abilities)
+    abilities = list(record.special_abilities or [])
     materials = available_special_ability_items(record)
-    lines = ["【我的特殊能力】"]
+    secret_count = nine_secret_count(record)
+    lines = ["\u3010\u6211\u7684\u7279\u6b8a\u80fd\u529b\u3011"]
+    if secret_count:
+        lines.append(f"\u4e5d\u79d8\u5957\u88c5\uff1a{secret_count}/9\uff0c\u5df2\u83b7\u4e5d\u79d8\u6548\u679c\u6597\u6cd5\u65f6 {secret_count}x \u589e\u5f3a\u3002")
+    highest = highest_forbidden_ability(abilities)
+    if highest:
+        lines.append(f"\u7981\u57df\u8def\u7ebf\uff1a\u5f53\u524d\u4fdd\u7559\u6700\u9ad8\u7ea7\u3010{highest}\u3011\u3002")
     if abilities:
-        lines.append(f"已领悟（{len(abilities)}）：")
+        lines.append(f"\u5df2\u9886\u609f\uff08{len(abilities)}\uff09\uff1a")
         for index, ability in enumerate(abilities, start=1):
             info = special_ability_info(ability)
             damage, defense, speed = info.get("combat", (0.08, 0.04, 0))
+            multiplier = nine_secret_set_multiplier(record) if ability.startswith("\u4e5d\u79d8") else 1
             lines.append(
-                f"{index}. {ability}｜伤害+{int(float(damage) * 100)}%｜防御+{int(float(defense) * 100)}%｜速度+{int(speed)}｜{info.get('effect', '')}"
+                f"{index}. {special_ability_rarity_text(ability)}\u3010{ability}\u3011\uff5c\u4f24\u5bb3+{int(float(damage) * 100)}%\uff5c\u9632\u5fa1+{int(float(defense) * 100)}%\uff5c\u901f\u5ea6+{int(speed)}\uff5c{multiplier}x\uff5c{info.get('effect', '')}"
             )
     else:
-        lines.append("暂未领悟特殊能力。")
+        lines.append("\u6682\u672a\u9886\u609f\u7279\u6b8a\u80fd\u529b\u3002")
     lines.append("")
-    lines.append("【可领悟传承材料】")
+    lines.append("\u3010\u53ef\u9886\u609f\u4f20\u627f\u6750\u6599\u3011")
     if not materials:
-        lines.append("暂无。垂钓、秘境和突破余韵都有机会获得九秘残页、八禁感悟、神禁烙印等传承材料。")
+        lines.append("\u6682\u65e0\u3002\u5782\u9493\u3001\u79d8\u5883\u548c\u7a81\u7834\u4f59\u97f5\u90fd\u6709\u673a\u4f1a\u83b7\u5f97\u4e5d\u79d8\u6b8b\u9875\u3001\u516b\u7981\u611f\u609f\u3001\u4e5d\u7981\u611f\u609f\u3001\u795e\u7981\u70d9\u5370\u7b49\u4f20\u627f\u6750\u6599\u3002")
     else:
         for index, item in enumerate(materials, start=1):
-            target = special_ability_material_target(record, reward_name(item), f"preview:{record.user_id}:{index}:{reward_signature(item)}")
-            target_text = target or "已无可领悟目标"
+            material = reward_name(item)
+            target = special_ability_material_target(record, material, f"preview:{record.user_id}:{index}:{reward_signature(item)}")
+            target_text = target or special_ability_material_requirement_text(record, material)
             lines.append(f"{index}. {reward_display_name(item)} -> {target_text}")
-    lines.append("发送“领悟特殊能力 编号”参悟传承；发送“特殊能力图鉴”查看完整追求路径。")
+    lines.append("\u53d1\u9001\u201c\u9886\u609f\u7279\u6b8a\u80fd\u529b \u7f16\u53f7\u201d\u53c2\u609f\u4f20\u627f\uff1b\u53d1\u9001\u201c\u7279\u6b8a\u80fd\u529b\u56fe\u9274\u201d\u67e5\u770b\u5b8c\u6574\u8ffd\u6c42\u8def\u5f84\u3002")
     return "\n".join(lines)
 
 
 def special_ability_catalog_text(record: Optional[UserRecord] = None) -> str:
-    owned = set(record.special_abilities or []) if record is not None else set()
+    owned = set(normalize_special_abilities(record.special_abilities if record is not None else []))
+    secret_count = len([ability for ability in owned if ability.startswith("\u4e5d\u79d8")])
     lines = [
-        "【特殊能力图鉴】",
-        "获取路径：垂钓、秘境探索、境界突破余韵会掉落“九秘残页”“八禁感悟”“神禁烙印”及其他传承材料。",
-        "使用方式：背包查看材料，发送“领悟特殊能力 编号”进行参悟；斗法中发送能力名或别名可触发。",
+        "\u3010\u7279\u6b8a\u80fd\u529b\u56fe\u9274\u3011",
+        "\u83b7\u53d6\u8def\u5f84\uff1a\u5782\u9493\u3001\u79d8\u5883\u63a2\u7d22\u3001\u5883\u754c\u7a81\u7834\u4f59\u97f5\u4f1a\u4f4e\u6982\u7387\u6389\u843d\u4f20\u627f\u6750\u6599\uff0c\u73b0\u5df2\u63d0\u9ad8\u83b7\u53d6\u96be\u5ea6\u3002",
+        "\u56fa\u5b9a\u54c1\u9636\uff1a\u6240\u6709\u7279\u6b8a\u80fd\u529b\u5747\u5df2\u56fa\u5b9a\u54c1\u9636\u4e0e\u54c1\u8d28\uff0c\u8be6\u89c1\u6bcf\u9879\u6807\u9898\uff1b\u4e5d\u79d8\u7edf\u4e00\u4e3a\u5929\u9636\u6781\u54c1\u3002",
+        "\u8fdb\u9636\u8def\u7ebf\uff1a\u516b\u7981 -> \u4e5d\u7981 -> \u795e\u7981\uff0c\u5347\u7ea7\u540e\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002",
+        f"\u4e5d\u79d8\u8054\u52a8\uff1a\u83b7\u53d6 n \u4ef6\u540e\uff0c\u5df2\u83b7\u4e5d\u79d8\u7684\u6597\u6cd5\u6548\u679c\u6309 n \u500d\u8ba1\u7b97\u3002\u5f53\u524d\uff1a{secret_count}/9\u3002",
         "",
     ]
     for index, ability in enumerate(SPECIAL_ABILITY_POOL, start=1):
         info = special_ability_info(ability)
         damage, defense, speed = info.get("combat", (0.08, 0.04, 0))
-        mark = "已悟" if ability in owned else "未悟"
-        aliases = "、".join(str(item) for item in info.get("aliases", [])[:3])
+        mark = "\u5df2\u609f" if ability in owned else "\u672a\u609f"
+        aliases = "\u3001".join(str(item) for item in info.get("aliases", [])[:3])
         lines.append(
-            f"{index}. 【{mark}】{ability}｜材料：{info.get('material', ability)}｜来源：{info.get('source', '失落传承')}"
+            f"{index}. \u3010{mark}\u3011{special_ability_rarity_text(ability)}\u3010{ability}\u3011\uff5c\u6750\u6599\uff1a{info.get('material', ability)}\uff5c\u6765\u6e90\uff1a{info.get('source', '\u5931\u843d\u4f20\u627f')}"
         )
         lines.append(
-            f"   效果：{info.get('effect', '')}｜斗法：伤害+{int(float(damage) * 100)}% 防御+{int(float(defense) * 100)}% 速度+{int(speed)}｜别名：{aliases or ability}"
+            f"   \u6548\u679c\uff1a{info.get('effect', '')}\uff5c\u6597\u6cd5\uff1a\u4f24\u5bb3+{int(float(damage) * 100)}% \u9632\u5fa1+{int(float(defense) * 100)}% \u901f\u5ea6+{int(speed)}\uff5c\u522b\u540d\uff1a{aliases or ability}"
         )
     return "\n".join(lines)
+
+
+def normalize_artifact_slot(slot: Optional[str] = None, artifact: Optional[dict[str, Any]] = None) -> str:
+    text = str(slot or "").strip()
+    if text in ARTIFACT_SLOT_ALIASES:
+        return ARTIFACT_SLOT_ALIASES[text]
+    name = reward_name(artifact)
+    if any(token in name for token in ("盾", "甲", "铠", "衣", "裍", "袍", "护心", "护身")):
+        return "护甲"
+    return "主手"
+
+
+def artifact_slots(record: UserRecord) -> dict[str, dict[str, Any]]:
+    slots: dict[str, dict[str, Any]] = {}
+    raw = record.equipped_artifacts or {}
+    for slot, item in raw.items():
+        if isinstance(item, dict):
+            normalized = normalize_artifact_slot(slot, item)
+            slots[normalized] = dict(item)
+    if record.equipped_artifact and "主手" not in slots:
+        slots["主手"] = dict(record.equipped_artifact)
+    record.equipped_artifacts = slots
+    record.equipped_artifact = slots.get("主手")
+    return slots
+
+
+def equipped_artifact_in_slot(record: UserRecord, slot: str) -> Optional[dict[str, Any]]:
+    return artifact_slots(record).get(normalize_artifact_slot(slot))
+
+
+def equipped_artifact_lines(record: UserRecord) -> list[str]:
+    slots = artifact_slots(record)
+    lines = []
+    for slot in ARTIFACT_SLOTS:
+        item = slots.get(slot)
+        lines.append(f"{slot}：{reward_display_name(item) if item else '\u672a\u88c5\u5907'}")
+    return lines
+
+
+def equipped_artifact_summary(record: UserRecord) -> str:
+    return "；".join(equipped_artifact_lines(record))
 
 
 def artifact_is_compatible(record: UserRecord, artifact: dict[str, Any]) -> bool:
@@ -3589,7 +4891,7 @@ def artifact_power(artifact: Optional[dict[str, Any]], record: Optional[UserReco
     ratio = ARTIFACT_GRADE_RATIO.get(str(artifact.get("grade")), 1.0)
     power = int(base * ratio)
     if record is not None and artifact_is_compatible(record, artifact):
-        power = int(power * 1.15)
+        power = int(power * 1.15 * root_purity_multiplier(record, reward_required_attribute(artifact)))
     return power
 
 
@@ -3600,7 +4902,9 @@ def method_power(method: Optional[dict[str, Any]], record: Optional[UserRecord] 
     ratio = ARTIFACT_GRADE_RATIO.get(str(method.get("grade")), 1.0)
     power = int(base * ratio)
     if record is not None and item_is_compatible(record, method):
-        power = int(power * 1.12)
+        layer = method_layer(record, method)
+        layer_rate = 1.0 + max(0, layer - 1) * 0.08
+        power = int(power * 1.12 * layer_rate * root_purity_multiplier(record, reward_required_attribute(method)))
     return power
 
 
@@ -3614,9 +4918,37 @@ def array_power(array: Optional[dict[str, Any]], record: Optional[UserRecord] = 
 
 
 def equipped_artifact_name(record: UserRecord) -> str:
-    if not record.equipped_artifact:
+    slots = artifact_slots(record)
+    if not slots:
         return "\u672a\u88c5\u5907\u7075\u5668"
-    return reward_display_name(record.equipped_artifact)
+    return "；".join(
+        f"{slot}{reward_display_name(item)}"
+        for slot, item in slots.items()
+        if item
+    )
+
+
+def equipped_talisman_name(record: UserRecord) -> str:
+    if not record.equipped_talisman:
+        return "未装备符箓"
+    return reward_display_name(record.equipped_talisman)
+
+
+def talisman_power(talisman: Optional[dict[str, Any]], record: Optional[UserRecord] = None) -> int:
+    if not talisman:
+        return 0
+    required_index = talisman_required_realm_index(str(talisman.get("tier")))
+    if record is not None and record.realm_index < required_index:
+        return 0
+    base = tier_exp(CONSUMABLE_EXP_BASE, str(talisman.get("tier")), str(talisman.get("grade")))
+    return max(20, int(base * 1.8))
+
+
+def equipped_artifact_power(record: UserRecord) -> int:
+    total = 0
+    for slot, artifact in artifact_slots(record).items():
+        total += int(artifact_power(artifact, record) * ARTIFACT_SLOT_POWER_RATE.get(slot, 1.0))
+    return total
 
 
 def equipped_method_name(record: UserRecord) -> str:
@@ -3661,7 +4993,7 @@ def plant_sign_bonus(record: UserRecord, base_exp: int) -> int:
     return max(1, bonus)
 
 
-def equip_artifact(record: UserRecord, artifact_index: int) -> tuple[bool, str]:
+def equip_artifact(record: UserRecord, artifact_index: int, slot: Optional[str] = None) -> tuple[bool, str]:
     result = reward_position_by_category_index(record, ARTIFACT_CATEGORY, artifact_index)
     if result is None:
         return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u7075\u5668\u3002"
@@ -3669,8 +5001,13 @@ def equip_artifact(record: UserRecord, artifact_index: int) -> tuple[bool, str]:
     if not artifact_is_compatible(record, artifact):
         required_attribute = reward_required_attribute(artifact)
         return False, f"{reward_display_name(artifact)} \u9700\u6c42{required_attribute}\u7075\u6839\uff0c\u6682\u65f6\u65e0\u6cd5\u88c5\u5907\u3002"
-    record.equipped_artifact = dict(artifact)
-    return True, f"\u5df2\u88c5\u5907 {reward_display_name(artifact)}\uff0c\u6218\u529b\u63d0\u5347 {artifact_power(artifact, record)}\u3002"
+    target_slot = normalize_artifact_slot(slot, artifact)
+    slots = artifact_slots(record)
+    slots[target_slot] = dict(artifact)
+    record.equipped_artifacts = slots
+    record.equipped_artifact = slots.get("主手")
+    power_gain = int(artifact_power(artifact, record) * ARTIFACT_SLOT_POWER_RATE.get(target_slot, 1.0))
+    return True, f"\u5df2\u88c5\u5907{target_slot} {reward_display_name(artifact)}\uff0c\u8be5\u69fd\u4f4d\u6218\u529b\u63d0\u5347 {power_gain}\u3002"
 
 
 def equip_method(record: UserRecord, method_index: int) -> tuple[bool, str]:
@@ -3719,12 +5056,22 @@ def plant_spirit_plant(record: UserRecord, plant_index: int) -> tuple[bool, str]
     return True, f"已栽种 {reward_display_name(plant)}，每日签到修为约增加 {rate:.0%}。"
 
 
-def unequip_artifact(record: UserRecord) -> str:
-    if not record.equipped_artifact:
+def unequip_artifact(record: UserRecord, slot: Optional[str] = None) -> str:
+    slots = artifact_slots(record)
+    if not slots:
         return "\u5f53\u524d\u6ca1\u6709\u88c5\u5907\u7075\u5668\u3002"
-    old_name = reward_display_name(record.equipped_artifact)
+    if slot:
+        target_slot = normalize_artifact_slot(slot)
+        old = slots.pop(target_slot, None)
+        record.equipped_artifacts = slots
+        record.equipped_artifact = slots.get("主手")
+        if not old:
+            return f"{target_slot}\u6ca1\u6709\u88c5\u5907\u7075\u5668\u3002"
+        return f"\u5df2\u5378\u4e0b{target_slot} {reward_display_name(old)}\u3002"
+    old_names = "；".join(equipped_artifact_lines(record))
+    record.equipped_artifacts = {}
     record.equipped_artifact = None
-    return f"\u5df2\u5378\u4e0b {old_name}\u3002"
+    return f"\u5df2\u5378\u4e0b\u5168\u90e8\u7075\u5668\uff1a{old_names}\u3002"
 
 
 def blocked_cultivation_message(record: UserRecord) -> str:
@@ -3742,6 +5089,31 @@ def exp_gain_text(prefix: str, applied: int, leveled: int, result: ExpApplyResul
     if result.spirit_liquid:
         return f"{prefix}\uff0c\u5f53\u524d\u5df2\u81f3\u74f6\u9888\u5dc5\u5cf0\uff0c\u6ea2\u51fa\u4fee\u4e3a {result.overflow} \u51dd\u6210\u7cbe\u7eaf\u7075\u6db2 +{result.spirit_liquid}\u3002"
     return f"{prefix}\uff0c\u5f53\u524d\u65e0\u6cd5\u589e\u957f\u4fee\u4e3a\u3002"
+
+def refine_spirit_liquid(record: UserRecord, amount: Optional[int] = None, today: Optional[date] = None) -> tuple[bool, str]:
+    if record.root is None:
+        return False, "\u5c1a\u672a\u8e0f\u5165\u4fee\u884c\u8def\uff0c\u53d1\u9001\u201c\u7b7e\u5230\u201d\u5148\u89c9\u9192\u7075\u6839\u3002"
+    if record.spirit_liquid <= 0:
+        return False, "\u5f53\u524d\u6ca1\u6709\u53ef\u70bc\u5316\u7684\u7cbe\u7eaf\u7075\u6db2\u3002"
+    if is_cultivation_locked(record, today):
+        return False, blocked_cultivation_message(record)
+    if is_breakthrough_bottleneck(record):
+        return False, "\u5f53\u524d\u5df2\u81f3\u74f6\u9888\u5dc5\u5cf0\uff0c\u8bf7\u5148\u5b8c\u6210\u7a81\u7834\uff0c\u518d\u70bc\u5316\u7cbe\u7eaf\u7075\u6db2\u3002"
+    if record.realm_index >= len(REALMS) - 1 and record.realm_exp >= record.progress_required:
+        return False, "\u5f53\u524d\u5df2\u81f3\u5927\u9053\u5c3d\u5934\uff0c\u7cbe\u7eaf\u7075\u6db2\u6682\u65f6\u65e0\u6cd5\u7ee7\u7eed\u63a8\u52a8\u4fee\u4e3a\u3002"
+    consume = record.spirit_liquid if amount is None else max(0, min(int(amount), record.spirit_liquid))
+    if consume <= 0:
+        return False, "\u8bf7\u8f93\u5165\u8981\u70bc\u5316\u7684\u7cbe\u7eaf\u7075\u6db2\u6570\u91cf\u3002"
+    record.spirit_liquid -= consume
+    exp_result = apply_exp(record, consume, today)
+    applied_exp, leveled = exp_result
+    if applied_exp <= 0 and exp_result.spirit_liquid <= 0:
+        record.spirit_liquid += consume
+        return False, "\u5f53\u524d\u7075\u6db2\u65e0\u6cd5\u878d\u5165\u4e39\u7530\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002"
+    if applied_exp <= 0:
+        return True, exp_gain_text(f"\u70bc\u5316\u7cbe\u7eaf\u7075\u6db2 {consume}", applied_exp, leveled, exp_result)
+    return True, exp_gain_text(f"\u70bc\u5316\u7cbe\u7eaf\u7075\u6db2 {consume}", applied_exp, leveled, exp_result)
+
 
 def use_pill(record: UserRecord, pill_index: int) -> tuple[bool, str]:
     result = pop_reward_by_category_index(record, PILL_CATEGORY, pill_index)
@@ -3867,6 +5239,26 @@ def talisman_required_realm_index(tier: str) -> int:
     return 0
 
 
+def equip_talisman(record: UserRecord, talisman_index: int) -> tuple[bool, str]:
+    result = reward_position_by_category_index(record, TALISMAN_CATEGORY, talisman_index)
+    if result is None:
+        return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u7b26\u7b93\u3002"
+    _, talisman = result
+    required_index = talisman_required_realm_index(str(talisman.get("tier")))
+    if record.realm_index < required_index:
+        return False, f"{reward_display_name(talisman)} \u9700\u8981{REALMS[required_index]}\u624d\u80fd\u88c5\u5907\u751f\u6548\u3002"
+    record.equipped_talisman = dict(talisman)
+    return True, f"\u5df2\u88c5\u5907\u7b26\u7b93\u69fd {reward_display_name(talisman)}\uff0c\u8fdb\u5165\u6597\u6cd5\u65f6\u751f\u6548\uff0c\u4e0d\u4f1a\u6d88\u8017\u3002"
+
+
+def unequip_talisman(record: UserRecord) -> str:
+    if not record.equipped_talisman:
+        return "\u5f53\u524d\u6ca1\u6709\u88c5\u5907\u7b26\u7b93\u3002"
+    old_name = reward_display_name(record.equipped_talisman)
+    record.equipped_talisman = None
+    return f"\u5df2\u5378\u4e0b\u7b26\u7b93 {old_name}\u3002"
+
+
 def use_talisman(record: UserRecord, talisman_index: int) -> tuple[bool, str]:
     result = reward_position_by_category_index(record, TALISMAN_CATEGORY, talisman_index)
     if result is None:
@@ -3946,15 +5338,27 @@ BAD_ENDING_TEXTS = {
 
 
 def mystic_success_text(realm_type: str) -> str:
+    theme = MYSTIC_EVENT_THEMES.get(realm_type)
+    if theme:
+        lines = [str(item[2]) for item in theme.get("reward_lines", []) if len(item) >= 3]
+        if lines:
+            return random.choice(lines)
     return random.choice(MYSTIC_SUCCESS_TEXTS.get(realm_type, MYSTIC_SUCCESS_TEXTS["上古宗门遗址"]))
 
 
 def mystic_empty_text(realm_type: str) -> str:
+    theme = MYSTIC_EVENT_THEMES.get(realm_type)
+    if theme and theme.get("empty"):
+        return random.choice(list(theme["empty"]))
     return random.choice(MYSTIC_EMPTY_TEXTS.get(realm_type, MYSTIC_EMPTY_TEXTS["上古宗门遗址"]))
 
 
 def mystic_bad_ending_text(realm_type: str) -> str:
+    theme = MYSTIC_EVENT_THEMES.get(realm_type)
+    if theme and theme.get("bad"):
+        return str(theme["bad"])
     return BAD_ENDING_TEXTS.get(realm_type, BAD_ENDING_TEXTS["上古大能洞府"])
+
 
 def mystic_realm_title(realm: dict[str, Any]) -> str:
     if realm.get("title"):
@@ -3963,6 +5367,19 @@ def mystic_realm_title(realm: dict[str, Any]) -> str:
     if realm_type == "兽潮":
         return f"{realm.get('boss_realm', '未知')}兽巢"
     return realm_type
+
+
+def mystic_option_display(option: Any) -> str:
+    if isinstance(option, dict):
+        text = str(option.get("text") or "未知去处")
+        hint = str(option.get("reward_hint") or "").strip()
+        category = str(option.get("category") or "").strip()
+        if hint:
+            return f"{text}（线索：{hint}）"
+        if category:
+            return f"{text}（线索：{category}）"
+        return text
+    return str(option)
 
 
 def mystic_realm_options_text(record: UserRecord) -> str:
@@ -3976,23 +5393,21 @@ def mystic_realm_options_text(record: UserRecord) -> str:
     if realm.get("insight") and realm.get("bad_option_index"):
         lines.append(f"天机示警：第 {int(realm.get('bad_option_index'))} 项通往坏结局。")
     for index, option in enumerate(options, start=1):
-        lines.append(f"{index}. {option}")
+        lines.append(f"{index}. {mystic_option_display(option)}")
     lines.append("发送“探索 编号”继续。")
     return "\n".join(lines)
 
 
-def roll_mystic_options(realm_type: str) -> list[str]:
+def roll_mystic_options(realm_type: str) -> list[dict[str, Any]]:
     pool = MYSTIC_OPTION_POOLS.get(realm_type, MYSTIC_OPTION_POOLS["上古宗门遗址"])
-    return random.sample(pool, k=min(5, len(pool)))
+    return [dict(item) for item in random.sample(pool, k=min(5, len(pool)))]
 
 
 def mystic_realm_intro(realm: dict[str, Any]) -> str:
     realm_type = str(realm.get("type"))
-    if realm_type == "上古宗门遗址":
-        return "残碑半埋，山门无声，深处仍有经卷气息流转。"
     if realm_type == "兽潮":
         return f"远处妖云翻涌，探得{realm.get('boss_realm', '未知')}兽巢，首领似为{realm.get('boss_name', '无名妖兽')}。"
-    return "洞府石门半启，禁制明灭不定，像是传承，也像是请君入瓮。"
+    return str(MYSTIC_EVENT_THEMES.get(realm_type, {}).get("intro", "秘境灵雾翻涌，等你踏入。"))
 
 
 def realm_short_name(realm_name: str) -> str:
@@ -4018,19 +5433,17 @@ def mystic_realm_title_from_entry(entry: dict[str, Any]) -> str:
 
 def draw_mystic_entrances(record: UserRecord) -> list[dict[str, Any]]:
     base_index = max(1, record.realm_index or 1)
-    sect_index = max(2, min(len(REALMS) - 1, base_index + random.choice([0, 1, 1, 2])))
-    if random.random() < 0.5:
-        beast_index = max(1, min(len(REALMS) - 1, random.choice([base_index, base_index - 1])))
-    else:
-        beast_index = max(2, min(len(REALMS) - 1, base_index + random.choice([1, 2, 2, 3])))
-    cave_index = max(3, min(len(REALMS) - 1, base_index + random.choice([2, 3, 3, 4])))
+
+    def clamp_index(value: int) -> int:
+        return max(1, min(len(REALMS) - 1, value))
+
+    beast_index = clamp_index(random.choice([base_index, base_index - 1]) if random.random() < 0.5 else base_index + random.choice([1, 2, 2, 3]))
     beast_stage = random.choice(["初期", "中期", "后期", "圆满"])
-    entries = [
+    candidate_entries = [
         {
             "type": "上古宗门遗址",
             "title": "上古宗门遗址",
-            "recommended_index": sect_index,
-            "recommended": recommended_realm_text(sect_index),
+            "recommended_index": clamp_index(base_index + random.choice([0, 1, 1, 2])),
             "danger": random.randint(12, 30),
         },
         {
@@ -4046,13 +5459,36 @@ def draw_mystic_entrances(record: UserRecord) -> list[dict[str, Any]]:
         {
             "type": "上古大能洞府",
             "title": "上古大能洞府",
-            "recommended_index": cave_index,
-            "recommended": recommended_realm_text(cave_index),
+            "recommended_index": clamp_index(base_index + random.choice([2, 3, 3, 4])),
             "danger": random.randint(22, 46),
             "false_lure": random.random() < 0.35,
         },
+        {
+            "type": "太古矿区",
+            "title": "太古矿区",
+            "recommended_index": clamp_index(base_index + random.choice([1, 2, 2, 3])),
+            "danger": random.randint(20, 44),
+            "false_lure": random.random() < 0.18,
+        },
+        {
+            "type": "虚神界残域",
+            "title": "虚神界残域",
+            "recommended_index": clamp_index(base_index + random.choice([0, 1, 2, 2])),
+            "danger": random.randint(16, 40),
+        },
+        {
+            "type": "青铜仙殿",
+            "title": "青铜仙殿",
+            "recommended_index": clamp_index(base_index + random.choice([3, 4, 4, 5])),
+            "danger": random.randint(28, 56),
+            "false_lure": random.random() < 0.28,
+        },
     ]
-    return entries
+    for entry in candidate_entries:
+        entry.setdefault("recommended", recommended_realm_text(int(entry.get("recommended_index", base_index))))
+    beast_entries = [entry for entry in candidate_entries if entry["type"] == "兽潮"]
+    others = [entry for entry in candidate_entries if entry["type"] != "兽潮"]
+    return beast_entries + random.sample(others, k=2)
 
 
 def assign_mystic_bad_option(realm: dict[str, Any]) -> None:
@@ -4072,7 +5508,7 @@ def start_mystic_realm(
     entrance = entrance or {}
     realm_type = str(entrance.get("type") or realm_type).strip()
     if realm_type not in MYSTIC_REALM_TYPES:
-        return False, "秘境类型可选：上古宗门遗址、兽潮、上古大能洞府。"
+        return False, "秘境类型可选：上古宗门遗址、兽潮、上古大能洞府、太古矿区、虚神界残域、青铜仙殿。"
     if record.mystic_realm:
         return False, mystic_realm_options_text(record)
     if is_cultivation_locked(record, today):
@@ -4090,10 +5526,12 @@ def start_mystic_realm(
         "false_lure": bool(entrance.get("false_lure", realm_type == "上古大能洞府" and random.random() < 0.35)),
         "boss_realm": boss_realm,
         "boss_name": boss_name,
+        "boss_element": str(entrance.get("boss_element") or random.choice(BASE_FIVE_ELEMENTS)),
         "options": roll_mystic_options(realm_type),
         "insight": bool(entrance.get("insight")) or has_soul_insight(record),
         "tianji": bool(entrance.get("tianji")),
     }
+    realm["options"].append({"text": f"挑战秘境首领：{realm.get('boss_realm')}·{realm.get('boss_name')}", "boss": True, "category": "灵材", "reward_hint": "首领妖丹"})
     assign_mystic_bad_option(realm)
     if realm.get("tianji") and today is not None:
         record.last_tianji_mystic_date = today.isoformat()
@@ -4104,7 +5542,13 @@ def mystic_reward_category(realm_type: str) -> str:
     if realm_type == "上古宗门遗址":
         return weighted_choice([("功法", 4), (SPECIAL_ABILITY_CATEGORY, 2), ("丹药", 2), ("阵盘", 2), ("灵材", 3), ("灵植", 2), ("仙缘", 1), ("杂物", 1)])
     if realm_type == "兽潮":
-        return weighted_choice([("灵材", 5), ("灵石", 3), ("傀儡", 1), ("符箓", 2), ("灵食", 2), ("灵植", 2), (SPECIAL_ABILITY_CATEGORY, 1), ("仙缘", 1)])
+        return weighted_choice([("灵材", 6), ("灵石", 3), ("符箓", 2), ("灵食", 2), ("灵植", 1), (SPECIAL_ABILITY_CATEGORY, 1), ("仙缘", 1)])
+    if realm_type == "太古矿区":
+        return weighted_choice([("灵材", 6), ("灵石", 4), ("奇物", 2), ("杂物", 2), ("仙缘", 1)])
+    if realm_type == "虚神界残域":
+        return weighted_choice([(SPECIAL_ABILITY_CATEGORY, 4), ("功法", 3), ("灵材", 2), ("符箓", 2), ("奇物", 2), ("仙缘", 1)])
+    if realm_type == "青铜仙殿":
+        return weighted_choice([(SPECIAL_ABILITY_CATEGORY, 4), ("灵材", 3), ("奇物", 3), ("灵器", 2), ("功法", 2), ("仙缘", 1)])
     return weighted_choice([("奇物", 3), (SPECIAL_ABILITY_CATEGORY, 3), ("灵器", 2), ("丹药", 2), ("阵盘", 2), ("灵材", 2), ("灵植", 2), ("仙缘", 1), ("杂物", 2)])
 
 
@@ -4114,6 +5558,140 @@ def draw_reward_by_category(category: str) -> dict[str, Any]:
         return draw_fishing_rewards(1)[0]
     tier, grade, item_category, name, description, _ = weighted_choice([(reward, float(reward[5])) for reward in pool])
     return normalize_reward({"tier": tier, "grade": grade, "category": item_category, "name": name, "description": description})
+
+
+def mystic_reward_tier(record: UserRecord, realm: dict[str, Any]) -> str:
+    recommended = int(realm.get("recommended_index", record.realm_index or 1))
+    gap = recommended - int(record.realm_index or 0)
+    if gap >= 4:
+        return weighted_choice([("天阶", 5), ("地阶", 4), ("玄阶", 1)])
+    if gap >= 2:
+        return weighted_choice([("地阶", 5), ("玄阶", 3), ("天阶", 1)])
+    if gap >= 0:
+        return weighted_choice([("玄阶", 5), ("地阶", 2), ("黄阶", 2)])
+    return weighted_choice([("黄阶", 5), ("玄阶", 2), ("凡品", 2)])
+
+
+def matching_fishing_reward(category: str, hint: str) -> Optional[tuple[str, str, str, str, str, int]]:
+    pool = [reward for reward in FISHING_REWARDS if reward[2] == category]
+    exact = [reward for reward in pool if str(reward[3]) == hint]
+    fuzzy = [reward for reward in pool if hint and (hint in str(reward[3]) or str(reward[3]) in hint)]
+    source_pool = exact or fuzzy
+    if not source_pool:
+        return None
+    return weighted_choice([(reward, float(reward[5])) for reward in source_pool])
+
+
+def draw_mystic_event_reward(record: UserRecord, realm: dict[str, Any], event: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    category = str(event.get("category") or mystic_reward_category(str(realm.get("type"))))
+    hint = str(event.get("reward_hint") or "").strip()
+    tier = mystic_reward_tier(record, realm)
+    grade = weighted_choice([("极品", 1), ("上品", 2), ("中品", 4), ("下品", 3)])
+    if category == SPECIAL_ABILITY_CATEGORY:
+        matched = matching_fishing_reward(category, hint) if hint else None
+        if matched is not None:
+            tier, grade, item_category, name, description, _ = matched
+            return category, normalize_reward({"tier": tier, "grade": grade, "category": item_category, "name": name, "description": description}, record)
+        reward = draw_special_ability_material(record)
+        if hint and hint not in {"古修神通烙印", "旧宗传承残卷"}:
+            reward["name"] = hint
+        return category, normalize_reward(reward, record)
+    if hint:
+        if hint == "妖丹":
+            boss_realm = realm_short_name(str(realm.get("boss_realm", REALMS[min(len(REALMS) - 1, record.realm_index)])))
+            hint = f"{boss_element(realm)}系{boss_realm}妖丹"
+        elif hint == "兽骨":
+            hint = f"{str(realm.get('boss_name', '妖兽'))}兽骨"
+        matched = matching_fishing_reward(category, hint)
+        if matched is not None:
+            tier, grade, item_category, name, description, _ = matched
+            return category, normalize_reward({"tier": tier, "grade": grade, "category": item_category, "name": name, "description": description}, record)
+        return category, normalize_reward({"tier": tier, "grade": grade, "category": category, "name": hint}, record)
+    return category, draw_reward_by_category(category)
+
+
+def boss_element(realm: dict[str, Any]) -> str:
+    value = str(realm.get("boss_element") or "").strip()
+    if value in BASE_FIVE_ELEMENTS:
+        return value
+    value = random.choice(BASE_FIVE_ELEMENTS)
+    realm["boss_element"] = value
+    return value
+
+
+def boss_demon_core_reward(record: UserRecord, realm: dict[str, Any]) -> dict[str, Any]:
+    attr = boss_element(realm)
+    boss_realm = realm_short_name(str(realm.get("boss_realm", REALMS[min(len(REALMS) - 1, record.realm_index)])))
+    boss_name = str(realm.get("boss_name") or "妖兽")
+    tier = mystic_reward_tier(record, realm)
+    grade = weighted_choice([("极品", 1), ("上品", 2), ("中品", 4), ("下品", 3)])
+    return normalize_reward(
+        {
+            "tier": tier,
+            "grade": grade,
+            "category": "灵材",
+            "name": f"{attr}系{boss_realm}{boss_name}妖丹",
+            "description": f"{attr}行妖力凝成的首领妖丹，可作丹灵根补全五行。",
+            "required_attribute": attr,
+        },
+        record,
+    )
+
+
+def draw_mystic_boss_rewards(record: UserRecord, realm: dict[str, Any]) -> list[dict[str, Any]]:
+    rewards: list[dict[str, Any]] = []
+    options = list(realm.get("options", [])) or roll_mystic_options(str(realm.get("type")))
+    normal_options = [item for item in options if not (isinstance(item, dict) and item.get("boss"))]
+    for index in range(MYSTIC_REALM_MAX_STEPS):
+        event = dict(random.choice(normal_options)) if normal_options else {}
+        category, reward = draw_mystic_event_reward(record, realm, event)
+        if category == "仙缘":
+            exp = tier_exp(INSTANT_EXP_BASE, str(reward.get("tier")), str(reward.get("grade")))
+            applied_result = apply_exp(record, exp) if not is_cultivation_locked(record) else ExpApplyResult()
+            applied, leveled = applied_result
+            reward["used"] = True
+            reward["exp_gain"] = applied
+            reward["leveled_realms"] = leveled
+            if applied < exp:
+                reward["blocked"] = True
+        else:
+            append_reward(record, reward)
+        rewards.append(reward)
+    core = boss_demon_core_reward(record, realm)
+    append_reward(record, core)
+    rewards.append(core)
+    return rewards
+
+
+def mystic_boss_success_chance(record: UserRecord, realm: dict[str, Any]) -> float:
+    base = mystic_success_chance(record, realm) - 0.18
+    recommended = int(realm.get("recommended_index", record.realm_index or 1))
+    if record.realm_index >= recommended:
+        base += 0.1
+    return max(0.12, min(0.72, base))
+
+
+def handle_mystic_boss_challenge(record: UserRecord, realm: dict[str, Any], today: Optional[date] = None) -> tuple[bool, str]:
+    realm_type = str(realm.get("type"))
+    boss_name = str(realm.get("boss_name") or "无名妖兽")
+    boss_realm = str(realm.get("boss_realm") or "未知")
+    chance = mystic_boss_success_chance(record, realm)
+    lines = [f"你选择：挑战{boss_realm}·{boss_name}", f"首领妖气压下，成功率约 {int(chance * 100)}%。"]
+    if random.random() > chance:
+        lock_text = lock_cultivation(record, today, minutes=5)
+        record.mystic_realm = None
+        lines.append(mystic_bad_ending_text(realm_type))
+        lines.append(f"挑战失败：进入5分钟反噬期，{lock_text}。")
+        return True, "\n".join(lines)
+    rewards = draw_mystic_boss_rewards(record, realm)
+    layer_up = increase_method_proficiency(record, 28)
+    increase_array_proficiency(record, 18)
+    record.mystic_realm = None
+    reward_text = "、".join(reward_display_name(reward) for reward in rewards[:11])
+    lines.append("你破开首领妖云，以一场硬战结束此处秘境。")
+    lines.append(f"获得10次探索折算奖励与首领妖丹：{reward_text}")
+    lines.append(f"功法熟练度+28{f'，功法连升 {layer_up} 层' if layer_up else ''}；阵法熟练度+18。")
+    return True, "\n".join(lines)
 
 
 def mystic_success_chance(record: UserRecord, realm: dict[str, Any]) -> float:
@@ -4136,7 +5714,11 @@ def explore_mystic_realm(record: UserRecord, option_index: int, today: Optional[
     if option_index < 1 or option_index > len(options):
         return False, f"请选择 1-{len(options)} 之间的探索选项。"
     choice = options[option_index - 1]
+    event = dict(choice) if isinstance(choice, dict) else {"text": str(choice)}
+    choice_text = mystic_option_display(event)
     realm_type = str(realm.get("type"))
+    if event.get("boss"):
+        return handle_mystic_boss_challenge(record, realm, today)
     realm["step"] = int(realm.get("step", 0)) + 1
     realm["steps_left"] = max(0, int(realm.get("steps_left", MYSTIC_REALM_MAX_STEPS)) - 1)
     success_chance = mystic_success_chance(record, realm)
@@ -4150,20 +5732,18 @@ def explore_mystic_realm(record: UserRecord, option_index: int, today: Optional[
     if record.equipped_puppet:
         bad_rate = max(0.03, bad_rate - 0.04)
     roll = random.random()
-    lines = [f"你选择：{choice}"]
+    lines = [f"你选择：{choice_text}"]
     if realm.get("false_lure") and record.evil_cultivator:
         lines.append("邪修气息识破了洞府中的同源陷阱，你没有因此直接坠入杀局。")
     if roll < bad_rate:
-        lock_hours = 12 if record.evil_cultivator else 3
-        lock_text = lock_cultivation(record, today, hours=lock_hours)
+        lock_text = lock_cultivation(record, today, minutes=5)
         record.mystic_realm = None
         lines.append(mystic_bad_ending_text(realm_type))
-        penalty = "12小时" if record.evil_cultivator else "3小时"
-        lines.append(f"坏结局：进入{penalty}惩罚期，{lock_text}，期间无法通过任何手段提升修为。")
+        lines.append(f"坏结局：进入5分钟反噬惩罚期，{lock_text}，期间无法通过任何手段提升修为。")
         return True, "\n".join(lines)
     if roll < bad_rate + success_chance:
-        category = mystic_reward_category(realm_type)
-        reward = draw_reward_by_category(category)
+        category, reward = draw_mystic_event_reward(record, realm, event)
+        success_text = str(event.get("success") or mystic_success_text(realm_type))
         if category == "仙缘":
             exp = tier_exp(INSTANT_EXP_BASE, str(reward.get("tier")), str(reward.get("grade")))
             applied_result = apply_exp(record, exp, today) if not is_cultivation_locked(record, today) else ExpApplyResult()
@@ -4174,12 +5754,12 @@ def explore_mystic_realm(record: UserRecord, option_index: int, today: Optional[
                 reward["blocked"] = True
             extra = f"，连破 {leveled} 境" if leveled else ""
             if applied:
-                lines.append(f"{mystic_success_text(realm_type)}触发 {reward_display_name(reward)}，修为 +{applied}{extra}。")
+                lines.append(f"{success_text}触发 {reward_display_name(reward)}，修为 +{applied}{extra}。")
             else:
-                lines.append(f"{mystic_success_text(realm_type)}触发 {reward_display_name(reward)}，但当前瓶颈或禁修阻住了灵机。")
+                lines.append(f"{success_text}触发 {reward_display_name(reward)}，但当前瓶颈或禁修阻住了灵机。")
         else:
             append_reward(record, reward)
-            lines.append(f"{mystic_success_text(realm_type)}获得 {reward_display_name(reward)}。")
+            lines.append(f"{success_text}获得 {reward_display_name(reward)}。")
         if category not in {"仙缘", "功法", "灵器", "阵盘", "傀儡", "灵植", SPECIAL_ABILITY_CATEGORY} and not is_cultivation_locked(record, today):
             exp = max(1, tier_exp(CONSUMABLE_EXP_BASE, str(reward.get("tier")), str(reward.get("grade"))) // 4)
             applied, _ = apply_exp(record, exp)
@@ -4192,6 +5772,7 @@ def explore_mystic_realm(record: UserRecord, option_index: int, today: Optional[
         lines.append("十次探索已尽，秘境门户在身后缓缓闭合。")
         return True, "\n".join(lines)
     realm["options"] = roll_mystic_options(realm_type)
+    realm["options"].append({"text": f"挑战秘境首领：{realm.get('boss_realm')}·{realm.get('boss_name')}", "boss": True, "category": "灵材", "reward_hint": "首领妖丹"})
     assign_mystic_bad_option(realm)
     record.mystic_realm = realm
     lines.append("")
@@ -4205,9 +5786,12 @@ def artifact_is_sword(artifact: Optional[dict[str, Any]]) -> bool:
 
 
 def route_power_multiplier(record: UserRecord) -> float:
-    if record.cultivation_route == "剑修" and artifact_is_sword(record.equipped_artifact):
+    slots = artifact_slots(record)
+    has_artifact = bool(slots)
+    has_sword = any(artifact_is_sword(item) for item in slots.values())
+    if record.cultivation_route == "剑修" and has_sword:
         return 1.3
-    if record.cultivation_route == "术修" and record.equipped_artifact and not artifact_is_sword(record.equipped_artifact):
+    if record.cultivation_route == "术修" and has_artifact and not has_sword:
         return 1.3
     return 1.0
 
@@ -4219,28 +5803,33 @@ def battle_power(record: UserRecord) -> int:
     root_power = 120
     if record.root:
         root_power += 320 + record.root.tier_rank * 280 + record.root.grade_rank * 120
-    root_power += len(record.extra_roots or []) * 220
+        if record.root.tier == "变异灵根":
+            root_power += 520
+    root_power += len(record.extra_roots or []) * 160
+    root_power += max_root_purity(record) * 6
+    root_power += acquired_root_power_total(record)
     foundation_bonus = realm_quality_power(record)
     equipment_power = (
-        artifact_power(record.equipped_artifact, record)
+        equipped_artifact_power(record)
         + method_power(record.equipped_method, record)
         + array_power(record.equipped_array, record)
         + puppet_power(record.equipped_puppet, record)
+        + talisman_power(record.equipped_talisman, record)
     )
-    special_ability_power = len(record.special_abilities or []) * 180
+    special_ability_power = special_ability_power_total(record)
     power = realm_power + exp_power + sign_power + root_power + foundation_bonus + equipment_power + special_ability_power
     power = int(power * route_power_multiplier(record))
     if is_breakthrough_bottleneck(record):
         power = int(power * 1.1)
     return max(1, power)
 
-
 def battle_summary(record: UserRecord) -> dict[str, Any]:
     equipment_power = (
-        artifact_power(record.equipped_artifact, record)
+        equipped_artifact_power(record)
         + method_power(record.equipped_method, record)
         + array_power(record.equipped_array, record)
         + puppet_power(record.equipped_puppet, record)
+        + talisman_power(record.equipped_talisman, record)
     )
     return {
         "power": battle_power(record),
@@ -4248,6 +5837,8 @@ def battle_summary(record: UserRecord) -> dict[str, Any]:
         "total_exp": record.total_exp,
         "pending_exp": record.pending_exp,
         "artifact": equipped_artifact_name(record),
+        "artifact_slots": equipped_artifact_summary(record),
+        "talisman": equipped_talisman_name(record),
         "method": equipped_method_name(record),
         "array": equipped_array_name(record),
         "puppet": equipped_puppet_name(record),
@@ -4256,7 +5847,8 @@ def battle_summary(record: UserRecord) -> dict[str, Any]:
         "spirit_liquid": record.spirit_liquid,
         "bottleneck_days": record.bottleneck_days,
         "array_multiplier": array_multiplier(record),
-        "artifact_power": artifact_power(record.equipped_artifact, record),
+        "artifact_power": equipped_artifact_power(record),
+        "talisman_power": talisman_power(record.equipped_talisman, record),
         "puppet_power": puppet_power(record.equipped_puppet, record),
         "equipment_power": equipment_power,
         "cultivation_lock": cultivation_lock_text(record),
@@ -4271,9 +5863,9 @@ def battle_summary(record: UserRecord) -> dict[str, Any]:
         "hehuan_remaining": hehuan_remaining_text(record),
         "tianji_status": tianji_status_text(record),
         "spirit_stones_text": spirit_stone_text(record.spirit_stones),
-        "special_abilities": list(record.special_abilities or []),
+        "special_abilities": normalize_special_abilities(record.special_abilities),
         "special_ability_materials": len(available_special_ability_items(record)),
-        "special_ability_power": len(record.special_abilities or []) * 180,
+        "special_ability_power": special_ability_power_total(record),
     }
 
 
@@ -4296,16 +5888,19 @@ def duel_records(attacker: UserRecord, defender: UserRecord) -> DuelResult:
 
 def rank_reward_for(rank: int) -> tuple[int, int]:
     if rank == 1:
-        return 36, 2
-    if rank == 2:
-        return 28, 1
-    if rank == 3:
-        return 22, 1
-    if 4 <= rank <= 5:
-        return 16, 0
-    if 6 <= rank <= 10:
-        return 10, 0
-    return 0, 0
+        exp = 36
+    elif rank == 2:
+        exp = 28
+    elif rank == 3:
+        exp = 22
+    elif 4 <= rank <= 5:
+        exp = 16
+    elif 6 <= rank <= 10:
+        exp = 10
+    else:
+        exp = 0
+    fishing_rewards = {1: 10, 2: 8, 3: 6, 4: 4, 5: 2}
+    return exp, fishing_rewards.get(rank, 0)
 
 
 def apply_rank_reward(record: UserRecord, rank: int) -> RankReward:

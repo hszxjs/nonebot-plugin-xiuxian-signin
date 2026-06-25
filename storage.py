@@ -14,6 +14,7 @@ class JsonStore:
         self.user_file_path = data_dir / "users.json"
         self.rank_file_path = data_dir / "daily_chat_rank.json"
         self.group_file_path = data_dir / "group_members.json"
+        self.tianji_hall_file_path = data_dir / "tianji_divination_hall.json"
         self._lock = asyncio.Lock()
 
     async def get_user(self, user_id: str) -> UserRecord:
@@ -68,6 +69,97 @@ class JsonStore:
             user_data["count"] = int(user_data.get("count", 0)) + 1
             self._write_json(self.rank_file_path, data)
             self._touch_group_member_locked(group_id, user_id, date_text, nickname)
+
+    async def register_tianji_sitter(
+        self,
+        group_id: str,
+        user_id: str,
+        date_text: str,
+        nickname: str = "",
+    ) -> tuple[bool, dict[str, Any]]:
+        async with self._lock:
+            data = self._read_json(self.tianji_hall_file_path)
+            group_data = data.get(group_id)
+            if not isinstance(group_data, dict) or group_data.get("date") != date_text:
+                sitter = {"user_id": user_id, "nickname": nickname or user_id}
+                group_data = {
+                    "date": date_text,
+                    "sitter_id": user_id,
+                    "sitter_name": nickname or user_id,
+                    "sitters": [sitter],
+                    "divination_count": 0,
+                    "income": 0,
+                }
+                data[group_id] = group_data
+                self._write_json(self.tianji_hall_file_path, data)
+                return True, dict(group_data)
+            return False, dict(group_data)
+
+    async def join_tianji_sitter(
+        self,
+        group_id: str,
+        user_id: str,
+        date_text: str,
+        nickname: str = "",
+    ) -> tuple[bool, dict[str, Any] | None]:
+        async with self._lock:
+            data = self._read_json(self.tianji_hall_file_path)
+            group_data = data.get(group_id)
+            if not isinstance(group_data, dict) or group_data.get("date") != date_text:
+                return False, None
+            sitters = group_data.get("sitters")
+            if not isinstance(sitters, list) or not sitters:
+                primary_id = str(group_data.get("sitter_id") or user_id)
+                sitters = [
+                    {
+                        "user_id": primary_id,
+                        "nickname": str(group_data.get("sitter_name") or primary_id),
+                    }
+                ]
+            normalized = []
+            seen = set()
+            for item in sitters:
+                if not isinstance(item, dict):
+                    continue
+                sitter_id = str(item.get("user_id") or "")
+                if not sitter_id or sitter_id in seen:
+                    continue
+                seen.add(sitter_id)
+                normalized.append({"user_id": sitter_id, "nickname": str(item.get("nickname") or sitter_id)})
+            if user_id in seen:
+                group_data["sitters"] = normalized
+                data[group_id] = group_data
+                self._write_json(self.tianji_hall_file_path, data)
+                return False, dict(group_data)
+            normalized.append({"user_id": user_id, "nickname": nickname or user_id})
+            group_data["sitters"] = normalized
+            data[group_id] = group_data
+            self._write_json(self.tianji_hall_file_path, data)
+            return True, dict(group_data)
+
+    async def get_tianji_hall(self, group_id: str, date_text: str) -> dict[str, Any] | None:
+        async with self._lock:
+            group_data = self._read_json(self.tianji_hall_file_path).get(group_id)
+            if not isinstance(group_data, dict) or group_data.get("date") != date_text:
+                return None
+            return dict(group_data)
+
+    async def add_tianji_divination_income(
+        self,
+        group_id: str,
+        date_text: str,
+        amount: int,
+    ) -> dict[str, Any] | None:
+        async with self._lock:
+            data = self._read_json(self.tianji_hall_file_path)
+            group_data = data.get(group_id)
+            if not isinstance(group_data, dict) or group_data.get("date") != date_text:
+                return None
+            group_data["divination_count"] = int(group_data.get("divination_count", 0)) + 1
+            group_data["income"] = int(group_data.get("income", 0)) + max(0, int(amount))
+            data[group_id] = group_data
+            self._write_json(self.tianji_hall_file_path, data)
+            return dict(group_data)
 
     async def get_group_member_nickname(self, group_id: str, user_id: str) -> str:
         async with self._lock:
