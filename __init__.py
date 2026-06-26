@@ -30,6 +30,8 @@ from .config import Config
 from .domain import (
     CANCEL_WORDS,
     CONFIRM_WORDS,
+    ARTIFACT_REFINING_RECIPES,
+    IMMORTAL_SEED_INFOS,
     BREAKTHROUGH_REQUIREMENTS,
     FISHING_REWARDS,
     REALMS,
@@ -65,7 +67,10 @@ from .domain import (
     battle_power,
     battle_summary,
     breakthrough_realm,
+    breakthrough_item_quality_cap_text,
+    breakthrough_quality_relation_text,
     breakthrough_status,
+    catalog_item_detail_text,
 
     buy_shop_item,
 
@@ -97,20 +102,35 @@ from .domain import (
     fishing_count_from_text,
     identify_misc_item,
     learn_special_ability,
+    market_offer_price,
     method_power,
     technique_cooldown,
     technique_mana_cost,
     mystic_realm_options_text,
     mystic_realm_title_from_entry,
     plant_spirit_plant,
+    pop_reward_by_category_index,
     puppet_power,
     rank_reward_for,
 
+    array_deduction_text,
+    batch_sell_rewards,
+    deduce_array,
+    divine_ability_catalog_text,
+    emperor_artifact_catalog_text,
+    equip_immortal_seed,
+    immortal_seed_text,
+    is_unique_reward,
+    make_unique_replica,
+    refine_artifact_by_recipe,
+    refining_text,
+    set_life_artifact,
     refine_pill_by_recipe,
     refine_dan_root,
     refine_artifact_root,
     regress_cultivation,
     refine_spirit_stone,
+    refine_spirit_stones_batch,
     refine_spirit_liquid,
     reward_display_name,
 
@@ -130,78 +150,68 @@ from .domain import (
     unequip_talisman,
     use_curio,
     use_food,
+    use_foods_batch,
     use_pill,
+    use_pills_batch,
     use_talisman,
 )
 from .storage import JsonStore
 
 __version__ = "0.5.1"
 
-PICMENU_NEXT_FUNCS = [
-    {
-        "func": "\u5f00\u59cb\u4fee\u4ed9",
-        "trigger_method": "\u7b7e\u5230 / \u9762\u677f / \u5e2e\u52a9",
-        "trigger_condition": "\u9996\u6b21\u7b7e\u5230\u4f1a\u62bd\u53d6\u7075\u6839\uff1b\u5e2e\u52a9\u4f1a\u6253\u5f00\u5185\u7f6e\u8bf4\u660e",
-        "brief_des": "\u4ece\u7b7e\u5230\u3001\u4e2a\u4eba\u9762\u677f\u548c\u65b0\u624b\u8bf4\u660e\u5f00\u59cb",
-        "detail_des": "`\u7b7e\u5230` \u6bcf\u65e5\u4fee\u70bc\u5e76\u83b7\u5f97 1 \u6b21\u5782\u9493\uff1b`\u9762\u677f` \u67e5\u770b\u4e2a\u4eba\u72b6\u6001\uff1b`\u5e2e\u52a9` \u67e5\u770b\u4fee\u4e3a\u63d0\u5347\u8def\u5f84\u4e0e\u5e38\u7528\u5165\u53e3\u3002",
-    },
-    {
-        "func": "\u80cc\u5305\u4e0e\u56fe\u9274",
-        "trigger_method": "\u80cc\u5305 / \u56fe\u9274 / \u7279\u6b8a\u80fd\u529b / \u7279\u6b8a\u80fd\u529b\u56fe\u9274 / \u9886\u609f\u7279\u6b8a\u80fd\u529b 1",
-        "trigger_condition": "\u56fe\u9274\u65e0\u9700\u62e5\u6709\u7269\u54c1\uff0c\u53ef\u76f4\u63a5\u67e5\u770b",
-        "brief_des": "\u67e5\u770b\u9053\u5177\u3001\u7279\u6b8a\u80fd\u529b\u3001\u4e39\u836f\u3001\u7b26\u7b93\u3001\u7075\u5668\u548c\u529f\u6cd5",
-        "detail_des": "`\u80cc\u5305` \u67e5\u770b\u5df2\u83b7\u5f97\u7269\u54c1\uff1b`\u7279\u6b8a\u80fd\u529b` \u67e5\u770b\u5df2\u9886\u609f\u80fd\u529b\u548c\u4f20\u627f\u6750\u6599\uff1b`\u7279\u6b8a\u80fd\u529b\u56fe\u9274` \u67e5\u770b\u4e5d\u79d8\u3001\u516b\u7981\u3001\u795e\u7981\u7b49\u8ffd\u6c42\u8def\u5f84\u3002",
-    },
-    {
-        "func": "\u7a81\u7834\u4e0e\u4fee\u4e3a",
-        "trigger_method": "\u7a81\u7834 / \u6563\u529f / \u70bc\u5316\u7075\u6db2 / \u540e\u5929\u7075\u6839 / \u5883\u754c\u56fe\u9274 / \u7a81\u7834\u56fe\u9274",
-        "trigger_condition": "\u5883\u754c\u5706\u6ee1\u540e\u8fdb\u5165\u74f6\u9888\uff0c\u9700\u7a81\u7834\u540e\u7ee7\u7eed\u589e\u957f\u4fee\u4e3a",
-        "brief_des": "\u67e5\u770b\u5883\u754c\u74f6\u9888\u3001\u7a81\u7834\u6750\u6599\u548c\u91cd\u4fee\u673a\u4f1a",
-        "detail_des": "\u74f6\u9888\u540e\u4fee\u4e3a\u4e0d\u4f1a\u7ee7\u7eed\u589e\u52a0\uff0c\u6ea2\u51fa\u4fee\u4e3a\u4f1a\u51dd\u6210\u7cbe\u7eaf\u7075\u6db2\uff1b\u5316\u795e\u7834\u70bc\u865a\u9700\u4e94\u884c\u8865\u5168\uff0c\u53ef\u7528 `\u540e\u5929\u7075\u6839` \u67e5\u770b\u4e39\u7075\u6839/\u5668\u7075\u6839\u70bc\u5316\u65b9\u5f0f\uff1b`\u70bc\u5316\u7075\u6db2` \u53ef\u628a\u5df2\u6c89\u6dc0\u7075\u6db2\u8f6c\u4e3a\u4fee\u4e3a\u3002",
-    },
-    {
-        "func": "\u5386\u7ec3\u4e0e\u88c5\u5907",
-        "trigger_method": "\u5386\u7ec3 / \u7075\u5668 / \u88c5\u5907\u7075\u5668 1 \u4e3b\u624b / \u88c5\u5907\u7075\u5668 2 \u526f\u624b / \u88c5\u5907\u7b26\u7b93 1 / \u6218\u529b / \u6218\u529b\u699c",
-        "trigger_condition": "\u7f16\u53f7\u6765\u81ea\u5bf9\u5e94\u9762\u677f\uff1b\u4e3b\u624b\u3001\u526f\u624b\u3001\u62a4\u7532\u5404\u53ef\u88c5\u5907\u4e00\u4ef6\u7075\u5668",
-        "brief_des": "\u7ba1\u7406\u4e09\u69fd\u7075\u5668\u3001\u7b26\u7b93\u680f\u3001\u529f\u6cd5\u9635\u76d8\u5e76\u8ba1\u7b97\u6218\u529b",
-        "detail_des": "`\u88c5\u5907\u7075\u5668 1 \u4e3b\u624b`\u3001`\u88c5\u5907\u7075\u5668 2 \u526f\u624b`\u3001`\u88c5\u5907\u7075\u5668 3 \u62a4\u7532` \u7ba1\u7406\u7075\u5668\u69fd\uff1b`\u88c5\u5907\u7b26\u7b93 1` \u653e\u5165\u7b26\u7b93\u680f\uff0c\u666e\u901a\u6597\u6cd5\u751f\u6548\u4e14\u4e0d\u6d88\u8017\uff1b`\u53c2\u609f\u529f\u6cd5 1`\u3001`\u5e03\u7f6e\u9635\u76d8 1` \u7ba1\u7406\u5386\u7ec3\u914d\u7f6e\uff1b`pk @\u7fa4\u53cb` \u53ef\u8fdb\u884c\u5207\u78cb\u3002",
-    },
-    {
-        "func": "\u79d8\u5883\u4e0e\u4efb\u52a1",
-        "trigger_method": "\u79d8\u5883 / \u63a2\u7d22 1 / \u5929\u673a\u79d8\u5883 / \u6bcf\u65e5\u4efb\u52a1 / \u5546\u5e97",
-        "trigger_condition": "\u79d8\u5883\u5165\u53e3 60 \u79d2\u5185\u9009\u62e9\uff1b\u4efb\u52a1\u7b7e\u5230\u540e\u751f\u6210",
-        "brief_des": "\u9650\u65f6\u79d8\u5883\u3001\u6bcf\u65e5\u4efb\u52a1\u548c\u6bcf\u65e5\u5546\u5e97",
-        "detail_des": "`\u79d8\u5883` \u4ece\u4e0a\u53e4\u5b97\u95e8\u9057\u5740\u3001\u517d\u6f6e\u3001\u6d1e\u5e9c\u3001\u592a\u53e4\u77ff\u533a\u3001\u865a\u795e\u754c\u6b8b\u57df\u3001\u9752\u94dc\u4ed9\u6bbf\u4e2d\u62bd 3 \u4e2a 60 \u79d2\u5165\u53e3\uff1b\u8fdb\u5165\u540e 10 \u6b21\u63a2\u7d22\uff0c\u6bcf\u8f6e\u542b\u9996\u9886\u6311\u6218\u9879\uff0c\u80dc\u5229\u53ef\u76f4\u63a5\u83b7\u5f97 10 \u6b21\u63a2\u7d22\u6298\u7b97\u5956\u52b1\u3001\u9996\u9886\u5996\u4e39\uff0c\u5e76\u63d0\u5347\u529f\u6cd5\u5c42\u6570\u719f\u7ec3\u5ea6\u4e0e\u9635\u6cd5\u719f\u7ec3\u5ea6\u3002",
-    },
-    {
-        "func": "\u8def\u7ebf\u4e0e\u8eab\u4efd",
-        "trigger_method": "\u8def\u7ebf / \u9009\u62e9\u8def\u7ebf \u5251\u4fee / \u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50 / \u9009\u62e9\u8eab\u4efd \u5408\u6b22\u5b97\u5f1f\u5b50",
-        "trigger_condition": "\u4e3b\u8def\u7ebf\u540c\u4e00\u65f6\u95f4\u53ea\u80fd\u4e00\u79cd\uff1b\u90aa\u4fee\u53ef\u989d\u5916\u540c\u4fee",
-        "brief_des": "\u9009\u62e9\u4e3b\u4fee\u8def\u7ebf\u3001\u90aa\u4fee\u540c\u4fee\u548c\u5b97\u95e8\u8eab\u4efd\u4ee4\u724c",
-        "detail_des": "`\u8def\u7ebf` \u4f1a\u663e\u793a\u6240\u6709\u8def\u7ebf\u6548\u679c\u3001\u5929\u673a\u9601/\u5408\u6b22\u5b97\u8eab\u4efd\u95e8\u69db\u3001\u8eab\u4efd\u4ee4\u724c\u6b21\u6570\u548c\u793a\u4f8b\u6307\u4ee4\u3002",
-    },
-    {
-        "func": "\u70bc\u4e39\u4e0e\u7b26\u7b93",
-        "trigger_method": "\u70bc\u4e39 / \u70bc\u4e39 \u7b51\u57fa\u4e39 / \u7ed8\u5236\u7b26\u7b93 / \u7ed8\u5236\u7b26\u7b93 1",
-        "trigger_condition": "\u70bc\u4e39\u9700\u70bc\u4e39\u5e08\u8def\u7ebf\uff1b\u7ed8\u5236\u7b26\u7b93\u9700\u4fee\u4e3a\u548c\u7075\u77f3",
-        "brief_des": "\u70bc\u5236\u4e39\u836f\u3001\u67e5\u770b\u4e39\u65b9\u5e76\u7ed8\u5236\u7b26\u7b93",
-        "detail_des": "\u6750\u6599\u54c1\u9636\u548c\u54c1\u8d28\u4f1a\u5f71\u54cd\u70bc\u4e39\u6210\u529f\u7387\u4e0e\u6210\u4e39\u54c1\u8d28\uff1b\u7a81\u7834\u7b26\u4ee4\u3001\u7b26\u8bcf\u548c\u6cd5\u65e8\u9700\u8981\u5bf9\u5e94\u5883\u754c\u5dc5\u5cf0\u624d\u53ef\u7ed8\u5236\u3002",
-    },
-    {
-        "func": "\u8da3\u5473\u73a9\u6cd5",
-        "trigger_method": "\u5929\u673a\u5360\u535c / \u5750\u5802 / \u5360\u535c \u4eca\u65e5\u8fd0\u52bf / \u6597\u5730\u4e3b / \u6597\u5730\u4e3b\u5f00\u684c / \u4eba\u673a\u6597\u5730\u4e3b",
-        "trigger_condition": "\u8da3\u5473\u4f11\u95f2\u73a9\u6cd5\uff1b\u6597\u5730\u4e3b\u9700\u7fa4\u804a\u4f7f\u7528",
-        "brief_des": "\u5929\u673a\u95ee\u5366\u4e0e\u7fa4\u804a\u6597\u5730\u4e3b\uff0c\u652f\u6301\u5a01\u538b\u62a2\u5730\u4e3b\u3001\u52a0\u500d\u548c\u6625\u5929",
-        "detail_des": "`\u5929\u673a\u5360\u535c` \u9700\u672c\u7fa4\u5929\u673a\u9601\u95e8\u4eba\u5750\u5802\u540e\u624d\u80fd\u95ee\u5366\uff1b\u5176\u4ed6\u5929\u673a\u9601\u95e8\u4eba\u53ef\u53d1\u9001 `\u5750\u5802` \u52a0\u5165\u5360\u535c\u6da6\u8d44\u5206\u6da6\u3002`\u6597\u5730\u4e3b\u5e2e\u52a9` \u67e5\u770b\u72ec\u7acb\u89c4\u5219\u3002",
-    },
-    {
-        "func": "\u6392\u884c",
-        "trigger_method": "\u6392\u884c / \u4fee\u4e3a\u699c / \u6218\u529b\u699c",
-        "trigger_condition": "\u7fa4\u804a\u5185\u4f7f\u7528",
-        "brief_des": "\u67e5\u770b\u7fa4\u4fee\u4e3a\u699c\u3001\u6218\u529b\u699c\u548c\u6bcf\u65e5\u8bdd\u75e8\u7ed3\u7b97",
-        "detail_des": "\u6bcf\u65e5 22:00 \u81ea\u52a8\u53d1\u5e03\u8bdd\u75e8\u699c\u5e76\u53d1\u5956\uff0c\u540c\u65f6\u540c\u6b65\u7fa4\u4fee\u4e3a\u699c\u548c\u7fa4\u6218\u529b\u699c\u3002",
-    },
-]
+PICMENU_NEXT_FUNCS = [{'func': '开始修仙',
+  'trigger_method': '签到 / 面板 / 帮助',
+  'trigger_condition': '首次签到会抽取灵根；帮助会打开内置说明',
+  'brief_des': '从签到、个人面板和新手说明开始',
+  'detail_des': '`签到` 每日修炼并获得 1 次垂钓；`面板` 查看个人状态；`帮助` 查看修为提升路径与常用入口。'},
+ {'func': '背包与图鉴',
+  'trigger_method': '背包 / 图鉴 / 神通 / 神通图鉴 / 炼器图鉴 / 仙种图鉴 / 帝兵图鉴',
+  'trigger_condition': '图鉴无需拥有物品，可直接查看',
+  'brief_des': '查看道具、神通、丹药、符箓、灵器、功法、仙种和帝兵',
+  'detail_des': '`背包` 查看已获得物品；支持 `批量使用丹药 10`、`批量炼化灵石 全部`、`批量使用灵食 10`；`图鉴 灵材名` 可反查配方用途；`神通` 查看已领悟能力和传承材料；`炼器图鉴` 查看可炼制灵器配方；`仙种图鉴`、`帝兵图鉴` 查看高阶唯一奖励和拥有者。'},
+ {'func': '突破与修为',
+  'trigger_method': '突破 / 散功 / 炼化灵液 / 后天灵根 / 境界图鉴 / 突破图鉴 / 品相图鉴',
+  'trigger_condition': '境界圆满后进入瓶颈，需突破后继续增长修为',
+  'brief_des': '查看境界瓶颈、突破材料和重修机会',
+  'detail_des': '瓶颈后修为不会继续增加，溢出修为会凝成精纯灵液；突破道具按名称区分品相上限，基础道具易得但不能直接冲到最高品相；化神破炼虚需五行补全，可用 `后天灵根` 查看丹灵根/器灵根炼化方式；`炼化灵液` 可把已沉淀灵液转为修为。'},
+ {'func': '历练与装备',
+  'trigger_method': '历练 / 灵器 / 装备灵器 1 主手 / 祭炼本命灵器 1 / 装备仙种 1 / 阵法推演 1 / 战力',
+  'trigger_condition': '编号来自对应面板；主手、副手、护甲各可装备一件灵器',
+  'brief_des': '管理三槽灵器、本命灵器、仙种、符箓栏、功法阵盘并计算战力',
+  'detail_des': '`装备灵器 1 主手`、`装备灵器 2 副手`、`装备灵器 3 护甲` 管理灵器槽；`祭炼本命灵器 1` 设为本命灵器；`装备仙种 1` 在真仙后生效；`阵法推演 '
+                '1` 以同名阵盘合成升品。'},
+ {'func': '秘境与任务',
+  'trigger_method': '秘境 / 探索 1 / 天机秘境 / 秘境救援 1000 / 救援列表 / 每日任务',
+  'trigger_condition': '秘境入口 60 秒内选择；任务签到后生成',
+  'brief_des': '限时秘境、每日任务和每日商店',
+  'detail_des': '`秘境` 会抽取 60 秒限时入口，并有概率出现高危险地。普通秘境首领挑战胜利可折算 10 次探索奖励和首领妖丹；高危险地 5 选 2 '
+                '生路，无首领挑战，不会被天机秘境选中。反噬后可发送 `秘境救援 1000` 委托其他修士救场。'},
+ {'func': '路线与身份',
+  'trigger_method': '路线 / 选择路线 剑修 / 选择路线 炼器师 / 选择身份 天机阁弟子',
+  'trigger_condition': '主路线同一时间只能一种；邪修可额外同修',
+  'brief_des': '选择主修路线、炼丹/炼器/阵法专长、邪修同修和宗门身份令牌',
+  'detail_des': '`路线` 会显示所有路线效果、天机阁/合欢宗身份门槛、身份令牌次数和示例指令。'},
+ {'func': '炼丹炼器与符箓',
+  'trigger_method': '炼丹 / 炼丹 筑基丹 / 炼器 / 炼器图鉴 / 图鉴 灵材名 / 绘制符箓 1',
+  'trigger_condition': '炼丹需炼丹师路线；炼器需炼器师路线；绘制符箓需修为和灵石',
+  'brief_des': '炼制丹药、灵器、阵盘和符箓',
+  'detail_des': '材料品阶和品质会影响炼丹成功率与成丹品质；所有垂钓灵材均接入至少一条炼丹或炼器用途；`炼器` 按图谱消耗灵材和灵石炼制青竹蜂云剑、庚金青竹蜂云剑、仿制帝兵等；突破符令需对应境界巅峰才可绘制。'},
+ {'func': '交易与资源处理',
+  'trigger_method': '万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1 / 交易 @对方 灵器 1 100 / 批量出售 杂物 20 / 批量炼化灵石 全部',
+  'trigger_condition': '群聊内使用；万宝楼自动按系统回收价 1.5 倍定价',
+  'brief_des': '万宝楼公开寄售、玩家指定交易和批量出售背包资源',
+  'detail_des': '`万宝楼挂售 灵器 1` 会自动估价并公开寄售；`万宝楼购买 1` 付款取货；`万宝楼下架 1` 撤回本人寄售；`交易 @对方 灵器 1 100` 保留为指定交易；`批量出售 杂物 20` 按类别一次性兑换灵石，唯一道具不会被批量出售。'},
+ {'func': '趣味玩法',
+  'trigger_method': '天机占卜 / 坐堂 / 占卜 今日运势 / 斗地主 / 斗地主开桌 / 人机斗地主',
+  'trigger_condition': '趣味休闲玩法；斗地主需群聊使用',
+  'brief_des': '天机问卦与群聊斗地主，支持威压抢地主、加倍和春天',
+  'detail_des': '`天机占卜` 需本群天机阁门人坐堂后才能问卦；其他天机阁门人可发送 `坐堂` 加入占卜润资分润。`斗地主帮助` 查看独立规则。'},
+ {'func': '排行',
+  'trigger_method': '排行 / 修为榜 / 战力榜',
+  'trigger_condition': '群聊内使用',
+  'brief_des': '查看群修为榜、战力榜和每日话痨结算',
+  'detail_des': '每日 22:00 自动发布话痨榜并发奖，同时同步群修为榜和群战力榜。'}]
+
 
 __plugin_meta__ = PluginMetadata(
     name="修仙签到",
@@ -245,6 +255,9 @@ CATALOG_TEXTS = {
     "\u56fe\u5f55",
     "\u5883\u754c\u56fe\u9274",
     "\u7a81\u7834\u56fe\u9274",
+    "\u54c1\u76f8\u56fe\u9274",
+    "\u7a81\u7834\u54c1\u76f8\u56fe\u9274",
+    "\u9053\u5177\u54c1\u76f8\u56fe\u9274",
     "\u4e39\u836f\u56fe\u9274",
     "\u7b26\u7b93\u56fe\u9274",
     "\u6b66\u5668\u56fe\u9274",
@@ -256,6 +269,7 @@ CATALOG_TEXTS = {
     "\u795e\u901a\u56fe\u9274",
     "\u7075\u6750\u56fe\u9274",
 }
+CATALOG_QUERY_PREFIXES = ("图鉴", "图录", "查看图鉴")
 BREAKTHROUGH_TEXTS = {"\u7a81\u7834", "\u5883\u754c\u7a81\u7834", "\u7834\u5883", "\u67e5\u770b\u7a81\u7834", "\u7a81\u7834\u72b6\u6001", "\u6563\u529f", "\u91cd\u4fee", "\u81ea\u5e9f\u4fee\u4e3a"}
 CULTIVATION_RANK_TEXTS = {"\u4fee\u4e3a\u699c", "\u7fa4\u4fee\u4e3a\u699c", "\u5883\u754c\u699c", "\u6392\u884c", "\u6392\u884c\u699c"}
 POWER_RANK_TEXTS = {"战力榜", "群战力榜"}
@@ -274,6 +288,10 @@ ROUTE_TEXTS = {"\u4fee\u70bc\u8def\u7ebf", "\u8def\u7ebf", "\u8eab\u4efd", "\u8e
 TASK_TEXTS = {"每日任务", "任务", "我的任务"}
 SHOP_TEXTS = {"商店", "坊市", "每日商店"}
 ALCHEMY_TEXTS = {"炼丹", "丹方"}
+REFINING_TEXTS = {'炼器', '炼器图鉴', '炼器帮助'}
+ARRAY_DEDUCTION_TEXTS = {'阵法推演', '推演阵法'}
+IMMORTAL_SEED_TEXTS = {'仙种', '我的仙种', '仙种图鉴'}
+EMPEROR_CATALOG_TEXTS = {'帝兵图鉴', '极道帝兵', '极道帝兵图鉴'}
 TALISMAN_DRAW_TEXTS = {"\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7b26\u7b93\u7ed8\u5236", "\u7ed8\u7b26"}
 TIANJI_MYSTIC_TEXTS = {"天机秘境", "天机探索", "特殊秘境"}
 DIVINATION_TEXTS = {"\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366"}
@@ -315,10 +333,14 @@ ARRAY_EQUIP_PREFIXES = ("布置阵盘", "装备阵盘", "布阵", "布置阵法"
 PUPPET_EQUIP_PREFIXES = ("装备傀儡", "唤醒傀儡", "启用傀儡")
 PLANT_EQUIP_PREFIXES = ("栽种灵植", "种植灵植", "种灵植")
 PILL_USE_PREFIXES = ("使用丹药", "服用丹药", "服丹", "吃丹药")
+PILL_BATCH_USE_PREFIXES = ("批量使用丹药", "批量服用丹药", "批量服丹", "一键服丹", "一键使用丹药")
 TALISMAN_USE_PREFIXES = ("使用符箓", "激发符箓", "用符")
 STONE_USE_PREFIXES = ("炼化灵石", "使用灵石", "吸收灵石")
+STONE_BATCH_USE_PREFIXES = ("批量炼化灵石", "批量使用灵石", "批量吸收灵石", "一键炼化灵石", "一键使用灵石")
 SPIRIT_LIQUID_USE_PREFIXES = ("炼化灵液", "炼化精纯灵液", "吸收灵液", "吸收精纯灵液", "使用灵液", "使用精纯灵液")
 FOOD_USE_PREFIXES = ("使用灵食", "食用灵食", "吃灵食")
+FOOD_BATCH_USE_PREFIXES = ("批量使用灵食", "批量食用灵食", "批量吃灵食", "一键吃灵食", "一键使用灵食")
+BATCH_USE_ALL_WORDS = {"全部", "全", "all", "ALL", "All"}
 CURIO_USE_PREFIXES = ("使用奇物", "催动奇物", "参悟奇物")
 MISC_USE_PREFIXES = ("鉴定杂物", "鉴定")
 DAN_ROOT_PREFIXES = ("\u70bc\u5316\u4e39\u7075\u6839", "\u51dd\u7ec3\u4e39\u7075\u6839", "\u8865\u5168\u4e39\u7075\u6839")
@@ -331,6 +353,20 @@ TASK_COMPLETE_PREFIXES = ("完成任务", "提交任务")
 BUY_PREFIXES = ("购买", "买入")
 SELL_PREFIXES = ("出售", "卖出")
 ALCHEMY_PREFIXES = ("炼丹",)
+REFINING_PREFIXES = ('炼器',)
+ARRAY_DEDUCTION_PREFIXES = ('阵法推演', '推演阵法')
+LIFE_ARTIFACT_PREFIXES = ('祭炼本命灵器', '本命灵器', '祭炼本命')
+IMMORTAL_SEED_EQUIP_PREFIXES = ('装备仙种', '纳入仙种')
+BATCH_SELL_PREFIXES = ('批量出售', '批量卖出', '一键出售')
+TRADE_OFFER_PREFIXES = ('交易', '出售给')
+TRADE_ACCEPT_PREFIXES = ('接受交易', '购买交易')
+TRADE_CANCEL_PREFIXES = ('取消交易', '撤销交易')
+MARKET_TEXTS = {'万宝楼', '万宝楼列表', '万宝阁', '寄售列表'}
+MARKET_OFFER_PREFIXES = ('万宝楼挂售', '万宝楼寄售', '挂售', '寄售')
+MARKET_BUY_PREFIXES = ('万宝楼购买', '万宝楼买入', '购买万宝楼')
+MARKET_CANCEL_PREFIXES = ('万宝楼下架', '下架寄售', '下架')
+RESCUE_REQUEST_PREFIXES = ('秘境救援', '发起救援')
+RESCUE_TAKE_PREFIXES = ('救援', '接受救援')
 TALISMAN_DRAW_PREFIXES = ("\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7ed8\u7b26")
 SPECIAL_ABILITY_LEARN_PREFIXES = ("\u9886\u609f\u7279\u6b8a\u80fd\u529b", "\u9886\u609f\u795e\u901a", "\u53c2\u609f\u7279\u6b8a\u80fd\u529b")
 MYSTIC_EXPLORE_PREFIXES = ("探索", "秘境探索")
@@ -650,6 +686,8 @@ def is_spirit_liquid_use_command_text(text: str) -> bool:
 
 
 def is_item_use_command_text(text: str) -> bool:
+    if parse_batch_item_use(text) is not None:
+        return True
     return any(
         is_prefixed_index_command(text, prefixes)
         for prefixes in (
@@ -698,7 +736,7 @@ def is_task_command_text(text: str) -> bool:
 
 
 def is_shop_command_text(text: str) -> bool:
-    return text in SHOP_TEXTS or parse_shop_buy_index(text) is not None or parse_sell_item(text) is not None
+    return text in SHOP_TEXTS or parse_shop_buy_index(text) is not None or parse_sell_item(text) is not None or parse_batch_sell(text) is not None
 
 
 def is_alchemy_command_text(text: str) -> bool:
@@ -721,6 +759,159 @@ def is_tianji_mystic_command_text(text: str) -> bool:
     return text in TIANJI_MYSTIC_TEXTS
 
 
+
+def parse_refining_name(text: str) -> Optional[str]:
+    stripped = text.strip()
+    if stripped in REFINING_TEXTS:
+        return ""
+    for prefix in REFINING_PREFIXES:
+        if stripped.startswith(f"{prefix} "):
+            return stripped[len(prefix):].strip()
+    return None
+
+
+def parse_array_deduction_index(text: str) -> Optional[int]:
+    if text in ARRAY_DEDUCTION_TEXTS:
+        return 0
+    return parse_prefixed_index(text, ARRAY_DEDUCTION_PREFIXES)
+
+
+def parse_life_artifact_index(text: str) -> Optional[int]:
+    return parse_prefixed_index(text, LIFE_ARTIFACT_PREFIXES)
+
+
+def parse_immortal_seed_equip_index(text: str) -> Optional[int]:
+    return parse_prefixed_index(text, IMMORTAL_SEED_EQUIP_PREFIXES)
+
+
+def parse_batch_sell(text: str) -> Optional[tuple[str, int]]:
+    for prefix in BATCH_SELL_PREFIXES:
+        if not text.startswith(prefix):
+            continue
+        rest = text[len(prefix):].strip()
+        if not rest:
+            return None
+        parts = rest.split()
+        category = parts[0]
+        limit = 999
+        if len(parts) > 1 and parts[1].isdigit():
+            limit = int(parts[1])
+        return category, limit
+    return None
+
+
+TRADE_CATEGORIES = ("仙缘", "灵器", "功法", "丹药", "阵盘", "灵材", "符箓", "傀儡", "灵植", "灵石", "杂物", "奇物", "特殊能力", "灵食", "仙种")
+
+
+def parse_catalog_query(text: str) -> Optional[str]:
+    stripped = text.strip()
+    for prefix in CATALOG_QUERY_PREFIXES:
+        if stripped == prefix:
+            return None
+        if stripped.startswith(prefix):
+            rest = stripped[len(prefix):].strip()
+            return rest or None
+    return None
+
+
+def parse_trade_offer(text: str) -> Optional[tuple[str, str, int, int]]:
+    for prefix in TRADE_OFFER_PREFIXES:
+        if not text.startswith(prefix):
+            continue
+        rest = text[len(prefix):].strip()
+        match = re.search(r"(\d{5,})", rest)
+        target_id = ""
+        if match:
+            target_id = match.group(1)
+            rest = (rest[:match.start()] + rest[match.end():]).strip()
+        for category in TRADE_CATEGORIES:
+            if category not in rest:
+                continue
+            tail = rest.split(category, 1)[1]
+            nums = [int(item) for item in re.findall(r"\d+", tail)]
+            if len(nums) >= 2:
+                return target_id, category, nums[0], nums[1]
+    return None
+
+
+def parse_trade_accept(text: str) -> Optional[int]:
+    return parse_prefixed_index(text, TRADE_ACCEPT_PREFIXES)
+
+
+def parse_trade_cancel(text: str) -> Optional[int]:
+    return parse_prefixed_index(text, TRADE_CANCEL_PREFIXES)
+
+
+def parse_market_offer(text: str) -> Optional[tuple[str, int]]:
+    for prefix in MARKET_OFFER_PREFIXES:
+        if not text.startswith(prefix):
+            continue
+        rest = text[len(prefix):].strip()
+        for category in TRADE_CATEGORIES:
+            if category not in rest:
+                continue
+            tail = rest.split(category, 1)[1]
+            nums = [int(item) for item in re.findall(r"\d+", tail)]
+            if nums:
+                return category, nums[0]
+    return None
+
+
+def parse_market_buy(text: str) -> Optional[int]:
+    return parse_prefixed_index(text, MARKET_BUY_PREFIXES)
+
+
+def parse_market_cancel(text: str) -> Optional[int]:
+    return parse_prefixed_index(text, MARKET_CANCEL_PREFIXES)
+
+
+def parse_rescue_request(text: str) -> Optional[int]:
+    for prefix in RESCUE_REQUEST_PREFIXES:
+        if text == prefix:
+            return 0
+        if text.startswith(prefix):
+            match = re.search(r"\d+", text[len(prefix):])
+            return int(match.group(0)) if match else 0
+    return None
+
+
+def parse_rescue_take(text: str) -> Optional[str]:
+    for prefix in RESCUE_TAKE_PREFIXES:
+        if text == prefix:
+            return ""
+        if text.startswith(prefix):
+            return text[len(prefix):].strip()
+    return None
+
+
+def is_refining_command_text(text: str) -> bool:
+    return parse_refining_name(text) is not None
+
+
+def is_array_deduction_command_text(text: str) -> bool:
+    return parse_array_deduction_index(text) is not None
+
+
+def is_life_artifact_command_text(text: str) -> bool:
+    return parse_life_artifact_index(text) is not None
+
+
+def is_immortal_seed_command_text(text: str) -> bool:
+    return text in IMMORTAL_SEED_TEXTS or parse_immortal_seed_equip_index(text) is not None
+
+
+def is_trade_command_text(text: str) -> bool:
+    return parse_trade_offer(text) is not None or parse_trade_accept(text) is not None or parse_trade_cancel(text) is not None or text in {"\u4ea4\u6613\u5217\u8868", "\u6211\u7684\u4ea4\u6613"}
+
+
+def is_market_command_text(text: str) -> bool:
+    return text in MARKET_TEXTS or parse_market_offer(text) is not None or parse_market_buy(text) is not None or parse_market_cancel(text) is not None
+
+
+def is_rescue_command_text(text: str) -> bool:
+    return parse_rescue_request(text) is not None or parse_rescue_take(text) is not None or text in {"\u6551\u63f4\u5217\u8868", "\u79d8\u5883\u6551\u63f4\u5217\u8868"}
+
+
 def parse_divination_question(text: str) -> Optional[str]:
     stripped = text.strip()
     for prefix in DIVINATION_PREFIXES:
@@ -738,6 +929,47 @@ def is_divination_command_text(text: str) -> bool:
 
 def is_dual_cultivation_command_text(text: str) -> bool:
     return text.startswith("双修") or text == "随机双修"
+
+
+def parse_batch_use_limit(rest: str) -> Optional[int]:
+    stripped = str(rest or "").strip()
+    if not stripped or stripped in BATCH_USE_ALL_WORDS:
+        return 999
+    if any(word in stripped for word in BATCH_USE_ALL_WORDS):
+        return 999
+    match = re.search(r"\d+", stripped)
+    if match:
+        return max(1, min(999, int(match.group(0))))
+    return None
+
+
+def parse_batch_item_use(text: str) -> Optional[tuple[str, int]]:
+    mapping = [
+        ("丹药", PILL_BATCH_USE_PREFIXES),
+        ("灵石", STONE_BATCH_USE_PREFIXES),
+        ("灵食", FOOD_BATCH_USE_PREFIXES),
+    ]
+    for category, prefixes in mapping:
+        for prefix in prefixes:
+            if text == prefix:
+                return category, 999
+            if text.startswith(prefix):
+                limit = parse_batch_use_limit(text[len(prefix):])
+                if limit is not None:
+                    return category, limit
+    direct_mapping = [
+        ("丹药", PILL_USE_PREFIXES),
+        ("灵石", STONE_USE_PREFIXES),
+        ("灵食", FOOD_USE_PREFIXES),
+    ]
+    for category, prefixes in direct_mapping:
+        for prefix in prefixes:
+            if not text.startswith(prefix):
+                continue
+            rest = text[len(prefix):].strip()
+            if rest and any(word in rest for word in BATCH_USE_ALL_WORDS):
+                return category, 999
+    return None
 
 
 def parse_item_use(text: str) -> Optional[tuple[str, int]]:
@@ -886,6 +1118,7 @@ def is_managed_command_text(text: str) -> bool:
         or text in STATUS_TEXTS
         or text in HELP_TEXTS
         or text in CATALOG_TEXTS
+        or parse_catalog_query(text) is not None
         or text in BREAKTHROUGH_TEXTS
         or text in CULTIVATION_RANK_TEXTS
         or text in POWER_RANK_TEXTS
@@ -905,6 +1138,14 @@ def is_managed_command_text(text: str) -> bool:
         or is_task_command_text(text)
         or is_shop_command_text(text)
         or is_alchemy_command_text(text)
+        or is_refining_command_text(text)
+        or is_array_deduction_command_text(text)
+        or is_life_artifact_command_text(text)
+        or is_immortal_seed_command_text(text)
+        or text in EMPEROR_CATALOG_TEXTS
+        or is_trade_command_text(text)
+        or is_market_command_text(text)
+        or is_rescue_command_text(text)
         or is_talisman_draw_command_text(text)
         or is_tianji_mystic_command_text(text)
         or is_divination_command_text(text)
@@ -2112,7 +2353,7 @@ def format_help_text() -> str:
             "2. \u529f\u6cd5\uff1a\u53c2\u609f\u540e\u53ef\u63d0\u5347\u7b7e\u5230\u6536\u76ca\uff0c\u804a\u5929\u65f6\u4e5f\u80fd\u6309\u6761\u6570\u4ea7\u751f\u4fee\u4e3a\u3002",
             "3. \u7075\u690d/\u7075\u98df/\u4e39\u836f/\u7075\u77f3\uff1a\u5728\u80cc\u5305\u4e2d\u4f7f\u7528\uff0c\u6216\u7528\u4e8e\u70bc\u4e39\u3001\u7a81\u7834\u3002",
             "4. \u74f6\u9888\uff1a\u5883\u754c\u5706\u6ee1\u540e\u4fee\u4e3a\u4e0d\u518d\u589e\u957f\uff0c\u6ea2\u51fa\u4fee\u4e3a 50% \u4f1a\u51dd\u6210\u7cbe\u7eaf\u7075\u6db2\uff1b\u7a81\u7834\u540e\u53ef\u53d1\u9001\u201c\u70bc\u5316\u7075\u6db2\u201d\u8f6c\u56de\u4fee\u4e3a\u3002",
-            "5. \u6c89\u6dc0\uff1a\u74f6\u9888\u540e\u6bcf\u5929\u7b7e\u5230\u6c89\u6dc0\u4e00\u6b21\uff0c\u5782\u9493\u9ad8\u9636\u7a81\u7834\u9053\u5177\u6743\u91cd\u4f1a\u9010\u65e5\u63d0\u5347\u3002",
+            "5. \u6c89\u6dc0\uff1a\u74f6\u9888\u540e\u6bcf\u5929\u7b7e\u5230\u6c89\u6dc0\u4e00\u6b21\uff0c\u7b7e\u5230/\u5782\u9493\u5bb9\u6613\u83b7\u5f97\u7a81\u7834\u9053\u5177\uff1b\u9053\u5177\u540d\u79f0\u51b3\u5b9a\u54c1\u76f8\u4e0a\u9650\uff0c\u54c1\u9636\u548c\u54c1\u8d28\u53ea\u5728\u4e0a\u9650\u5185\u63d0\u5347\u7a81\u7834\u54c1\u76f8\u3002",
             "6. \u540e\u5929\u7075\u6839\uff1a\u5316\u795e\u7834\u70bc\u865a\u9700\u4e94\u884c\u8865\u5168\uff0c\u53d1\u9001\u201c\u540e\u5929\u7075\u6839\u201d\u67e5\u770b\uff1b\u5996\u4e39\u7528\u201c\u70bc\u5316\u4e39\u7075\u6839 1\u201d\uff0c\u9002\u914d\u7075\u5668\u7528\u201c\u70bc\u5316\u5668\u7075\u6839 1\u201d\u3002",
             "",
             "\u3010\u8def\u7ebf\u4e0e\u8eab\u4efd\u3011",
@@ -2120,20 +2361,21 @@ def format_help_text() -> str:
             "\u4e3b\u8def\u7ebf\u793a\u4f8b\uff1a\u9009\u62e9\u8def\u7ebf \u5251\u4fee\uff1b\u5b97\u95e8\u793a\u4f8b\uff1a\u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50\u3002",
             "",
             "\u3010\u56fe\u9274\u5165\u53e3\u3011",
-            "\u56fe\u9274 / \u5883\u754c\u56fe\u9274 / \u7a81\u7834\u56fe\u9274 / \u4e39\u836f\u56fe\u9274 / \u7b26\u7b93\u56fe\u9274 / \u6b66\u5668\u56fe\u9274 / \u529f\u6cd5\u56fe\u9274 / \u7279\u6b8a\u80fd\u529b\u56fe\u9274",
+            "\u56fe\u9274 / \u56fe\u9274 \u7834\u865a\u7075\u5f15 / \u5883\u754c\u56fe\u9274 / \u7a81\u7834\u56fe\u9274 / \u4e39\u836f\u56fe\u9274 / \u7b26\u7b93\u56fe\u9274 / \u6b66\u5668\u56fe\u9274 / \u529f\u6cd5\u56fe\u9274 / \u7279\u6b8a\u80fd\u529b\u56fe\u9274",
             "\u3010\u7279\u6b8a\u80fd\u529b\u3011",
             "\u7279\u6b8a\u80fd\u529b / \u9886\u609f\u7279\u6b8a\u80fd\u529b 1 / \u7279\u6b8a\u80fd\u529b\u56fe\u9274\uff1a\u67e5\u770b\u3001\u9886\u609f\u5e76\u8ffd\u6c42\u4e5d\u79d8\u3001\u516b\u7981\u3001\u795e\u7981\u7b49\u80fd\u529b\u3002",
             "\u3010\u6597\u6cd5\u3011",
             "\u7533\u8bf7\u666e\u901a\u6597\u6cd5\uff1a\u4e24\u4eba\u5339\u914d\u540e 1 \u5206\u949f\u51c6\u5907\uff0c60 \u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u7279\u6b8a\u80fd\u529b\u6216\u5373\u5174\u53f0\u8bcd\uff0c\u7ed3\u675f\u540e\u8f93\u51fa\u6218\u62a5\u56fe\u3002",
             "\u3010\u8da3\u5473\u73a9\u6cd5\u3011",
             "\u5929\u673a\u5360\u535c / \u5360\u535c \u4eca\u65e5\u8fd0\u52bf / \u7b97\u547d \u59fb\u7f18\uff1a\u53c2\u8003\u5468\u6613\u5366\u8c61\u4e0e\u9053\u6559\u7b7e\u8bed\u751f\u6210\u8da3\u5473\u65ad\u8bed\uff0c\u4e0d\u6d88\u8017\u4fee\u4e3a\u6216\u9053\u5177\u3002",
+            "万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1：公开寄售按系统回收价 1.5 倍自动定价。",
             "斗地主 / 斗地主帮助 / 人机斗地主：群聊三人斗牌，炸弹在修仙牌局中显示为雷劫，王炸显示为天罚雷劫。",
         ]
     )
 
 
 def reward_catalog_lines(category: str, title: str) -> list[str]:
-    tier_order = ["\u5929\u9636", "\u5730\u9636", "\u7384\u9636", "\u9ec4\u9636", "\u51e1\u54c1"]
+    tier_order = ["帝兵", "仙阶", "\u5929\u9636", "\u5730\u9636", "\u7384\u9636", "\u9ec4\u9636", "\u51e1\u54c1"]
     seen: dict[str, set[str]] = {tier: set() for tier in tier_order}
     for tier, _grade, item_category, name, _desc, _weight in FISHING_REWARDS:
         if item_category == category:
@@ -2149,12 +2391,19 @@ def reward_catalog_lines(category: str, title: str) -> list[str]:
 
 
 def format_catalog_text(text: str) -> str:
+    query = parse_catalog_query(text)
+    if query:
+        detail = catalog_item_detail_text(query)
+        if detail:
+            return detail
+        return f"【{query}图鉴】\n暂未收录这个条目的图鉴。可尝试发送“丹药图鉴 / 符箓图鉴 / 材料图鉴 / 帝兵图鉴”查看完整分类。"
     if text in {"\u56fe\u9274", "\u56fe\u5f55"}:
         return "\n".join(
             [
                 "\u3010\u5185\u7f6e\u56fe\u9274\u3011",
                 "\u5883\u754c\u56fe\u9274\uff1a\u5883\u754c\u3001\u9636\u6bb5\u548c\u74f6\u9888\u8bf4\u660e\u3002",
                 "\u7a81\u7834\u56fe\u9274\uff1a\u6bcf\u4e2a\u74f6\u9888\u9700\u8981\u7684\u4e39\u836f\u3001\u7b26\u4ee4\u3001\u610f\u5883\u6216\u6cd5\u65e8\u3002",
+                "\u54c1\u76f8\u56fe\u9274\uff1a\u67e5\u770b\u7a81\u7834\u9053\u5177\u540d\u79f0\u4e0e\u6700\u7ec8\u5883\u754c\u54c1\u76f8\u4e0a\u9650\u7684\u5bf9\u5e94\u5173\u7cfb\u3002",
                 "\u4e39\u836f\u56fe\u9274\uff1a\u4e39\u836f\u4e0e\u7a81\u7834\u4e39\u6536\u5f55\uff0c\u70bc\u4e39\u6750\u6599\u54c1\u8d28\u4f1a\u5f71\u54cd\u6210\u4e39\u3002",
                 "\u7b26\u7b93\u56fe\u9274\uff1a\u666e\u901a\u7b26\u7b93\u4e0e\u7a81\u7834\u7b26\u4ee4\u3001\u7b26\u8bcf\u3001\u6cd5\u65e8\u3002",
                 "\u6b66\u5668\u56fe\u9274\uff1a\u5404\u7cfb\u7075\u6839\u53ef\u7528\u7684\u7075\u5668\u3002",
@@ -2169,17 +2418,37 @@ def format_catalog_text(text: str) -> str:
             suffix = "\uff08\u6709\u74f6\u9888\uff09" if index - 1 in BREAKTHROUGH_REQUIREMENTS else ""
             lines.append(f"{index}. {realm}{suffix}")
         return "\n".join(lines)
+    if text in {"品相图鉴", "突破品相图鉴", "道具品相图鉴"}:
+        return breakthrough_quality_relation_text()
     if text == "\u7a81\u7834\u56fe\u9274":
-        lines = ["\u3010\u7a81\u7834\u56fe\u9274\u3011", "\u4fee\u4e3a\u8fbe\u5230\u5706\u6ee1\u540e\u4f1a\u8fdb\u5165\u74f6\u9888\uff0c\u9700\u6d88\u8017\u5bf9\u5e94\u9053\u5177\u624d\u80fd\u7a81\u7834\u3002"]
+        lines = ["\u3010\u7a81\u7834\u56fe\u9274\u3011", "\u4fee\u4e3a\u8fbe\u5230\u5706\u6ee1\u540e\u4f1a\u8fdb\u5165\u74f6\u9888\uff0c\u9700\u6d88\u8017\u5bf9\u5e94\u9053\u5177\u624d\u80fd\u7a81\u7834\u3002", "\u9053\u5177\u540d\u79f0\u51b3\u5b9a\u54c1\u76f8\u4e0a\u9650\uff1b\u54c1\u9636/\u54c1\u8d28\u53ea\u5728\u8be5\u4e0a\u9650\u5185\u63d0\u5347\u7ed3\u679c\uff0c\u57fa\u7840\u9053\u5177\u5373\u4f7f\u62bd\u5230\u5929\u9636\u4e5f\u4e0d\u4f1a\u76f4\u63a5\u89e3\u9501\u6700\u9ad8\u54c1\u76f8\u3002"]
         for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
             current = REALMS[realm_index]
             target = str(requirement.get("target", "\u4e0b\u4e00\u5883"))
-            items = " / ".join(str(item) for item in requirement.get("items", []))
+            items = " / ".join(
+                f"{item}（{breakthrough_item_quality_cap_text(str(item), realm_index + 1)}）"
+                for item in requirement.get("items", [])
+            )
             lines.append(f"{current} -> {target}\uff1a{items}")
-        lines.append("\u74f6\u9888\u65f6\u7b7e\u5230/\u5782\u9493\u83b7\u5f97\u7a81\u7834\u9053\u5177\u7684\u6982\u7387\u4f1a\u5927\u5e45\u63d0\u5347\u3002")
+        lines.append("\u74f6\u9888\u65f6\u7b7e\u5230/\u5782\u9493\u83b7\u5f97\u7a81\u7834\u9053\u5177\u7684\u6982\u7387\u4f1a\u5927\u5e45\u63d0\u5347\uff0c\u4f46\u6700\u7ec8\u54c1\u76f8\u9700\u540c\u65f6\u770b\u9053\u5177\u540d\u79f0\u3001\u54c1\u9636\u548c\u54c1\u8d28\u3002")
         return "\n".join(lines)
     if text in SPECIAL_ABILITY_CATALOG_TEXTS:
         return special_ability_catalog_text()
+    if text in EMPEROR_CATALOG_TEXTS:
+        return emperor_artifact_catalog_text()
+    if text == "\u70bc\u5668\u56fe\u9274":
+        lines = ["\u3010\u70bc\u5668\u56fe\u9274\u3011", "\u70bc\u5668\u5e08\u53ef\u6309\u914d\u65b9\u6d88\u8017\u7075\u6750\u548c\u7075\u77f3\u70bc\u5236\u7075\u5668\uff1b\u6750\u6599\u54c1\u8d28\u4f1a\u5f71\u54cd\u6210\u54c1\u54c1\u8d28\u3002"]
+        for name, recipe in ARTIFACT_REFINING_RECIPES.items():
+            mats = "\u3001".join(recipe["materials"][:8])
+            if len(recipe["materials"]) > 8:
+                mats += f"\u7b49{len(recipe['materials'])}\u4ef6"
+            lines.append(f"{name}\uff1a{recipe['tier']}{recipe['grade']}{recipe.get('category', '\u7075\u5668')}\uff5c\u9700{REALMS[int(recipe.get('required_realm', 0))]}\uff5c\u6750\u6599\uff1a{mats}")
+        return "\n".join(lines)
+    if text == "\u4ed9\u79cd\u56fe\u9274":
+        lines = ["\u3010\u4ed9\u79cd\u56fe\u9274\u3011", "\u4ed9\u79cd\u4e3a\u5b8c\u7f8e\u4e16\u754c\u7cfb\u79d8\u5883\u4ea7\u51fa\uff0c\u771f\u4ed9\u5883\u540e\u53ef\u88c5\u5907\uff0c\u90e8\u5206\u4ed9\u79cd\u5177\u6709\u5168\u5c40\u552f\u4e00\u6027\u3002"]
+        for name, info in IMMORTAL_SEED_INFOS.items():
+            lines.append(f"{name}\uff1a{info.get('effect', '')}")
+        return "\n".join(lines)
     category_map = {
         "\u4e39\u836f\u56fe\u9274": ("\u4e39\u836f", "\u4e39\u836f\u56fe\u9274"),
         "\u7b26\u7b93\u56fe\u9274": ("\u7b26\u7b93", "\u7b26\u7b93\u56fe\u9274"),
@@ -2271,8 +2540,10 @@ def format_adventure_panel(record) -> str:
     return "\n".join(
         [
             "\u3010\u5386\u7ec3\u3011",
-            f"\u5f53\u524d\u6218\u529b\uff1a{summary['power']}\uff1b\u7075\u529b\u4e0a\u9650\uff1a{summary['mana']}",
+            f"\u5f53\u524d\u6218\u529b\uff1a{summary['power']}\uff1b{summary['mana_label']}\u4e0a\u9650\uff1a{summary['mana']}",
             f"\u5f53\u524d\u7075\u5668\u69fd\uff1a{summary['artifact_slots']}",
+            f"\u672c\u547d\u7075\u5668\uff1a{summary['life_artifact']}",
+            f"\u4ed9\u79cd\uff1a{summary['immortal_seed']}\uff08\u6218\u529b+{summary['immortal_seed_power']}\uff09",
             f"\u5f53\u524d\u7b26\u7b93\u680f\uff1a{summary['talisman']}\uff08\u6218\u529b+{summary['talisman_power']}\uff09",
             f"\u5f53\u524d\u529f\u6cd5\uff1a{summary['method']}",
             f"\u5f53\u524d\u9635\u76d8\uff1a{summary['array']}\uff08{summary['array_multiplier']:.1f}x\uff09",
@@ -2282,15 +2553,16 @@ def format_adventure_panel(record) -> str:
             f"\u7cbe\u7eaf\u7075\u6db2\uff1a{summary['spirit_liquid']}\uff1b\u74f6\u9888\u6c89\u6dc0\uff1a{summary['bottleneck_days']} \u5929",
             f"\u4fee\u70bc\u8def\u7ebf\uff1a{summary['route']}",
             f"\u8eab\u4efd\u4ee4\u724c\uff1a{summary['identity']}\uff08\u5929\u673a\u79d8\u5883\uff1a{summary['tianji_status']}\uff0c\u53cc\u4fee\uff1a{summary['hehuan_remaining']}\uff09",
-            f"\u7279\u6b8a\u80fd\u529b\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd",
-            "\u8def\u7ebf / \u9009\u62e9\u8def\u7ebf \u5251\u4fee / \u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50 / \u9009\u62e9\u8eab\u4efd \u5408\u6b22\u5b97\u5f1f\u5b50",
+            f"\u795e\u901a\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd",
+            "\u8def\u7ebf / \u9009\u62e9\u8def\u7ebf \u5251\u4fee / \u9009\u62e9\u8def\u7ebf \u70bc\u5668\u5e08 / \u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50",
             "\u6bcf\u65e5\u4efb\u52a1 / \u5b8c\u6210\u4efb\u52a1 1 / \u5546\u5e97 / \u8d2d\u4e70 1 / \u51fa\u552e \u4e39\u836f 1",
-            "\u70bc\u4e39 / \u70bc\u4e39 \u7b51\u57fa\u4e39 / \u5929\u673a\u79d8\u5883 / \u53cc\u4fee@\u7fa4\u53cb / \u968f\u673a\u53cc\u4fee",
-            "\u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u7279\u6b8a\u80fd\u529b\uff1a\u67e5\u770b\u53ef\u7528\u914d\u7f6e",
+            "\u70bc\u4e39 / \u70bc\u5668 / \u70bc\u5668\u56fe\u9274 / \u9635\u6cd5\u63a8\u6f14 1 / \u796d\u70bc\u672c\u547d\u7075\u5668 1",
+            "\u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u795e\u901a / \u4ed9\u79cd / \u5e1d\u5175\u56fe\u9274\uff1a\u67e5\u770b\u53ef\u7528\u914d\u7f6e",
             "\u5080\u5121 / \u7075\u690d / \u80cc\u5305\uff1a\u67e5\u770b\u5386\u7ec3\u8d44\u6e90",
             "\u88c5\u5907\u7075\u5668 1 \u4e3b\u624b / \u88c5\u5907\u7075\u5668 2 \u526f\u624b / \u88c5\u5907\u7075\u5668 3 \u62a4\u7532 / \u88c5\u5907\u7b26\u7b93 1",
-            "\u53c2\u609f\u529f\u6cd5 1 / \u5e03\u7f6e\u9635\u76d8 1 / \u5378\u4e0b\u7075\u5668 \u526f\u624b / \u5378\u4e0b\u7b26\u7b93",
-            "\u79d8\u5883\uff1a\u67e5\u770b60\u79d2\u9650\u65f6\u79d8\u5883\u5165\u53e3\uff1b\u63a2\u7d22 1\uff1a\u63a8\u8fdb\u5f53\u524d\u79d8\u5883\uff1b\u6311\u6218\u9996\u9886\u53ef\u6298\u7b9710\u6b21\u63a2\u7d22\u5956\u52b1",
+            "\u53c2\u609f\u529f\u6cd5 1 / \u5e03\u7f6e\u9635\u76d8 1 / \u88c5\u5907\u4ed9\u79cd 1 / \u5378\u4e0b\u7075\u5668 \u526f\u624b",
+            "\u4ea4\u6613\u5217\u8868 / \u4ea4\u6613 @\u5bf9\u65b9 \u7075\u5668 1 100 / \u6279\u91cf\u51fa\u552e \u6742\u7269 20 / \u79d8\u5883\u6551\u63f4 1000",
+            "\u79d8\u5883\uff1a\u67e5\u770b60\u79d2\u9650\u65f6\u79d8\u5883\u5165\u53e3\uff1b\u9ad8\u5371\u9669\u5730\u6709\u66f4\u5c11\u751f\u8def\u4e14\u65e0\u9996\u9886\u6311\u6218\uff1b\u666e\u901a\u79d8\u5883\u9996\u9886\u80dc\u5229\u53ef\u6298\u7b9710\u6b21\u63a2\u7d22\u5956\u52b1",
             "\u7a81\u7834\uff1a\u5883\u754c\u5706\u6ee1\u540e\u4f7f\u7528\u7a81\u7834\u9053\u5177\uff1b\u6563\u529f\uff1a\u56de\u9000\u91cd\u4fee\u6539\u5584\u54c1\u76f8",
             "\u6218\u529b / pk @\u5bf9\u65b9 / \u7533\u8bf7\u666e\u901a\u6597\u6cd5 / \u6218\u529b\u699c\uff1a\u67e5\u770b\u6218\u529b\u4e0e\u5207\u78cb",
         ]
@@ -2411,7 +2683,8 @@ async def is_help_message(event: MessageEvent) -> bool:
 
 
 async def is_catalog_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in CATALOG_TEXTS
+    text = normalized_plain_text(event)
+    return text in CATALOG_TEXTS or parse_catalog_query(text) is not None
 
 
 async def is_signin_message(event: MessageEvent) -> bool:
@@ -2461,6 +2734,38 @@ async def is_shop_message(event: MessageEvent) -> bool:
 async def is_alchemy_message(event: MessageEvent) -> bool:
     return is_alchemy_command_text(normalized_plain_text(event))
 
+
+
+async def is_refining_message(event: MessageEvent) -> bool:
+    return is_refining_command_text(normalized_plain_text(event))
+
+
+async def is_array_deduction_message(event: MessageEvent) -> bool:
+    return is_array_deduction_command_text(normalized_plain_text(event))
+
+
+async def is_life_artifact_message(event: MessageEvent) -> bool:
+    return is_life_artifact_command_text(normalized_plain_text(event))
+
+
+async def is_immortal_seed_message(event: MessageEvent) -> bool:
+    return is_immortal_seed_command_text(normalized_plain_text(event))
+
+
+async def is_emperor_catalog_message(event: MessageEvent) -> bool:
+    return normalized_plain_text(event) in EMPEROR_CATALOG_TEXTS
+
+
+async def is_trade_message(event: MessageEvent) -> bool:
+    return is_trade_command_text(normalized_plain_text(event))
+
+
+async def is_market_message(event: MessageEvent) -> bool:
+    return is_market_command_text(normalized_plain_text(event))
+
+
+async def is_rescue_message(event: MessageEvent) -> bool:
+    return is_rescue_command_text(normalized_plain_text(event))
 
 async def is_talisman_draw_message(event: MessageEvent) -> bool:
     return is_talisman_draw_command_text(normalized_plain_text(event))
@@ -2654,6 +2959,14 @@ route_cmd = on_message(rule=Rule(is_route_message), priority=10, block=True)
 task_cmd = on_message(rule=Rule(is_task_message), priority=10, block=True)
 shop_cmd = on_message(rule=Rule(is_shop_message), priority=10, block=True)
 alchemy_cmd = on_message(rule=Rule(is_alchemy_message), priority=10, block=True)
+refining_cmd = on_message(rule=Rule(is_refining_message), priority=10, block=True)
+array_deduction_cmd = on_message(rule=Rule(is_array_deduction_message), priority=10, block=True)
+life_artifact_cmd = on_message(rule=Rule(is_life_artifact_message), priority=10, block=True)
+immortal_seed_cmd = on_message(rule=Rule(is_immortal_seed_message), priority=10, block=True)
+emperor_catalog_cmd = on_message(rule=Rule(is_emperor_catalog_message), priority=10, block=True)
+trade_cmd = on_message(rule=Rule(is_trade_message), priority=10, block=True)
+market_cmd = on_message(rule=Rule(is_market_message), priority=10, block=True)
+rescue_cmd = on_message(rule=Rule(is_rescue_message), priority=10, block=True)
 talisman_draw_cmd = on_message(rule=Rule(is_talisman_draw_message), priority=10, block=True)
 tianji_mystic_cmd = on_message(rule=Rule(is_tianji_mystic_message), priority=10, block=True)
 divination_cmd = on_message(rule=Rule(is_divination_message), priority=10, block=True)
@@ -2864,21 +3177,28 @@ async def handle_shop(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(event.get_user_id())
     text = normalized_plain_text(event)
     if text in SHOP_TEXTS:
-        await finish_panel(matcher, "每日商店", format_shop_panel(record, local_today().isoformat()), record, icon="shop")
+        await finish_panel(matcher, "\u6bcf\u65e5\u5546\u5e97", format_shop_panel(record, local_today().isoformat()), record, icon="shop")
     buy_index = parse_shop_buy_index(text)
     if buy_index is not None:
         success, message = buy_shop_item(record, buy_index, local_today().isoformat())
         if success:
             await store.save_user(record)
-        await finish_panel(matcher, "每日商店" if success else "购买失败", message, record, icon="shop" if success else "warning")
+        await finish_panel(matcher, "\u6bcf\u65e5\u5546\u5e97" if success else "\u8d2d\u4e70\u5931\u8d25", message, record, icon="shop" if success else "warning")
     sale = parse_sell_item(text)
     if sale is not None:
         category, item_index = sale
         success, message = sell_reward(record, category, item_index)
         if success:
             await store.save_user(record)
-        await finish_panel(matcher, "出售物品" if success else "出售失败", message, record, icon=item_icon_for_category(category) if success else "warning")
-    await finish_panel(matcher, "每日商店", format_shop_panel(record, local_today().isoformat()), record, icon="shop")
+        await finish_panel(matcher, "\u51fa\u552e\u7269\u54c1" if success else "\u51fa\u552e\u5931\u8d25", message, record, icon=item_icon_for_category(category) if success else "warning")
+    batch_sale = parse_batch_sell(text)
+    if batch_sale is not None:
+        category, limit = batch_sale
+        success, message = batch_sell_rewards(record, category, limit)
+        if success:
+            await store.save_user(record)
+        await finish_panel(matcher, "\u6279\u91cf\u51fa\u552e" if success else "\u51fa\u552e\u5931\u8d25", message, record, icon=item_icon_for_category(category) if success else "warning")
+    await finish_panel(matcher, "\u6bcf\u65e5\u5546\u5e97", format_shop_panel(record, local_today().isoformat()), record, icon="shop")
 
 
 @alchemy_cmd.handle()
@@ -2895,6 +3215,280 @@ async def handle_alchemy(matcher: Matcher, event: MessageEvent) -> None:
     if success:
         await store.save_user(record)
     await finish_panel(matcher, "炼丹" if success else "炼丹失败", message, record, icon="alchemy" if success else "warning")
+
+
+
+
+async def enforce_unique_rewards(record, event: MessageEvent) -> str:
+    notes = []
+    changed = False
+    rewards = []
+    for reward in record.rewards or []:
+        if is_unique_reward(reward):
+            claimed, owner = await store.claim_unique_artifact(reward.get("name", ""), record.user_id, nickname_from_event(event) or record.user_id)
+            if not claimed or str(owner.get("user_id")) != record.user_id:
+                rewards.append(make_unique_replica(reward))
+                notes.append(f"{reward.get('name')}\u672c\u4f53\u5df2\u7531 {owner.get('nickname') or owner.get('user_id')} \u6301\u6709\uff0c\u672c\u6b21\u8f6c\u5316\u4e3a\u4eff\u5236\u54c1\u3002")
+                changed = True
+                continue
+        rewards.append(reward)
+    if changed:
+        record.rewards = rewards
+    return "\n".join(notes)
+
+async def normalize_unique_reward_for_user(record, reward: dict[str, Any], event: MessageEvent) -> tuple[dict[str, Any], str]:
+    if not is_unique_reward(reward):
+        return reward, ""
+    claimed, owner = await store.claim_unique_artifact(reward.get("name", ""), record.user_id, nickname_from_event(event) or record.user_id)
+    if claimed and str(owner.get("user_id")) == record.user_id:
+        return reward, f"\n\u552f\u4e00\u9053\u5177\u5df2\u8bb0\u5f55\u62e5\u6709\u8005\uff1a{owner.get('nickname') or record.user_id}\u3002"
+    replica = make_unique_replica(reward)
+    return replica, f"\n{reward.get('name')}\u672c\u4f53\u5df2\u7531 {owner.get('nickname') or owner.get('user_id')} \u6301\u6709\uff0c\u672c\u6b21\u8f6c\u5316\u4e3a\u4eff\u5236\u54c1\u3002"
+
+
+@refining_cmd.handle()
+async def handle_refining(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    name = parse_refining_name(normalized_plain_text(event))
+    if name is None or name == "":
+        await finish_panel(matcher, "\u70bc\u5668", refining_text(record), record, icon="alchemy")
+    success, message = refine_artifact_by_recipe(record, name)
+    await store.save_user(record)
+    await finish_panel(matcher, "\u70bc\u5668\u6210\u529f" if success else "\u70bc\u5668\u5931\u8d25", message, record, icon="alchemy" if success else "warning")
+
+
+@array_deduction_cmd.handle()
+async def handle_array_deduction(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    index = parse_array_deduction_index(normalized_plain_text(event))
+    if not index:
+        await finish_panel(matcher, "\u9635\u6cd5\u63a8\u6f14", array_deduction_text(record), record, icon="array")
+    success, message = deduce_array(record, index)
+    await store.save_user(record)
+    await finish_panel(matcher, "\u63a8\u6f14\u6210\u529f" if success else "\u63a8\u6f14\u5931\u8d25", message, record, icon="array" if success else "warning")
+
+
+@life_artifact_cmd.handle()
+async def handle_life_artifact(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    index = parse_life_artifact_index(normalized_plain_text(event))
+    if index is None:
+        await finish_panel(matcher, "\u672c\u547d\u7075\u5668", "\u8bf7\u53d1\u9001\uff1a\u796d\u70bc\u672c\u547d\u7075\u5668 1", record, icon="artifact")
+    success, message = set_life_artifact(record, index)
+    await store.save_user(record)
+    await finish_panel(matcher, "\u672c\u547d\u7075\u5668" if success else "\u796d\u70bc\u5931\u8d25", message, record, icon="artifact" if success else "warning")
+
+
+@immortal_seed_cmd.handle()
+async def handle_immortal_seed(matcher: Matcher, event: MessageEvent) -> None:
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    text = normalized_plain_text(event)
+    index = parse_immortal_seed_equip_index(text)
+    if index is None:
+        await finish_panel(matcher, "\u4ed9\u79cd", immortal_seed_text(record), record, icon="ability")
+    success, message = equip_immortal_seed(record, index)
+    await store.save_user(record)
+    await finish_panel(matcher, "\u4ed9\u79cd" if success else "\u88c5\u5907\u5931\u8d25", message, record, icon="ability" if success else "warning")
+
+
+@emperor_catalog_cmd.handle()
+async def handle_emperor_catalog(matcher: Matcher, event: MessageEvent) -> None:
+    owners = await store.get_unique_artifacts()
+    owner_lookup = {name: str(info.get("nickname") or info.get("user_id") or "") for name, info in owners.items() if isinstance(info, dict)}
+    record = await store.get_user(event.get_user_id())
+    await finish_panel(matcher, "\u5e1d\u5175\u56fe\u9274", emperor_artifact_catalog_text(owner_lookup), record, icon="artifact")
+
+
+@trade_cmd.handle()
+async def handle_trade(matcher: Matcher, event: MessageEvent) -> None:
+    if not isinstance(event, GroupMessageEvent):
+        await finish_panel(matcher, "\u73a9\u5bb6\u4ea4\u6613", "\u73a9\u5bb6\u4ea4\u6613\u4ec5\u652f\u6301\u7fa4\u804a\u4f7f\u7528\u3002", icon="warning")
+    await remember_group_member(event)
+    user_id = event.get_user_id()
+    group_id = str(event.group_id)
+    text = normalized_plain_text(event)
+    record = await store.get_user(user_id)
+    accept_id = parse_trade_accept(text)
+    cancel_id = parse_trade_cancel(text)
+    offer_data = parse_trade_offer(text)
+    if text in {"\u4ea4\u6613\u5217\u8868", "\u6211\u7684\u4ea4\u6613"}:
+        offers = await store.list_trade_offers(group_id, market=False)
+        lines = ["\u3010\u73a9\u5bb6\u4ea4\u6613\u3011"]
+        if not offers:
+            lines.append("\u6682\u65e0\u6302\u5355\u3002")
+        for offer in offers[:12]:
+            item = offer.get("item", {})
+            target = offer.get("target_id") or "\u5168\u7fa4"
+            lines.append(f"{offer.get('id')}. {offer.get('seller_name')} \u51fa\u552e {reward_display_name(item)}\uff0c\u4ef7\u683c {spirit_stone_text(int(offer.get('price', 0)))}\uff0c\u5bf9\u8c61\uff1a{target}")
+        lines.append("\u6302\u5355\uff1a\u4ea4\u6613 @\u5bf9\u65b9 \u7c7b\u522b \u7f16\u53f7 \u4ef7\u683c\uff1b\u63a5\u5355\uff1a\u63a5\u53d7\u4ea4\u6613 \u7f16\u53f7\uff1b\u64a4\u56de\uff1a\u53d6\u6d88\u4ea4\u6613 \u7f16\u53f7\u3002")
+        await finish_panel(matcher, "\u73a9\u5bb6\u4ea4\u6613", "\n".join(lines), record, icon="shop")
+    if accept_id is not None:
+        offers = await store.list_trade_offers(group_id, market=False)
+        preview = next((item for item in offers if str(item.get("id")) == str(accept_id)), None)
+        if not preview:
+            await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", "\u6ca1\u6709\u627e\u5230\u8fd9\u7b14\u53ef\u63a5\u53d6\u4ea4\u6613\uff0c\u6216\u4ea4\u6613\u5bf9\u8c61\u4e0d\u662f\u4f60\u3002", record, icon="warning")
+        target_id = str(preview.get("target_id") or "")
+        if target_id and target_id != user_id:
+            await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", "\u8fd9\u7b14\u4ea4\u6613\u6307\u5b9a\u4e86\u5176\u4ed6\u4fee\u58eb\uff0c\u6682\u65f6\u65e0\u6cd5\u63a5\u53d6\u3002", record, icon="warning")
+        price = int(preview.get("price", 0))
+        if record.spirit_stones < price:
+            await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", f"\u7075\u77f3\u4e0d\u8db3\uff0c\u9700\u8981 {spirit_stone_text(price)}\u3002", record, icon="warning")
+        offer = await store.take_trade_offer(group_id, str(accept_id), user_id)
+        if not offer:
+            await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", "\u4ea4\u6613\u5df2\u88ab\u63a5\u53d6\u3001\u53d6\u6d88\u6216\u8fc7\u671f\u3002", record, icon="warning")
+        seller_id = str(offer.get("seller_id"))
+        item = dict(offer.get("item") or {})
+        record.spirit_stones -= price
+        item, append_msg = await normalize_unique_reward_for_user(record, item, event)
+        record.rewards = list(record.rewards or []) + [item]
+        await store.save_user(record)
+
+        def seller_gain(seller, gain=price):
+            seller.spirit_stones += gain
+
+        await store.apply_to_user(seller_id, seller_gain)
+        await finish_panel(matcher, "\u4ea4\u6613\u5b8c\u6210", f"\u83b7\u5f97 {reward_display_name(item)}\uff0c\u652f\u4ed8 {spirit_stone_text(price)}\u3002{append_msg}", record, icon="shop")
+    if cancel_id is not None:
+        offer = await store.cancel_trade_offer(group_id, str(cancel_id), user_id)
+        if not offer:
+            await finish_panel(matcher, "\u64a4\u9500\u5931\u8d25", "\u6ca1\u6709\u627e\u5230\u53ef\u64a4\u9500\u7684\u672c\u4eba\u6302\u5355\u3002", record, icon="warning")
+        item = dict(offer.get("item") or {})
+        record.rewards = list(record.rewards or []) + [item]
+        await store.save_user(record)
+        await finish_panel(matcher, "\u4ea4\u6613\u64a4\u9500", f"\u5df2\u64a4\u56de {reward_display_name(item)}\u3002", record, icon="shop")
+    if offer_data is None:
+        await finish_panel(matcher, "\u73a9\u5bb6\u4ea4\u6613", "\u6302\u5355\u683c\u5f0f\uff1a\u4ea4\u6613 @\u5bf9\u65b9 \u7c7b\u522b \u7f16\u53f7 \u4ef7\u683c\uff0c\u4f8b\u5982\uff1a\u4ea4\u6613 @\u9053\u53cb \u7075\u5668 1 100\u3002", record, icon="shop")
+    target_id, category, item_index, price = offer_data
+    if not target_id:
+        targets = at_user_ids(event)
+        target_id = targets[0] if targets else ""
+    result = pop_reward_by_category_index(record, category, item_index)
+    if result is None:
+        await finish_panel(matcher, "\u6302\u5355\u5931\u8d25", f"\u6ca1\u6709\u627e\u5230\u7b2c {item_index} \u4ef6{category}\u3002", record, icon="warning")
+    await store.save_user(record)
+    offer = await store.create_trade_offer(group_id, user_id, nickname_from_event(event), target_id, result, price)
+    await finish_panel(matcher, "\u73a9\u5bb6\u4ea4\u6613", f"\u5df2\u6302\u5355 {offer.get('id')}\uff1a{reward_display_name(result)}\uff0c\u4ef7\u683c {spirit_stone_text(price)}\u3002", record, icon="shop")
+
+
+@market_cmd.handle()
+async def handle_market(matcher: Matcher, event: MessageEvent) -> None:
+    if not isinstance(event, GroupMessageEvent):
+        await finish_panel(matcher, "万宝楼", "万宝楼仅支持群聊使用。", icon="warning")
+    await remember_group_member(event)
+    user_id = event.get_user_id()
+    group_id = str(event.group_id)
+    text = normalized_plain_text(event)
+    record = await store.get_user(user_id)
+    buy_id = parse_market_buy(text)
+    cancel_id = parse_market_cancel(text)
+    offer_data = parse_market_offer(text)
+    if text in MARKET_TEXTS:
+        offers = await store.list_trade_offers(group_id, market=True)
+        lines = ["【万宝楼】", "寄售定价：系统回收价 × 1.5。"]
+        if not offers:
+            lines.append("当前暂无寄售物品。")
+        for offer in offers[:16]:
+            item = dict(offer.get("item") or {})
+            seller = offer.get("seller_name") or offer.get("seller_id")
+            lines.append(f"{offer.get('id')}. {seller} 寄售 {reward_display_name(item)}｜{spirit_stone_text(int(offer.get('price', 0)))}")
+        lines.append("挂售：万宝楼挂售 类别 编号；购买：万宝楼购买 编号；下架：万宝楼下架 编号。")
+        await finish_panel(matcher, "万宝楼", "\n".join(lines), record, icon="shop")
+    if buy_id is not None:
+        offers = await store.list_trade_offers(group_id, market=True)
+        preview = next((item for item in offers if str(item.get("id")) == str(buy_id)), None)
+        if not preview:
+            await finish_panel(matcher, "购买失败", "没有找到这件万宝楼寄售物。", record, icon="warning")
+        if str(preview.get("seller_id")) == user_id:
+            await finish_panel(matcher, "购买失败", "不能购买自己寄售的物品，可使用“万宝楼下架 编号”撤回。", record, icon="warning")
+        price = int(preview.get("price", 0))
+        if record.spirit_stones < price:
+            await finish_panel(matcher, "购买失败", f"灵石不足，需要 {spirit_stone_text(price)}。", record, icon="warning")
+        offer = await store.take_trade_offer(group_id, str(buy_id), user_id)
+        if not offer or not offer.get("market"):
+            await finish_panel(matcher, "购买失败", "寄售已被购买、下架或状态变化。", record, icon="warning")
+        seller_id = str(offer.get("seller_id"))
+        item = dict(offer.get("item") or {})
+        record.spirit_stones -= price
+        item, append_msg = await normalize_unique_reward_for_user(record, item, event)
+        record.rewards = list(record.rewards or []) + [item]
+        await store.save_user(record)
+
+        def seller_gain(seller, gain=price):
+            seller.spirit_stones += gain
+
+        await store.apply_to_user(seller_id, seller_gain)
+        await finish_panel(matcher, "万宝楼成交", f"购得 {reward_display_name(item)}，支付 {spirit_stone_text(price)}。{append_msg}", record, icon="shop")
+    if cancel_id is not None:
+        offer = await store.cancel_trade_offer(group_id, str(cancel_id), user_id)
+        if not offer or not offer.get("market"):
+            await finish_panel(matcher, "下架失败", "没有找到可下架的本人寄售物。", record, icon="warning")
+        item = dict(offer.get("item") or {})
+        record.rewards = list(record.rewards or []) + [item]
+        await store.save_user(record)
+        await finish_panel(matcher, "万宝楼下架", f"已下架 {reward_display_name(item)}。", record, icon="shop")
+    if offer_data is None:
+        await finish_panel(matcher, "万宝楼", "格式：万宝楼挂售 类别 编号，例如：万宝楼挂售 灵器 1。", record, icon="shop")
+    category, item_index = offer_data
+    result = pop_reward_by_category_index(record, category, item_index)
+    if result is None:
+        await finish_panel(matcher, "挂售失败", f"没有找到第 {item_index} 件{category}。", record, icon="warning")
+    if is_unique_reward(result):
+        record.rewards = list(record.rewards or []) + [result]
+        await store.save_user(record)
+        await finish_panel(matcher, "挂售失败", "全局唯一道具暂不支持万宝楼寄售，避免本体归属错乱。", record, icon="warning")
+    price = market_offer_price(result)
+    await store.save_user(record)
+    offer = await store.create_trade_offer(group_id, user_id, nickname_from_event(event), "", result, price, market=True)
+    await finish_panel(matcher, "万宝楼挂售", f"已寄售 {offer.get('id')}：{reward_display_name(result)}，定价 {spirit_stone_text(price)}（系统回收价 × 1.5）。", record, icon="shop")
+
+
+@rescue_cmd.handle()
+async def handle_rescue(matcher: Matcher, event: MessageEvent) -> None:
+    if not isinstance(event, GroupMessageEvent):
+        await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", "\u79d8\u5883\u6551\u63f4\u4ec5\u652f\u6301\u7fa4\u804a\u4f7f\u7528\u3002", icon="warning")
+    await remember_group_member(event)
+    record = await store.get_user(event.get_user_id())
+    group_id = str(event.group_id)
+    text = normalized_plain_text(event)
+    if text in {"\u6551\u63f4\u5217\u8868", "\u79d8\u5883\u6551\u63f4\u5217\u8868"}:
+        requests = await store.list_rescue_requests(group_id)
+        lines = ["\u3010\u79d8\u5883\u6551\u63f4\u3011"]
+        if not requests:
+            lines.append("\u6682\u65e0\u6551\u63f4\u59d4\u6258\u3002")
+        for req in requests[:10]:
+            realm = req.get("realm", {})
+            lines.append(f"{req.get('id')}\uff1a{req.get('requester_name')} \u6c42\u63f4 {realm.get('title') or realm.get('type')}\uff0c\u916c\u52b3 {spirit_stone_text(int(req.get('reward_stones', 0)))}")
+        lines.append("\u53d1\u8d77\uff1a\u79d8\u5883\u6551\u63f4 1000\uff1b\u63a5\u53d6\uff1a\u6551\u63f4 \u59d4\u6258\u7f16\u53f7\u3002")
+        await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", "\n".join(lines), record, icon="mystic")
+    amount = parse_rescue_request(text)
+    if amount is not None:
+        if amount <= 0:
+            await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", "\u8bf7\u5199\u660e\u6551\u63f4\u916c\u52b3\uff0c\u4f8b\u5982\uff1a\u79d8\u5883\u6551\u63f4 1000\u3002", record, icon="mystic")
+        if record.spirit_stones < amount:
+            await finish_panel(matcher, "\u6551\u63f4\u5931\u8d25", f"\u7075\u77f3\u4e0d\u8db3\uff0c\u5f53\u524d\u4ec5\u6709 {spirit_stone_text(record.spirit_stones)}\u3002", record, icon="warning")
+        if not record.last_failed_mystic_realm:
+            await finish_panel(matcher, "\u6551\u63f4\u5931\u8d25", "\u5f53\u524d\u6ca1\u6709\u53ef\u59d4\u6258\u6551\u63f4\u7684\u5931\u8d25\u79d8\u5883\u8bb0\u5f55\u3002", record, icon="warning")
+        record.spirit_stones -= amount
+        request = await store.create_rescue_request(group_id, event.get_user_id(), nickname_from_event(event), record.last_failed_mystic_realm, amount)
+        await store.save_user(record)
+        await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", f"\u5df2\u53d1\u5e03\u6551\u63f4\u59d4\u6258 {request.get('id')}\uff0c\u916c\u52b3 {spirit_stone_text(amount)}\u3002\u5176\u4ed6\u4fee\u58eb\u53ef\u53d1\u9001\uff1a\u6551\u63f4 {request.get('id')}\u3002", record, icon="mystic")
+    take_id = parse_rescue_take(text)
+    if take_id is not None:
+        if not take_id:
+            await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", "\u8bf7\u53d1\u9001\uff1a\u6551\u63f4 \u59d4\u6258\u7f16\u53f7\u3002", record, icon="mystic")
+        request = await store.take_rescue_request(group_id, take_id, event.get_user_id())
+        if not request:
+            await finish_panel(matcher, "\u63a5\u53d6\u5931\u8d25", "\u6ca1\u6709\u627e\u5230\u8fd9\u6761\u53ef\u63a5\u53d6\u6551\u63f4\uff0c\u6216\u4e0d\u80fd\u6551\u63f4\u81ea\u5df1\u3002", record, icon="warning")
+        realm = dict(request.get("realm") or {})
+        realm["rescued_from"] = request.get("requester_id")
+        record.mystic_realm = realm
+        record.spirit_stones += int(request.get("reward_stones", 0))
+        await store.save_user(record)
+        await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", f"\u5df2\u63a5\u53d6 {request.get('requester_name')} \u7684\u6551\u63f4\u59d4\u6258\uff0c\u83b7\u5f97\u916c\u52b3 {spirit_stone_text(int(request.get('reward_stones', 0)))}\u3002\n{mystic_realm_options_text(record)}", record, icon="mystic")
 
 
 @talisman_draw_cmd.handle()
@@ -3100,9 +3694,29 @@ async def handle_plant(matcher: Matcher, event: MessageEvent) -> None:
 async def handle_item_use(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    parsed = parse_item_use(normalized_plain_text(event))
+    text = normalized_plain_text(event)
+    batch_parsed = parse_batch_item_use(text)
+    if batch_parsed is not None:
+        category, limit = batch_parsed
+        batch_handlers = {
+            "丹药": use_pills_batch,
+            "灵石": refine_spirit_stones_batch,
+            "灵食": use_foods_batch,
+        }
+        success, message = batch_handlers[category](record, limit)
+        if success:
+            await store.save_user(record)
+        await finish_panel(
+            matcher,
+            f"批量{category}使用" if success else "操作失败",
+            f"{message}\n当前境界：{record.realm if record.root else '未入门'}\n当前战力：{battle_power(record)}",
+            record,
+            icon=item_icon_for_category(category) if success else "warning",
+        )
+        return
+    parsed = parse_item_use(text)
     if parsed is None:
-        await finish_panel(matcher, "操作提示", "请发送“使用丹药 1 / 使用符箓 1 / 炼化灵石 1 / 炼化灵液 / 使用奇物 1”等格式。", record, icon="bag")
+        await finish_panel(matcher, "操作提示", "请发送“使用丹药 1 / 批量使用丹药 10 / 使用符箓 1 / 炼化灵石 1 / 批量炼化灵石 全部 / 使用灵食 1”等格式。", record, icon="bag")
     category, item_index = parsed
     handlers = {
         "丹药": use_pill,
@@ -3206,6 +3820,9 @@ async def handle_mystic_explore(matcher: Matcher, event: MessageEvent) -> None:
     if option_index is None:
         await finish_panel(matcher, "操作提示", "请发送“探索 编号”，例如：探索 1。", record, icon="mystic")
     success, message = explore_mystic_realm(record, option_index, local_now())
+    unique_note = await enforce_unique_rewards(record, event) if success else ""
+    if unique_note:
+        message = f"{message}\n{unique_note}"
     if success:
         await store.save_user(record)
     await finish_panel(matcher, "秘境探索" if success else "操作失败", message, record, icon="mystic" if success else "warning")
@@ -3839,6 +4456,7 @@ async def do_fishing(matcher: Matcher, event: MessageEvent, count: int) -> None:
     count = max(1, min(count, record.fishing_chances, 10))
     await send_panel(matcher, "诸天万界垂钓", f"正在为宿主进行{count}次垂钓。", record, icon="fishing")
     rewards = apply_fishing(record, count)
+    unique_note = await enforce_unique_rewards(record, event)
     pending_fishing_users.pop(user_id, None)
     await store.save_user(record)
     image = await build_fishing_image(event, record, rewards)

@@ -14,7 +14,9 @@ from .domain import (
     array_multiplier,
     battle_power,
     breakthrough_required_text,
+    acquired_root_attribute_text,
     acquired_root_summary,
+    normalize_acquired_roots,
     combat_max_mana,
     hehuan_remaining_text,
     is_breakthrough_bottleneck,
@@ -327,6 +329,11 @@ def root_purity_summary(record: UserRecord) -> str:
             if sources:
                 text += f"\uff08{' + '.join(sources)}\uff09"
         parts.append(text)
+    acquired_parts = []
+    for root in normalize_acquired_roots(record)[:3]:
+        acquired_parts.append(f"{acquired_root_attribute_text(root)}{int(root.get('purity', 0))}%")
+    if acquired_parts:
+        parts.append("后天：" + " / ".join(acquired_parts))
     return " / ".join(parts)
 
 

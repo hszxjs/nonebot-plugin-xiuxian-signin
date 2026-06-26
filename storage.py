@@ -15,6 +15,9 @@ class JsonStore:
         self.rank_file_path = data_dir / "daily_chat_rank.json"
         self.group_file_path = data_dir / "group_members.json"
         self.tianji_hall_file_path = data_dir / "tianji_divination_hall.json"
+        self.unique_artifact_file_path = data_dir / "unique_artifacts.json"
+        self.trade_file_path = data_dir / "trade_offers.json"
+        self.rescue_file_path = data_dir / "mystic_rescue.json"
         self._lock = asyncio.Lock()
 
     async def get_user(self, user_id: str) -> UserRecord:
@@ -238,6 +241,146 @@ class JsonStore:
             data[user_id] = record.to_dict()
             self._write_json(self.user_file_path, data)
             return record
+
+
+    async def get_unique_artifacts(self) -> dict[str, Any]:
+        async with self._lock:
+            return dict(self._read_json(self.unique_artifact_file_path))
+
+    async def claim_unique_artifact(self, item_name: str, user_id: str, nickname: str = "") -> tuple[bool, dict[str, Any]]:
+        async with self._lock:
+            data = self._read_json(self.unique_artifact_file_path)
+            current = data.get(item_name)
+            if isinstance(current, dict):
+                return str(current.get("user_id")) == user_id, dict(current)
+            owner = {"user_id": user_id, "nickname": nickname or user_id}
+            data[item_name] = owner
+            self._write_json(self.unique_artifact_file_path, data)
+            return True, dict(owner)
+
+    async def unique_owner_name(self, item_name: str) -> str:
+        async with self._lock:
+            owner = self._read_json(self.unique_artifact_file_path).get(item_name)
+            if not isinstance(owner, dict):
+                return ""
+            return str(owner.get("nickname") or owner.get("user_id") or "")
+
+    async def create_trade_offer(
+        self,
+        group_id: str,
+        seller_id: str,
+        seller_name: str,
+        target_id: str,
+        item: dict[str, Any],
+        price: int,
+        market: bool = False,
+    ) -> dict[str, Any]:
+        async with self._lock:
+            data = self._read_json(self.trade_file_path)
+            offers = data.setdefault(str(group_id), {})
+            next_id = int(data.get("next_id", 1))
+            data["next_id"] = next_id + 1
+            offer = {
+                "id": str(next_id),
+                "group_id": str(group_id),
+                "seller_id": str(seller_id),
+                "seller_name": seller_name or str(seller_id),
+                "target_id": str(target_id or ""),
+                "item": item,
+                "price": int(price),
+                "status": "open",
+                "market": bool(market),
+            }
+            offers[str(next_id)] = offer
+            self._write_json(self.trade_file_path, data)
+            return dict(offer)
+
+    async def list_trade_offers(self, group_id: str, market: bool | None = None) -> list[dict[str, Any]]:
+        async with self._lock:
+            group = self._read_json(self.trade_file_path).get(str(group_id), {})
+            if not isinstance(group, dict):
+                return []
+            offers = [dict(item) for item in group.values() if isinstance(item, dict) and item.get("status") == "open"]
+            if market is None:
+                return offers
+            return [item for item in offers if bool(item.get("market")) is bool(market)]
+
+    async def take_trade_offer(self, group_id: str, offer_id: str, buyer_id: str) -> dict[str, Any] | None:
+        async with self._lock:
+            data = self._read_json(self.trade_file_path)
+            group = data.get(str(group_id), {})
+            if not isinstance(group, dict):
+                return None
+            offer = group.get(str(offer_id))
+            if not isinstance(offer, dict) or offer.get("status") != "open":
+                return None
+            target_id = str(offer.get("target_id") or "")
+            if target_id and target_id != str(buyer_id):
+                return None
+            offer["status"] = "taken"
+            offer["buyer_id"] = str(buyer_id)
+            group[str(offer_id)] = offer
+            data[str(group_id)] = group
+            self._write_json(self.trade_file_path, data)
+            return dict(offer)
+
+    async def cancel_trade_offer(self, group_id: str, offer_id: str, seller_id: str) -> dict[str, Any] | None:
+        async with self._lock:
+            data = self._read_json(self.trade_file_path)
+            group = data.get(str(group_id), {})
+            if not isinstance(group, dict):
+                return None
+            offer = group.get(str(offer_id))
+            if not isinstance(offer, dict) or str(offer.get("seller_id")) != str(seller_id) or offer.get("status") != "open":
+                return None
+            offer["status"] = "cancelled"
+            group[str(offer_id)] = offer
+            data[str(group_id)] = group
+            self._write_json(self.trade_file_path, data)
+            return dict(offer)
+
+    async def create_rescue_request(self, group_id: str, requester_id: str, requester_name: str, realm: dict[str, Any], reward_stones: int) -> dict[str, Any]:
+        async with self._lock:
+            data = self._read_json(self.rescue_file_path)
+            group = data.setdefault(str(group_id), {})
+            request_id = f"{requester_id}:{len(group) + 1}"
+            request = {
+                "id": request_id,
+                "group_id": str(group_id),
+                "requester_id": str(requester_id),
+                "requester_name": requester_name or str(requester_id),
+                "realm": realm,
+                "reward_stones": int(reward_stones),
+                "status": "open",
+            }
+            group[request_id] = request
+            self._write_json(self.rescue_file_path, data)
+            return dict(request)
+
+    async def list_rescue_requests(self, group_id: str) -> list[dict[str, Any]]:
+        async with self._lock:
+            group = self._read_json(self.rescue_file_path).get(str(group_id), {})
+            if not isinstance(group, dict):
+                return []
+            return [dict(item) for item in group.values() if isinstance(item, dict) and item.get("status") == "open"]
+
+    async def take_rescue_request(self, group_id: str, request_id: str, rescuer_id: str) -> dict[str, Any] | None:
+        async with self._lock:
+            data = self._read_json(self.rescue_file_path)
+            group = data.get(str(group_id), {})
+            if not isinstance(group, dict):
+                return None
+            request = group.get(str(request_id))
+            if not isinstance(request, dict) or request.get("status") != "open":
+                return None
+            if str(request.get("requester_id")) == str(rescuer_id):
+                return None
+            request["status"] = "taken"
+            request["rescuer_id"] = str(rescuer_id)
+            group[str(request_id)] = request
+            data[str(group_id)] = group
+            self._write_json(self.rescue_file_path, data)
+            return dict(request)
 
     def _touch_group_member_locked(
         self,
