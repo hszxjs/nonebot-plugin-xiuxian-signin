@@ -25,7 +25,7 @@ from nonebot.matcher import Matcher
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 
-from .cards import render_battle_card, render_fishing_card, render_signin_card, render_text_panel, set_font_paths
+from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_signin_card, render_text_panel, set_font_paths
 from .config import Config
 from .domain import (
     CANCEL_WORDS,
@@ -184,8 +184,8 @@ PICMENU_NEXT_FUNCS = [{'func': '开始修仙',
   'trigger_method': '秘境 / 探索 1 / 天机秘境 / 秘境救援 1000 / 救援列表 / 每日任务',
   'trigger_condition': '秘境入口 60 秒内选择；任务签到后生成',
   'brief_des': '限时秘境、每日任务和每日商店',
-  'detail_des': '`秘境` 会抽取 60 秒限时入口，并有概率出现高危险地。普通秘境首领挑战胜利可折算 10 次探索奖励和首领妖丹；高危险地 5 选 2 '
-                '生路，无首领挑战，不会被天机秘境选中。反噬后可发送 `秘境救援 1000` 委托其他修士救场。'},
+  'detail_des': '`秘境` 会抽取 60 秒限时入口，并有概率出现高危险地。普通秘境首领挑战会转为私聊生死斗法，每日共享 4 次机会，胜利可折算 10 次探索奖励和首领妖丹；高危险地 5 选 2 '
+                '生路，无首领挑战，不会被天机秘境选中。每日任务查看、接取和完成结算会优先私聊发送。反噬后可发送 `秘境救援 1000` 委托其他修士救场。'},
  {'func': '路线与身份',
   'trigger_method': '路线 / 选择路线 剑修 / 选择路线 炼器师 / 选择身份 天机阁弟子',
   'trigger_condition': '主路线同一时间只能一种；邪修可额外同修',
@@ -215,7 +215,7 @@ PICMENU_NEXT_FUNCS = [{'func': '开始修仙',
 
 __plugin_meta__ = PluginMetadata(
     name="修仙签到",
-    description="以图片面板输出的修仙签到、灵根抽取、特殊能力领悟、境界突破、历练道具、秘境探索与诸天万界垂钓插件。",
+    description="以图片面板输出的修仙签到、灵根抽取、神通领悟、境界突破、历练道具、秘境探索与诸天万界垂钓插件。",
     usage=(
         "签到：每日签到，首次抽取灵根\n"
         "我的修为：查看当前修炼状态\n"
@@ -225,7 +225,7 @@ __plugin_meta__ = PluginMetadata(
         "历练：主手/副手/护甲三槽灵器、符箓栏、功法阵盘、PK 与战力榜\n"
         "突破/散功：突破境界瓶颈，或回退至上一境界后期重修\n"
         "背包：使用丹药、灵石、灵食、奇物和杂物；装备符箓进入符箓栏，炼化灵液可转为修为\n"
-        "特殊能力：查看九秘残页、八禁感悟、神禁烙印等传承材料；领悟特殊能力 1 进行参悟\n"
+        "神通：查看九秘残页、八禁感悟、神禁烙印等传承材料；领悟神通 1 进行参悟\n"
         "秘境：60秒限时入口，进入后发送 探索 1-6；首领挑战胜利可折算10次探索奖励"
     ),
     type="application",
@@ -282,10 +282,10 @@ PUPPET_LIST_TEXTS = {"傀儡", "我的傀儡", "傀儡列表"}
 PLANT_LIST_TEXTS = {"灵植", "我的灵植", "灵植列表"}
 ITEM_LIST_TEXTS = {"\u9053\u5177", "\u6211\u7684\u9053\u5177", "\u80cc\u5305", "\u7269\u54c1", "\u6211\u7684\u7269\u54c1", "\u5305\u88f9"}
 ACQUIRED_ROOT_TEXTS = {"\u540e\u5929\u7075\u6839", "\u4e39\u7075\u6839", "\u5668\u7075\u6839", "\u70bc\u5316\u7075\u6839", "\u4e94\u884c\u8865\u5168"}
-SPECIAL_ABILITY_TEXTS = {"特殊能力", "我的特殊能力", "神通", "我的神通"}
-SPECIAL_ABILITY_CATALOG_TEXTS = {"特殊能力图鉴", "神通图鉴"}
+SPECIAL_ABILITY_TEXTS = {"神通", "我的神通"}
+SPECIAL_ABILITY_CATALOG_TEXTS = {"神通图鉴"}
 ROUTE_TEXTS = {"\u4fee\u70bc\u8def\u7ebf", "\u8def\u7ebf", "\u8eab\u4efd", "\u8eab\u4efd\u4ee4\u724c", "\u5b97\u95e8\u8eab\u4efd"}
-TASK_TEXTS = {"每日任务", "任务", "我的任务"}
+TASK_TEXTS = {"每日任务", "任务", "我的任务", "今日任务", "接取任务", "领取任务"}
 SHOP_TEXTS = {"商店", "坊市", "每日商店"}
 ALCHEMY_TEXTS = {"炼丹", "丹方"}
 REFINING_TEXTS = {'炼器', '炼器图鉴', '炼器帮助'}
@@ -368,7 +368,7 @@ MARKET_CANCEL_PREFIXES = ('万宝楼下架', '下架寄售', '下架')
 RESCUE_REQUEST_PREFIXES = ('秘境救援', '发起救援')
 RESCUE_TAKE_PREFIXES = ('救援', '接受救援')
 TALISMAN_DRAW_PREFIXES = ("\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7ed8\u7b26")
-SPECIAL_ABILITY_LEARN_PREFIXES = ("\u9886\u609f\u7279\u6b8a\u80fd\u529b", "\u9886\u609f\u795e\u901a", "\u53c2\u609f\u7279\u6b8a\u80fd\u529b")
+SPECIAL_ABILITY_LEARN_PREFIXES = ("\u9886\u609f\u795e\u901a", "\u53c2\u609f\u795e\u901a")
 MYSTIC_EXPLORE_PREFIXES = ("探索", "秘境探索")
 DIVINATION_PREFIXES = ("\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366")
 DUEL_PREFIXES = ("pk", "PK", "切磋", "挑战")
@@ -1217,6 +1217,45 @@ async def finish_panel(
     await matcher.finish(panel_segment(title, content, record, subtitle, icon, footer))
 
 
+async def send_private_panel(
+    user_id: str,
+    title: str,
+    content: str | list[str],
+    record=None,
+    subtitle: str = "",
+    icon: str = "scroll",
+    footer: str = "",
+) -> bool:
+    try:
+        await get_bot().send_private_msg(
+            user_id=int(user_id),
+            message=panel_segment(title, content, record, subtitle, icon, footer),
+        )
+        return True
+    except Exception as exc:
+        logger.debug(f"发送私聊面板失败: {user_id} {title} {exc}")
+        return False
+
+
+async def finish_private_or_current_panel(
+    matcher: Matcher,
+    event: MessageEvent,
+    title: str,
+    content: str | list[str],
+    record=None,
+    subtitle: str = "",
+    icon: str = "scroll",
+    footer: str = "",
+    group_success: str = "已通过私聊发送，请查看私聊。",
+) -> None:
+    if isinstance(event, GroupMessageEvent):
+        sent = await send_private_panel(event.get_user_id(), title, content, record, subtitle, icon, footer)
+        if sent:
+            await finish_panel(matcher, title, group_success, record, icon=icon)
+        await finish_panel(matcher, "私聊发送失败", f"{title}已生成，但私聊发送失败，请检查好友或临时会话权限。", record, icon="warning")
+    await finish_panel(matcher, title, content, record, subtitle=subtitle, icon=icon, footer=footer)
+
+
 async def send_image(matcher: Matcher, image_bytes: bytes) -> None:
     await matcher.send(MessageSegment.image(BytesIO(image_bytes)))
 
@@ -1449,6 +1488,32 @@ async def send_normal_duel_prepare_messages(session: dict[str, Any]) -> None:
         send_normal_duel_prepare_cards(left_id, left_record, str(session.get("left_name") or left_id)),
         send_normal_duel_prepare_cards(right_id, right_record, str(session.get("right_name") or right_id)),
     )
+
+
+async def send_mystic_boss_duel_report(user_id: str, record, result: dict[str, Any]) -> bool:
+    if not result:
+        return False
+    try:
+        left = result.get("left", {})
+        left_avatar = await fetch_avatar(str(left.get("user_id") or user_id))
+        image = render_battle_card(
+            result,
+            left_avatar=left_avatar,
+            right_avatar=None,
+            width=config.xiuxian_signin_image_width,
+        )
+        await get_bot().send_private_msg(user_id=int(user_id), message=MessageSegment.image(BytesIO(image)))
+        return True
+    except Exception as exc:
+        logger.debug(f"发送秘境首领斗法私聊战报失败: {user_id} {exc}")
+        try:
+            await get_bot().send_private_msg(
+                user_id=int(user_id),
+                message=panel_segment("秘境首领斗法", "斗法战报生成完成，但图片私聊发送失败，请检查好友或临时会话权限。", record, icon="warning"),
+            )
+        except Exception:
+            logger.debug(f"发送秘境首领斗法失败提示失败: {user_id}")
+        return False
 
 
 async def build_normal_duel_image(result: dict[str, Any]) -> bytes:
@@ -3017,7 +3082,7 @@ async def handle_catalog(matcher: Matcher, event: MessageEvent) -> None:
     if text in SPECIAL_ABILITY_CATALOG_TEXTS:
         ensure_combat_profile(record)
         await store.save_user(record)
-        await finish_panel(matcher, "\u7279\u6b8a\u80fd\u529b\u56fe\u9274", special_ability_catalog_text(record), record, icon="ability")
+        await finish_panel(matcher, "\u795e\u901a\u56fe\u9274", special_ability_catalog_text(record), record, icon="ability")
     await finish_panel(matcher, "\u4fee\u4ed9\u56fe\u9274", format_catalog_text(text), record, icon="catalog")
 
 
@@ -3106,9 +3171,9 @@ async def handle_special_ability(matcher: Matcher, event: MessageEvent) -> None:
     text = normalized_plain_text(event)
     if text in SPECIAL_ABILITY_CATALOG_TEXTS:
         await store.save_user(record)
-        await finish_panel(matcher, "特殊能力图鉴", special_ability_catalog_text(record), record, icon="ability")
+        await finish_panel(matcher, "神通图鉴", special_ability_catalog_text(record), record, icon="ability")
     await store.save_user(record)
-    await finish_panel(matcher, "我的特殊能力", special_ability_list_text(record), record, icon="ability")
+    await finish_panel(matcher, "我的神通", special_ability_list_text(record), record, icon="ability")
 
 
 @special_ability_learn_cmd.handle()
@@ -3117,11 +3182,11 @@ async def handle_special_ability_learn(matcher: Matcher, event: MessageEvent) ->
     record = await store.get_user(event.get_user_id())
     item_index = parse_prefixed_index(normalized_plain_text(event), SPECIAL_ABILITY_LEARN_PREFIXES)
     if item_index is None:
-        await finish_panel(matcher, "操作提示", "请发送“领悟特殊能力 1”。", record, icon="ability")
+        await finish_panel(matcher, "操作提示", "请发送“领悟神通 1”。", record, icon="ability")
     success, message = learn_special_ability(record, item_index)
     if success:
         await store.save_user(record)
-    await finish_panel(matcher, "特殊能力领悟" if success else "领悟失败", message, record, icon="ability" if success else "warning")
+    await finish_panel(matcher, "神通领悟" if success else "领悟失败", message, record, icon="ability" if success else "warning")
 
 
 @route_cmd.handle()
@@ -3160,15 +3225,46 @@ async def handle_daily_task(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
     text = normalized_plain_text(event)
+    today = local_today()
     if text in TASK_TEXTS:
-        await finish_panel(matcher, "每日任务", daily_tasks_text(record, local_today()), record, icon="task")
+        content = daily_tasks_text(record, today)
+        await store.save_user(record)
+        await finish_private_or_current_panel(
+            matcher,
+            event,
+            "每日任务",
+            content,
+            record,
+            icon="task",
+            group_success="今日任务已接取，任务详情已通过私聊发送。",
+        )
     task_index = parse_prefixed_index(text, TASK_COMPLETE_PREFIXES)
     if task_index is None:
-        await finish_panel(matcher, "每日任务", daily_tasks_text(record, local_today()), record, icon="task")
-    success, message = complete_daily_task(record, task_index, local_today())
-    if success:
+        content = daily_tasks_text(record, today)
         await store.save_user(record)
-    await finish_panel(matcher, "每日任务" if success else "任务失败", message, record, icon="task" if success else "warning")
+        await finish_private_or_current_panel(
+            matcher,
+            event,
+            "每日任务",
+            content,
+            record,
+            icon="task",
+            group_success="今日任务已接取，任务详情已通过私聊发送。",
+        )
+    success, message = complete_daily_task(record, task_index, today)
+    content = message
+    if success:
+        content = f"{message}\n\n{daily_tasks_text(record, today)}"
+    await store.save_user(record)
+    await finish_private_or_current_panel(
+        matcher,
+        event,
+        "每日任务完成" if success else "任务失败",
+        content,
+        record,
+        icon="task" if success else "warning",
+        group_success="任务结算结果已通过私聊发送。" if success else "任务处理结果已通过私聊发送。",
+    )
 
 
 @shop_cmd.handle()
@@ -3819,7 +3915,14 @@ async def handle_mystic_explore(matcher: Matcher, event: MessageEvent) -> None:
     option_index = parse_prefixed_index(normalized_plain_text(event), MYSTIC_EXPLORE_PREFIXES)
     if option_index is None:
         await finish_panel(matcher, "操作提示", "请发送“探索 编号”，例如：探索 1。", record, icon="mystic")
+    record.combat_nickname = nickname_from_event(event) or f"QQ {event.get_user_id()}"
     success, message = explore_mystic_realm(record, option_index, local_now())
+    boss_duel = getattr(record, "last_mystic_boss_duel", None)
+    if boss_duel:
+        sent = await send_mystic_boss_duel_report(event.get_user_id(), record, boss_duel)
+        record.last_mystic_boss_duel = None
+        if not sent:
+            message = f"{message}\n私聊战报发送失败，请检查好友或临时会话权限。"
     unique_note = await enforce_unique_rewards(record, event) if success else ""
     if unique_note:
         message = f"{message}\n{unique_note}"
@@ -3883,7 +3986,18 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
     await send_image(matcher, image)
 
     if not result.already_signed and result.daily_tasks:
-        await send_panel(matcher, "每日任务", daily_tasks_text(result.record, local_today()), result.record, icon="task")
+        task_content = daily_tasks_text(result.record, local_today())
+        if isinstance(event, GroupMessageEvent):
+            sent = await send_private_panel(user_id, "每日任务", task_content, result.record, icon="task")
+            await send_panel(
+                matcher,
+                "每日任务",
+                "今日任务已接取，任务详情已通过私聊发送。" if sent else "今日任务已接取，但私聊发送失败，请检查好友或临时会话权限。",
+                result.record,
+                icon="task" if sent else "warning",
+            )
+        else:
+            await send_panel(matcher, "每日任务", task_content, result.record, icon="task")
 
     if not result.already_signed and result.record.fishing_chances > 0:
         pending_fishing_users[user_id] = time.monotonic() + PENDING_FISHING_TTL
@@ -3957,7 +4071,12 @@ async def handle_power_status(matcher: Matcher, event: MessageEvent) -> None:
 async def handle_adventure(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "历练面板", format_adventure_panel(record), record, icon="adventure")
+    image = render_adventure_card(
+        record=record,
+        nickname=nickname_from_event(event),
+        width=config.xiuxian_signin_image_width,
+    )
+    await send_image(matcher, image)
 
 
 @artifact_list.handle()

@@ -963,6 +963,8 @@ ARTIFACT_SLOT_POWER_RATE = {"主手": 1.0, "副手": 0.65, "护甲": 0.85}
 
 MYSTIC_REALM_TYPES = ("上古宗门遗址", "兽潮", "上古大能洞府", "太古矿区", "虚神界残域", "青铜仙殿")
 MYSTIC_REALM_MAX_STEPS = 10
+MYSTIC_BOSS_DAILY_BASE_ATTEMPTS = 4
+MYSTIC_BOSS_WEEKLY_BONUS_THRESHOLDS = (3, 5, 7)
 BEAST_NAME_PREFIXES = [
     "赤焰", "玄霜", "碧鳞", "噬月", "裂山", "幽冥", "金瞳", "雷角", "青翼", "血纹",
     "吞星", "搬山", "银翼", "黑渊", "紫电", "白骨", "青冥", "古荒", "血月", "玄甲",
@@ -973,6 +975,130 @@ BEAST_NAME_SUFFIXES = [
     "魔猿", "荒犼", "雷鹏", "骨龙", "火麟", "冰蟒", "山魈", "血蝠", "天狼", "玄蛛",
     "石犀", "鬼面獒", "碧眼蟾", "吞月狐", "裂海鲸", "赤羽鸾", "铁甲蜈", "青鳞鲛", "风翼豹", "古蜥",
 ]
+
+BOSS_ARCHETYPE_CONFIGS = {
+    "dragon": {
+        "tokens": ("蛟", "龙", "鲛", "麟"),
+        "race": "妖族-真龙遗脉",
+        "physique": "青莲道体",
+        "method": "龙皇镇海经",
+        "method_kind": "战技类",
+        "artifact": "沧龙破海戟",
+        "offhand": "逆鳞护心镜",
+        "armor": "龙鳞玄甲",
+        "talisman": "龙魂镇岳符",
+        "array": "沧海锁龙阵",
+        "abilities": ("神禁领域", "古神一指"),
+        "techniques": ("沧龙裂海", "逆鳞碎岳", "真龙摆尾", "龙吟镇魂", "覆海玄光"),
+        "intro": "龙血妖气如潮起伏，鳞甲间有古老龙纹明灭。",
+    },
+    "thunder": {
+        "tokens": ("雷", "鹏", "金翅", "紫电"),
+        "race": "妖族-金翅大鹏",
+        "physique": "金翅神脉",
+        "method": "鲲鹏雷遁篇",
+        "method_kind": "战技类",
+        "artifact": "紫霄雷羽刃",
+        "offhand": "风雷双翼轮",
+        "armor": "金鹏神羽甲",
+        "talisman": "天雷破邪符",
+        "array": "九霄引雷阵",
+        "abilities": ("八禁", "鲲鹏极速"),
+        "techniques": ("鲲鹏极速", "紫霄万劫", "雷羽斩天", "扶摇裂空", "天鹏搏龙术"),
+        "intro": "鹏影压天，雷羽扫开云层，速度快到只余残光。",
+    },
+    "fire": {
+        "tokens": ("火", "赤", "焰", "离火", "赤羽"),
+        "race": "妖族-太古火脉",
+        "physique": "太阳神体",
+        "method": "太阳焚天诀",
+        "method_kind": "战技类",
+        "artifact": "离火焚天戟",
+        "offhand": "赤霞火轮",
+        "armor": "凰血炎甲",
+        "talisman": "朱雀焚身符",
+        "array": "太阳真火阵",
+        "abilities": ("九禁", "太阳真火"),
+        "techniques": ("太阳真火", "朱雀焚天", "离火炼界", "焚山煮海", "火麟踏天"),
+        "intro": "烈焰铺地，火脉首领每一次呼吸都像炉门洞开。",
+    },
+    "ice": {
+        "tokens": ("冰", "霜", "寒", "玄霜", "寒狱"),
+        "race": "妖族-玄冰血裔",
+        "physique": "太阴之体",
+        "method": "太阴玄冰经",
+        "method_kind": "神魂类",
+        "artifact": "寒狱冰魄枪",
+        "offhand": "玄冰照魂镜",
+        "armor": "太阴寒鳞甲",
+        "talisman": "冰魄封魂符",
+        "array": "玄冥锁界阵",
+        "abilities": ("梦道轮回", "太阴寒髓"),
+        "techniques": ("太阴玄封", "寒狱葬天", "冰魄凝魂", "玄冥锁界", "霜华照影"),
+        "intro": "寒潮无声漫过脚踝，神魂像被冰镜照住。",
+    },
+    "earth": {
+        "tokens": ("山", "象", "龟", "犀", "玄甲", "石"),
+        "race": "妖族-搬山古兽",
+        "physique": "荒古圣体",
+        "method": "玄黄搬山经",
+        "method_kind": "锻体类",
+        "artifact": "撼岳巨锤",
+        "offhand": "玄龟镇海盾",
+        "armor": "厚土不动甲",
+        "talisman": "玄甲护身符",
+        "array": "山河镇岳阵",
+        "abilities": ("十洞天神环", "玄黄不动"),
+        "techniques": ("玄黄不动", "搬山覆海", "厚土载道", "山河印落", "古象踏天"),
+        "intro": "大地随它的脚步起伏，厚重妖力像一座山压来。",
+    },
+    "soul": {
+        "tokens": ("蜃", "幽", "鬼", "冥", "血", "月", "魔"),
+        "race": "妖族-幽冥异种",
+        "physique": "混沌神魔体",
+        "method": "幽冥噬魂经",
+        "method_kind": "神魂类",
+        "artifact": "黄泉噬魂幡",
+        "offhand": "白骨摄心铃",
+        "armor": "幽冥血纹袍",
+        "talisman": "噬魂镇魄符",
+        "array": "黄泉万魂阵",
+        "abilities": ("杀戮本源", "梦道轮回"),
+        "techniques": ("黄泉噬魂", "白骨镇魂", "血月幻杀", "幽冥入梦", "万魂噬心"),
+        "intro": "阴风里有万魂低语，首领眼中倒映出你的心魔。",
+    },
+    "poison": {
+        "tokens": ("蛇", "蛛", "蟾", "蜈"),
+        "race": "妖族-万毒灵裔",
+        "physique": "太阴之体",
+        "method": "万毒噬灵经",
+        "method_kind": "战技类",
+        "artifact": "碧毒穿心刺",
+        "offhand": "万蛊玄壶",
+        "armor": "毒雾隐鳞衣",
+        "talisman": "瘴毒封脉符",
+        "array": "万毒迷天阵",
+        "abilities": ("神藏开阖", "古神一指"),
+        "techniques": ("万毒噬灵", "碧眼封喉", "蛛网锁魂", "瘴海沉身", "毒牙裂魄"),
+        "intro": "毒雾绕成古怪符纹，地面每一处阴影都在蠕动。",
+    },
+    "default": {
+        "tokens": (),
+        "race": "妖族-荒古异兽",
+        "physique": "凡体",
+        "method": "万兽吞灵诀",
+        "method_kind": "战技类",
+        "artifact": "裂山兽王爪",
+        "offhand": "兽骨护魂牌",
+        "armor": "兽王玄骨甲",
+        "talisman": "兽血狂战符",
+        "array": "万兽奔雷阵",
+        "abilities": ("八禁",),
+        "techniques": ("裂山爪", "万兽奔腾", "妖云压顶", "兽王怒吼", "荒骨冲撞"),
+        "intro": "兽王妖气铺开，周围群兽同时俯首。",
+    },
+}
+
 
 MYSTIC_EVENT_THEMES = {
     '上古宗门遗址': {
@@ -1531,6 +1657,12 @@ class UserRecord:
     last_immortal_conversion_date: Optional[str] = None
     last_failed_mystic_realm: Optional[dict[str, Any]] = None
     mystic_boss_successes: Optional[dict[str, list[str]]] = None
+    mystic_boss_daily_date: Optional[str] = None
+    mystic_boss_daily_attempts: int = 0
+    mystic_boss_daily_bonus: int = 0
+    mystic_boss_week_key: Optional[str] = None
+    mystic_boss_week_attempts: int = 0
+    mystic_boss_week_claimed: Optional[list[int]] = None
 
     @property
     def realm_name(self) -> str:
@@ -1660,6 +1792,12 @@ class UserRecord:
             "last_immortal_conversion_date": self.last_immortal_conversion_date,
             "last_failed_mystic_realm": self.last_failed_mystic_realm or None,
             "mystic_boss_successes": self.mystic_boss_successes or {},
+            "mystic_boss_daily_date": self.mystic_boss_daily_date,
+            "mystic_boss_daily_attempts": self.mystic_boss_daily_attempts,
+            "mystic_boss_daily_bonus": self.mystic_boss_daily_bonus,
+            "mystic_boss_week_key": self.mystic_boss_week_key,
+            "mystic_boss_week_attempts": self.mystic_boss_week_attempts,
+            "mystic_boss_week_claimed": self.mystic_boss_week_claimed or [],
         }
 
     @classmethod
@@ -1780,6 +1918,12 @@ class UserRecord:
                 for key, value in dict(data.get("mystic_boss_successes") or {}).items()
                 if isinstance(value, list)
             },
+            mystic_boss_daily_date=(str(data["mystic_boss_daily_date"]) if data.get("mystic_boss_daily_date") else None),
+            mystic_boss_daily_attempts=int(data.get("mystic_boss_daily_attempts", 0)),
+            mystic_boss_daily_bonus=int(data.get("mystic_boss_daily_bonus", 0)),
+            mystic_boss_week_key=(str(data["mystic_boss_week_key"]) if data.get("mystic_boss_week_key") else None),
+            mystic_boss_week_attempts=int(data.get("mystic_boss_week_attempts", 0)),
+            mystic_boss_week_claimed=[int(item) for item in data.get("mystic_boss_week_claimed", []) if str(item).isdigit()],
         )
 
 @dataclass
@@ -3172,12 +3316,12 @@ def catalog_item_detail_text(query: str) -> str:
         if name == ability:
             lines.append(f"固定品阶：{tier}{grade}")
             lines.append("简介：" + str(info.get("effect", "失落传承，参悟后可在斗法中生效。")))
-            lines.append("获取方式：垂钓特殊能力池、秘境探索、秘境首领挑战、境界突破余韵。")
+            lines.append("获取方式：垂钓神通传承池、秘境探索、秘境首领挑战、境界突破余韵。")
             lines.append("对应材料：" + str(info.get("material", name)))
         else:
             lines.append(f"对应神通：{ability}（{tier}{grade}）")
             lines.append("简介：参悟此材料后可领悟或推进对应神通。")
-            lines.append("获取方式：垂钓特殊能力池、秘境探索、秘境首领挑战、境界突破余韵。")
+            lines.append("获取方式：垂钓神通传承池、秘境探索、秘境首领挑战、境界突破余韵。")
     elif unique or extra_info:
         info_block = unique or extra_info or {}
         lines.append("简介：" + str(info_block.get("story", f"{name} 是高危险秘境中流传的唯一奇物。")))
@@ -3890,7 +4034,7 @@ def breakthrough_realm(record: UserRecord) -> tuple[bool, str]:
         message += f"\n五行补全：炼化{names}，丹/器灵根归入己身，助你掌握天地元气。"
     special_reward = maybe_grant_special_ability_material(record, chance=0.35, source="突破余韵")
     if special_reward:
-        message += f"\n突破余韵中落下一份{reward_display_name(special_reward)}，可发送“领悟特殊能力 编号”参悟。"
+        message += f"\n突破余韵中落下一份{reward_display_name(special_reward)}，可发送“领悟神通 编号”参悟。"
     return True, message
 
 
@@ -4142,6 +4286,9 @@ def method_required_race(method: Optional[dict[str, Any]], kind: str) -> Optiona
 def method_techniques(method: Optional[dict[str, Any]], kind: Optional[str] = None) -> list[str]:
     if not method:
         return []
+    custom_techniques = [str(item) for item in method.get("techniques", []) if item]
+    if custom_techniques:
+        return list(dict.fromkeys(custom_techniques))[:5]
     kind = kind or method_kind(method)
     required = reward_required_attribute(method) or stable_choice(ATTRIBUTES, f"method-attr:{reward_signature(method)}")
     candidates = list(ATTRIBUTE_TECHNIQUE_NAMES.get(required, [])) + GENERAL_TECHNIQUE_NAMES
@@ -4160,6 +4307,9 @@ def method_techniques(method: Optional[dict[str, Any]], kind: Optional[str] = No
 
 
 def method_origin_text(method: Optional[dict[str, Any]], kind: str) -> str:
+    custom_origin = str((method or {}).get("origin") or "")
+    if custom_origin:
+        return custom_origin
     name = reward_name(method)
     tier = str((method or {}).get("tier", "\u51e1\u54c1"))
     origins = {
@@ -4185,6 +4335,9 @@ def method_origin_text(method: Optional[dict[str, Any]], kind: str) -> str:
 
 
 def method_content_text(method: Optional[dict[str, Any]], kind: str) -> str:
+    custom_content = str((method or {}).get("content") or "")
+    if custom_content:
+        return custom_content
     name = reward_name(method)
     attribute = reward_required_attribute(method) or stable_choice(ATTRIBUTES, f"content-attr:{reward_signature(method)}")
     attr_name = ATTRIBUTE_NAMES.get(attribute, "\u7075\u6839")
@@ -4460,7 +4613,7 @@ def combat_special_power(record: UserRecord, ability: str, kind: str) -> tuple[i
         return damage, defense, speed, f"触发{rarity}【{ability}】，禁域气机展开。"
     if kind == "secret":
         return damage, defense, speed, f"触发{rarity}【{ability}】，九秘套装共鸣{multiplier}倍，已悟九秘同步增强{multiplier}倍。"
-    return damage, defense, speed, f"触发{rarity}【{ability}】：{info.get('effect', '神通气机展开。')}"
+    return damage, defense, speed, f"触发{rarity}神通【{ability}】：{info.get('effect', '神通气机展开。')}"
 
 
 def sanitize_combat_text(text: str) -> str:
@@ -5795,9 +5948,9 @@ def learn_special_ability(record: UserRecord, item_index: int) -> tuple[bool, st
         "\n".join(
             [
                 f"\u53ee\uff01\u53c2\u609f {reward_display_name(item)} \u6210\u529f\u3002",
-                f"\u9886\u609f{special_ability_rarity_text(target)}\u7279\u6b8a\u80fd\u529b\u3010{target}\u3011\u3002",
+                f"\u9886\u609f{special_ability_rarity_text(target)}\u795e\u901a\u3010{target}\u3011\u3002",
                 f"\u6765\u6e90\uff1a{info.get('source', '\u5931\u843d\u4f20\u627f')}",
-                f"\u6548\u679c\uff1a{info.get('effect', '\u4e00\u6bb5\u5c1a\u672a\u5b8c\u5168\u660e\u609f\u7684\u7279\u6b8a\u80fd\u529b\u3002')}{extra}",
+                f"\u6548\u679c\uff1a{info.get('effect', '\u4e00\u6bb5\u5c1a\u672a\u5b8c\u5168\u660e\u609f\u7684\u795e\u901a\u3002')}{extra}",
                 "\u6597\u6cd5\u4e2d\u76f4\u63a5\u53d1\u9001\u80fd\u529b\u540d\u6216\u522b\u540d\u5373\u53ef\u5c1d\u8bd5\u89e6\u53d1\u3002",
             ]
         ),
@@ -5809,7 +5962,7 @@ def special_ability_list_text(record: UserRecord) -> str:
     abilities = list(record.special_abilities or [])
     materials = available_special_ability_items(record)
     secret_count = nine_secret_count(record)
-    lines = ["\u3010\u6211\u7684\u7279\u6b8a\u80fd\u529b\u3011"]
+    lines = ["\u3010\u6211\u7684\u795e\u901a\u3011"]
     if secret_count:
         lines.append(f"\u4e5d\u79d8\u5957\u88c5\uff1a{secret_count}/9\uff0c\u5df2\u83b7\u4e5d\u79d8\u6548\u679c\u6597\u6cd5\u65f6 {secret_count}x \u589e\u5f3a\u3002")
     highest = highest_forbidden_ability(abilities)
@@ -5825,7 +5978,7 @@ def special_ability_list_text(record: UserRecord) -> str:
                 f"{index}. {special_ability_rarity_text(ability)}\u3010{ability}\u3011\uff5c\u4f24\u5bb3+{int(float(damage) * 100)}%\uff5c\u9632\u5fa1+{int(float(defense) * 100)}%\uff5c\u901f\u5ea6+{int(speed)}\uff5c{multiplier}x\uff5c{info.get('effect', '')}"
             )
     else:
-        lines.append("\u6682\u672a\u9886\u609f\u7279\u6b8a\u80fd\u529b\u3002")
+        lines.append("\u6682\u672a\u9886\u609f\u795e\u901a\u3002")
     lines.append("")
     lines.append("\u3010\u53ef\u9886\u609f\u4f20\u627f\u6750\u6599\u3011")
     if not materials:
@@ -5836,7 +5989,7 @@ def special_ability_list_text(record: UserRecord) -> str:
             target = special_ability_material_target(record, material, f"preview:{record.user_id}:{index}:{reward_signature(item)}")
             target_text = target or special_ability_material_requirement_text(record, material)
             lines.append(f"{index}. {reward_display_name(item)} -> {target_text}")
-    lines.append("\u53d1\u9001\u201c\u9886\u609f\u7279\u6b8a\u80fd\u529b \u7f16\u53f7\u201d\u53c2\u609f\u4f20\u627f\uff1b\u53d1\u9001\u201c\u7279\u6b8a\u80fd\u529b\u56fe\u9274\u201d\u67e5\u770b\u5b8c\u6574\u8ffd\u6c42\u8def\u5f84\u3002")
+    lines.append("\u53d1\u9001\u201c\u9886\u609f\u795e\u901a \u7f16\u53f7\u201d\u53c2\u609f\u4f20\u627f\uff1b\u53d1\u9001\u201c\u795e\u901a\u56fe\u9274\u201d\u67e5\u770b\u5b8c\u6574\u8ffd\u6c42\u8def\u5f84\u3002")
     return "\n".join(lines)
 
 
@@ -5844,9 +5997,9 @@ def special_ability_catalog_text(record: Optional[UserRecord] = None) -> str:
     owned = set(normalize_special_abilities(record.special_abilities if record is not None else []))
     secret_count = len([ability for ability in owned if ability.startswith("\u4e5d\u79d8")])
     lines = [
-        "\u3010\u7279\u6b8a\u80fd\u529b\u56fe\u9274\u3011",
+        "\u3010\u795e\u901a\u56fe\u9274\u3011",
         "\u83b7\u53d6\u8def\u5f84\uff1a\u5782\u9493\u3001\u79d8\u5883\u63a2\u7d22\u3001\u5883\u754c\u7a81\u7834\u4f59\u97f5\u4f1a\u4f4e\u6982\u7387\u6389\u843d\u4f20\u627f\u6750\u6599\uff0c\u73b0\u5df2\u63d0\u9ad8\u83b7\u53d6\u96be\u5ea6\u3002",
-        "\u56fa\u5b9a\u54c1\u9636\uff1a\u6240\u6709\u7279\u6b8a\u80fd\u529b\u5747\u5df2\u56fa\u5b9a\u54c1\u9636\u4e0e\u54c1\u8d28\uff0c\u8be6\u89c1\u6bcf\u9879\u6807\u9898\uff1b\u4e5d\u79d8\u7edf\u4e00\u4e3a\u5929\u9636\u6781\u54c1\u3002",
+        "\u56fa\u5b9a\u54c1\u9636\uff1a\u6240\u6709\u795e\u901a\u5747\u5df2\u56fa\u5b9a\u54c1\u9636\u4e0e\u54c1\u8d28\uff0c\u8be6\u89c1\u6bcf\u9879\u6807\u9898\uff1b\u4e5d\u79d8\u7edf\u4e00\u4e3a\u5929\u9636\u6781\u54c1\u3002",
         "\u8fdb\u9636\u8def\u7ebf\uff1a\u516b\u7981 -> \u4e5d\u7981 -> \u795e\u7981\uff0c\u5347\u7ea7\u540e\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002",
         f"\u4e5d\u79d8\u8054\u52a8\uff1a\u83b7\u53d6 n \u4ef6\u540e\uff0c\u5df2\u83b7\u4e5d\u79d8\u7684\u6597\u6cd5\u6548\u679c\u6309 n \u500d\u8ba1\u7b97\u3002\u5f53\u524d\uff1a{secret_count}/9\u3002",
         "",
@@ -6543,6 +6696,8 @@ def mystic_realm_options_text(record: UserRecord) -> str:
     lines = [f"【秘境探索】{mystic_realm_title(realm)}", f"剩余探索次数：{int(realm.get('steps_left', 0))}/{MYSTIC_REALM_MAX_STEPS}"]
     if realm.get("type") == "兽潮":
         lines.append(f"兽潮首领：{realm.get('boss_realm', '未知')}·{realm.get('boss_name', '无名妖兽')}")
+    if any(isinstance(item, dict) and item.get("boss") for item in options):
+        lines.append(mystic_boss_attempt_status_text(record))
     if realm.get("insight") and realm.get("bad_option_index"):
         lines.append(f"天机示警：第 {int(realm.get('bad_option_index'))} 项通往坏结局。")
     for index, option in enumerate(options, start=1):
@@ -6816,6 +6971,222 @@ def draw_mystic_event_reward(record: UserRecord, realm: dict[str, Any], event: d
     return category, draw_reward_by_category(category)
 
 
+def boss_archetype_config(realm: dict[str, Any]) -> dict[str, Any]:
+    boss_name = str(realm.get("boss_name") or "")
+    for key, config in BOSS_ARCHETYPE_CONFIGS.items():
+        if key == "default":
+            continue
+        if any(token and token in boss_name for token in config.get("tokens", ())):
+            return dict(config)
+    return dict(BOSS_ARCHETYPE_CONFIGS["default"])
+
+
+def realm_index_from_name(realm_name: str, fallback: int = 0) -> int:
+    text = str(realm_name or "")
+    for index, name in enumerate(REALMS):
+        if text == name or text.startswith(name) or realm_short_name(name) in text:
+            return index
+    return max(0, min(len(REALMS) - 1, int(fallback)))
+
+
+def boss_tier_for_realm(realm_index: int) -> str:
+    if realm_index >= 13:
+        return "帝兵"
+    if realm_index >= 10:
+        return "仙阶"
+    if realm_index >= 5:
+        return "天阶"
+    if realm_index >= 3:
+        return "地阶"
+    if realm_index >= 2:
+        return "玄阶"
+    if realm_index >= 1:
+        return "黄阶"
+    return "凡品"
+
+
+def boss_grade_for_realm(realm_index: int) -> str:
+    if realm_index >= 8:
+        return "极品"
+    if realm_index >= 5:
+        return "上品"
+    if realm_index >= 2:
+        return "中品"
+    return "下品"
+
+
+def boss_method_layers_for(method: dict[str, Any], realm_index: int) -> dict[str, int]:
+    layer = max(1, min(9, 1 + realm_index // 2))
+    return {reward_signature(method): layer}
+
+
+def boss_record_for_realm(realm: dict[str, Any], player: UserRecord) -> UserRecord:
+    config = boss_archetype_config(realm)
+    realm_index = realm_index_from_name(str(realm.get("boss_realm") or ""), int(realm.get("recommended_index", player.realm_index or 1)))
+    attr = boss_element(realm)
+    tier = boss_tier_for_realm(realm_index)
+    grade = boss_grade_for_realm(realm_index)
+    boss_name = str(realm.get("boss_name") or "秘境首领")
+    boss = UserRecord(user_id=f"boss:{mystic_boss_limit_key(realm)}:{boss_name}")
+    root_tier = tier if tier in TIER_RANKS and tier != "帝兵" else "天阶"
+    purity = min(100, 72 + realm_index * 3)
+    boss.root = make_root(root_tier, grade, attr, purity=purity, sources=[attr], source_purities={attr: purity})
+    boss.realm_index = max(0, min(len(REALMS) - 1, realm_index))
+    boss.realm_exp = int(realm_progress_required(boss.root, boss.realm_index) * min(0.88, 0.18 + realm_index * 0.035))
+    boss.total_exp = cumulative_realm_exp(boss.root, boss.realm_index) + boss.realm_exp
+    boss.sign_count = 30 + realm_index * 16
+    boss.combat_race = str(config.get("race") or "妖族-荒古异兽")
+    boss.physique = str(config.get("physique") or "凡体")
+    boss.special_abilities = [str(item) for item in config.get("abilities", ())]
+    method = make_reward(tier, grade, METHOD_CATEGORY, str(config.get("method") or "万兽吞灵诀"))
+    method["kind"] = str(config.get("method_kind") or "战技类")
+    method["techniques"] = list(config.get("techniques", ()))
+    method["origin"] = str(config.get("intro") or "秘境首领天生妖术所化。")
+    method["content"] = "首领本命传承，战斗时会自行催发。"
+    boss.equipped_method = method
+    boss.method_layers = boss_method_layers_for(method, realm_index)
+    boss.method_proficiency = {reward_signature(method): max(80, realm_index * 35)}
+    artifact = make_reward(tier, grade, ARTIFACT_CATEGORY, str(config.get("artifact") or "兽王爪"))
+    offhand = make_reward(tier, grade, ARTIFACT_CATEGORY, str(config.get("offhand") or "兽骨牌"))
+    armor = make_reward(tier, grade, ARTIFACT_CATEGORY, str(config.get("armor") or "兽王甲"))
+    for item in (artifact, offhand, armor):
+        item["required_attribute"] = attr
+        item["min_realm_index"] = max(0, min(len(REALMS) - 1, realm_index))
+    boss.equipped_artifact = artifact
+    boss.equipped_artifacts = {"主手": artifact, "副手": offhand, "护甲": armor}
+    talisman = make_reward(tier, grade, TALISMAN_CATEGORY, str(config.get("talisman") or "兽血狂战符"))
+    talisman["min_realm_index"] = max(0, min(len(REALMS) - 1, realm_index))
+    boss.equipped_talisman = talisman
+    array = make_reward(tier, grade, ARRAY_CATEGORY, str(config.get("array") or "万兽奔雷阵"))
+    boss.equipped_array = array
+    boss.array_proficiency = {reward_signature(array): max(100, realm_index * 45)}
+    return boss
+
+
+def boss_combat_actions(realm: dict[str, Any], boss: UserRecord) -> list[dict[str, Any]]:
+    config = boss_archetype_config(realm)
+    techniques = list(config.get("techniques", ())) or available_battle_techniques(boss)
+    abilities = list(config.get("abilities", ()))
+    actions = [{"text": str(technique)} for technique in techniques[:5]]
+    actions.extend({"text": str(ability)} for ability in abilities[:3])
+    if not actions:
+        actions.append({"text": "妖云压顶"})
+    return actions
+
+
+def player_boss_auto_actions(record: UserRecord) -> list[dict[str, Any]]:
+    actions = [{"text": str(technique)} for technique in available_battle_techniques(record)[:5]]
+    actions.extend({"text": str(ability)} for ability in normalize_special_abilities(record.special_abilities)[:3])
+    if not actions:
+        actions.append({"text": "即兴术式"})
+    return actions
+
+
+
+def split_boss_duel_damage(total: int, rounds: int, seed: str) -> list[int]:
+    total = max(0, int(total))
+    rounds = max(1, int(rounds))
+    if total <= 0:
+        return [0 for _ in range(rounds)]
+    weights = [70 + stable_int(f"{seed}:{index}") % 61 for index in range(rounds)]
+    weight_total = max(1, sum(weights))
+    parts = [int(total * weight / weight_total) for weight in weights]
+    diff = total - sum(parts)
+    for index in range(abs(diff)):
+        pos = index % rounds
+        parts[pos] += 1 if diff > 0 else -1
+    return [max(0, value) for value in parts]
+
+
+def boss_duel_skill_cycle(fighter: dict[str, Any], fallback: Sequence[str], seed: str) -> list[str]:
+    skills = [str(item) for item in fighter.get("triggered_techniques", []) if item]
+    skills.extend(str(item) for item in fallback if item)
+    skills.extend(str(item) for item in fighter.get("abilities", []) if item)
+    skills = list(dict.fromkeys(skills))
+    if not skills:
+        return ["近身搏杀", "灵压冲撞", "护体灵光"]
+    offset = stable_int(seed) % len(skills)
+    return skills[offset:] + skills[:offset]
+
+
+def build_mystic_boss_duel_timeline(result: dict[str, Any], realm: dict[str, Any], boss: UserRecord) -> list[str]:
+    left = dict(result.get("left") or {})
+    right = dict(result.get("right") or {})
+    elapsed = max(5, int(result.get("elapsed_seconds", 60)))
+    rounds = max(5, min(12, elapsed // 6 + (1 if elapsed % 6 else 0)))
+    player_damage_total = max(0, int(right.get("max_hp", 0)) - int(right.get("hp", 0)))
+    boss_damage_total = max(0, int(left.get("max_hp", 0)) - int(left.get("hp", 0)))
+    player_damage_parts = split_boss_duel_damage(player_damage_total, rounds, f"boss-duel-player:{record_signature_for_boss(left)}:{right.get('user_id')}")
+    boss_damage_parts = split_boss_duel_damage(boss_damage_total, rounds, f"boss-duel-boss:{right.get('user_id')}:{record_signature_for_boss(left)}")
+    player_skills = boss_duel_skill_cycle(left, left.get("available_techniques", []), f"player-skills:{left.get('user_id')}")
+    boss_skills = boss_duel_skill_cycle(right, available_battle_techniques(boss), f"boss-skills:{right.get('user_id')}")
+    player_hp = max(0, int(left.get("max_hp", 1)))
+    boss_hp = max(0, int(right.get("max_hp", 1)))
+    player_name = str(left.get("nickname") or "宿主")
+    boss_name = str(right.get("nickname") or realm.get("boss_name") or "秘境首领")
+    intro = str(result.get("boss_intro") or "妖气压下，生死斗法已起。")
+    boss_gears = "、".join(reward_display_name(item) for item in (boss.equipped_artifacts or {}).values()) or "妖骨本命兵"
+    timeline = [
+        f"入场：{intro}",
+        f"对峙：{player_name}祭起功法与符箓，{boss_name}展开{boss.equipped_array and reward_display_name(boss.equipped_array) or '本命妖阵'}，灵器为{boss_gears}。",
+    ]
+    for index in range(rounds):
+        seconds = min(elapsed, (index + 1) * 6)
+        p_skill = player_skills[index % len(player_skills)]
+        b_skill = boss_skills[index % len(boss_skills)]
+        p_damage = player_damage_parts[index]
+        b_damage = boss_damage_parts[index]
+        boss_hp = max(0, boss_hp - p_damage)
+        player_hp = max(0, player_hp - b_damage)
+        if p_damage >= b_damage * 1.25:
+            phrase = "抢到先机"
+        elif b_damage >= p_damage * 1.25:
+            phrase = "被首领压回半步"
+        else:
+            phrase = "与首领硬撼一记"
+        timeline.append(
+            f"第{seconds}息：{player_name}催动【{p_skill}】，{boss_name}以【{b_skill}】反扑，{phrase}；首领受创{p_damage}，宿主受创{b_damage}，血量 {player_hp}/{left.get('max_hp', 1)} vs {boss_hp}/{right.get('max_hp', 1)}。"
+        )
+        if player_hp <= 0 or boss_hp <= 0:
+            break
+    winner_name = str(result.get("winner_name") or "胜者")
+    if result.get("ended_early"):
+        timeline.append(f"终局：{winner_name}提前分出生死，剩余{int(result.get('remaining_seconds', 0))}息。")
+    else:
+        timeline.append(f"终局：一炷香斗到最后，{winner_name}凭剩余血量压过对手。")
+    for log in list(left.get("logs") or [])[:2]:
+        timeline.append(f"余波：{player_name}曾{log}")
+    for log in list(right.get("logs") or [])[:2]:
+        timeline.append(f"妖术：{boss_name}曾{log}")
+    return timeline
+
+
+def record_signature_for_boss(fighter: dict[str, Any]) -> str:
+    return f"{fighter.get('user_id')}:{fighter.get('nickname')}:{fighter.get('power')}"
+
+
+def simulate_mystic_boss_duel(record: UserRecord, realm: dict[str, Any]) -> tuple[dict[str, Any], UserRecord]:
+    boss = boss_record_for_realm(realm, record)
+    player_name = str(getattr(record, "combat_nickname", "") or "宿主")
+    boss_name = f"{realm.get('boss_realm', '未知')}·{realm.get('boss_name', '秘境首领')}"
+    result = simulate_normal_duel(
+        record,
+        boss,
+        player_name,
+        boss_name,
+        player_boss_auto_actions(record),
+        boss_combat_actions(realm, boss),
+        duration_seconds=60,
+    )
+    result["title"] = "秘境首领生死斗战报"
+    result["summary"] = "秘境首领生死斗：" + str(result.get("summary") or "胜负已分。")
+    result["boss_intro"] = str(boss_archetype_config(realm).get("intro") or "首领妖气翻涌。")
+    result["mystic_boss"] = True
+    result["life_and_death"] = True
+    result["footer"] = "秘境首领为生死斗法：胜利折算10次探索奖励；失败会反噬禁修，并随机折损100-500点修为，修为跌破本境会跌落境界。"
+    result["timeline"] = build_mystic_boss_duel_timeline(result, realm, boss)
+    return result, boss
+
 def boss_element(realm: dict[str, Any]) -> str:
     value = str(realm.get("boss_element") or "").strip()
     if value in BASE_FIVE_ELEMENTS:
@@ -6882,6 +7253,120 @@ def today_key(today: Optional[Any] = None) -> str:
     return str(today)[:10]
 
 
+
+def mystic_boss_week_key(today: Optional[Any] = None) -> str:
+    if isinstance(today, datetime):
+        day = today.date()
+    elif isinstance(today, date):
+        day = today
+    else:
+        parsed = parse_lock_until(str(today)) if today is not None else None
+        day = parsed or date.today()
+    iso = day.isocalendar()
+    return f"{iso.year}-W{iso.week:02d}"
+
+
+def normalize_mystic_boss_attempts(record: UserRecord, today: Optional[Any] = None) -> None:
+    day = today_key(today)
+    if record.mystic_boss_daily_date != day:
+        record.mystic_boss_daily_date = day
+        record.mystic_boss_daily_attempts = 0
+        record.mystic_boss_daily_bonus = 0
+    week = mystic_boss_week_key(today)
+    if record.mystic_boss_week_key != week:
+        record.mystic_boss_week_key = week
+        record.mystic_boss_week_attempts = 0
+        record.mystic_boss_week_claimed = []
+    record.mystic_boss_week_claimed = sorted(
+        {int(item) for item in (record.mystic_boss_week_claimed or []) if int(item) in MYSTIC_BOSS_WEEKLY_BONUS_THRESHOLDS}
+    )
+    record.mystic_boss_daily_attempts = max(0, int(record.mystic_boss_daily_attempts or 0))
+    record.mystic_boss_daily_bonus = max(0, int(record.mystic_boss_daily_bonus or 0))
+    record.mystic_boss_week_attempts = max(0, int(record.mystic_boss_week_attempts or 0))
+
+
+def mystic_boss_daily_limit(record: UserRecord, today: Optional[Any] = None) -> int:
+    normalize_mystic_boss_attempts(record, today)
+    return MYSTIC_BOSS_DAILY_BASE_ATTEMPTS + int(record.mystic_boss_daily_bonus or 0)
+
+
+def mystic_boss_remaining_attempts(record: UserRecord, today: Optional[Any] = None) -> int:
+    limit = mystic_boss_daily_limit(record, today)
+    return max(0, limit - int(record.mystic_boss_daily_attempts or 0))
+
+
+def mystic_boss_attempt_status_text(record: UserRecord, today: Optional[Any] = None) -> str:
+    limit = mystic_boss_daily_limit(record, today)
+    remaining = max(0, limit - int(record.mystic_boss_daily_attempts or 0))
+    claimed = "、".join(str(item) for item in record.mystic_boss_week_claimed or []) or "暂无"
+    return (
+        f"首领斗法次数：今日剩余 {remaining}/{limit}；"
+        f"本周已进行 {int(record.mystic_boss_week_attempts or 0)}/7 次；"
+        f"周补给节点 {claimed}。"
+    )
+
+
+def consume_mystic_boss_attempt(record: UserRecord, today: Optional[Any] = None) -> tuple[bool, str, list[int]]:
+    limit = mystic_boss_daily_limit(record, today)
+    if int(record.mystic_boss_daily_attempts or 0) >= limit:
+        return (
+            False,
+            f"今日Boss挑战次数已用尽（{limit}/{limit}）。所有秘境首领共享次数；本周进行3/5/7次首领斗法时，会分别给当天补充1次挑战机会。",
+            [],
+        )
+    record.mystic_boss_daily_attempts = int(record.mystic_boss_daily_attempts or 0) + 1
+    record.mystic_boss_week_attempts = int(record.mystic_boss_week_attempts or 0) + 1
+    claimed = set(record.mystic_boss_week_claimed or [])
+    grants: list[int] = []
+    for threshold in MYSTIC_BOSS_WEEKLY_BONUS_THRESHOLDS:
+        if record.mystic_boss_week_attempts >= threshold and threshold not in claimed:
+            claimed.add(threshold)
+            grants.append(threshold)
+            record.mystic_boss_daily_bonus = int(record.mystic_boss_daily_bonus or 0) + 1
+    record.mystic_boss_week_claimed = sorted(claimed)
+    new_limit = mystic_boss_daily_limit(record, today)
+    remaining = max(0, new_limit - int(record.mystic_boss_daily_attempts or 0))
+    text = f"今日Boss斗法次数已消耗 {record.mystic_boss_daily_attempts}/{new_limit}，剩余 {remaining} 次；本周已进行 {record.mystic_boss_week_attempts}/7 次。"
+    if grants:
+        text += "\n周任务达成：" + "、".join(f"第{item}次" for item in grants) + "，已为今日补充对应Boss挑战次数。"
+    return True, text, grants
+
+
+def apply_mystic_boss_defeat_penalty(record: UserRecord) -> tuple[int, int, str]:
+    if record.root is None:
+        return 0, 0, "尚未凝成修为，反噬只在经脉中留下刺痛。"
+    loss = random.randint(100, 500)
+    old_realm = record.realm
+    old_index = record.realm_index
+    remaining = loss
+    if remaining <= record.realm_exp:
+        record.realm_exp = max(0, int(record.realm_exp) - remaining)
+    else:
+        remaining -= max(0, int(record.realm_exp))
+        while remaining > 0 and record.realm_index > 0:
+            record.realm_index -= 1
+            required = realm_progress_required(record.root, record.realm_index)
+            if remaining >= required:
+                remaining -= required
+                record.realm_exp = 0
+            else:
+                record.realm_exp = max(0, required - remaining)
+                remaining = 0
+        if record.realm_index <= 0 and remaining > 0:
+            record.realm_index = 0
+            record.realm_exp = 0
+    record.total_exp = max(0, cumulative_realm_exp(record.root, record.realm_index) + record.realm_exp)
+    if record.realm_marks:
+        record.realm_marks = {key: value for key, value in record.realm_marks.items() if int(key) <= record.realm_index}
+    if record.realm_index < 2:
+        record.foundation_type = None
+    reset_bottleneck_state(record)
+    dropped = max(0, old_index - record.realm_index)
+    if dropped:
+        return loss, dropped, f"生死斗反噬折损修为{loss}点，境界从{old_realm}跌落至{record.realm}。"
+    return loss, 0, f"生死斗反噬折损修为{loss}点，当前进度降至 {record.realm_exp}/{record.progress_required}。"
+
+
 def mystic_boss_limit_key(realm: dict[str, Any]) -> str:
     realm_type = str(realm.get("type") or "未知秘境")
     title = str(realm.get("title") or mystic_realm_title(realm) or realm_type)
@@ -6937,15 +7422,42 @@ def handle_mystic_boss_challenge(record: UserRecord, realm: dict[str, Any], toda
     boss_realm = str(realm.get("boss_realm") or "未知")
     realm_title = mystic_realm_title(realm)
     if has_mystic_boss_success_today(record, realm, today):
-        return False, f"今日已成功挑战过【{realm_title}】首领，不能再次通过同一秘境首领折算10次探索奖励。可继续普通探索，或明日再来。"
-    chance = mystic_boss_success_chance(record, realm)
-    lines = [f"你选择：挑战{boss_realm}·{boss_name}", f"首领妖气压下，成功率约 {int(chance * 100)}%。"]
-    if random.random() > chance:
+        return False, f"今日已成功挑战过【{realm_title}】首领，不能再次通过同一秘境首领折算10次探索奖励。可继续普通探索，或明日再来。\n{mystic_boss_attempt_status_text(record, today)}"
+    consumed, attempt_text, grants = consume_mystic_boss_attempt(record, today)
+    if not consumed:
+        return False, attempt_text
+    duel_result, boss = simulate_mystic_boss_duel(record, realm)
+    record.last_mystic_boss_duel = duel_result
+    player_win = str(duel_result.get("winner_id")) == str(record.user_id)
+    left = duel_result.get("left", {})
+    right = duel_result.get("right", {})
+    lines = [
+        f"你选择：挑战{boss_realm}·{boss_name}",
+        str(duel_result.get("boss_intro") or "首领妖气压下，斗法已起。"),
+        attempt_text,
+        "生死斗法战报已尝试私聊发送，内含玩家与Boss的完整斗法过程。",
+        f"宿主血量：{int(left.get('hp', 0))}/{int(left.get('max_hp', 1))}；首领血量：{int(right.get('hp', 0))}/{int(right.get('max_hp', 1))}。",
+        "首领装备：" + "、".join(reward_display_name(item) for item in (boss.equipped_artifacts or {}).values()),
+        "首领阵盘：" + reward_display_name(boss.equipped_array),
+        "首领符箓：" + reward_display_name(boss.equipped_talisman),
+        "首领战技：" + "、".join(available_battle_techniques(boss)[:5]),
+        "首领神通：" + "、".join(normalize_special_abilities(boss.special_abilities)[:5]),
+    ]
+    if grants:
+        lines.append("本周Boss斗法进度触发补给，当天可继续追击更多首领。")
+    if not player_win:
+        loss, dropped, penalty_text = apply_mystic_boss_defeat_penalty(record)
+        duel_result["penalty_text"] = penalty_text
+        duel_result["summary"] = f"秘境首领生死斗：{duel_result.get('winner_name', '首领')}胜出，宿主反噬折损修为{loss}点。"
+        duel_result.setdefault("timeline", []).append("反噬：" + penalty_text)
         lock_text = lock_cultivation(record, today, minutes=5)
         record.last_failed_mystic_realm = dict(realm)
         record.mystic_realm = None
         lines.append(mystic_bad_ending_text(realm_type))
-        lines.append(f"挑战失败：进入5分钟反噬期，{lock_text}。今日仍可再次尝试该秘境首领，只有成功才会占用每日次数。")
+        lines.append(f"斗法失败：进入5分钟反噬期，{lock_text}。{penalty_text}")
+        if dropped:
+            lines.append("修为跌破本境根基，境界已发生跌落；可重新修炼并尝试改善突破品相。")
+        lines.append(mystic_boss_attempt_status_text(record, today))
         return True, "\n".join(lines)
     rewards = draw_mystic_boss_rewards(record, realm)
     mark_mystic_boss_success(record, realm, today)
@@ -6953,12 +7465,12 @@ def handle_mystic_boss_challenge(record: UserRecord, realm: dict[str, Any], toda
     increase_array_proficiency(record, 18)
     record.mystic_realm = None
     reward_text = "、".join(reward_display_name(reward) for reward in rewards[:11])
-    lines.append("你破开首领妖云，以一场硬战结束此处秘境。")
+    lines.append("你以斗法斩开首领妖云，硬生生打穿此处秘境。")
     lines.append(f"获得10次探索折算奖励与首领妖丹：{reward_text}")
     lines.append(f"功法熟练度+28{f'，功法连升 {layer_up} 层' if layer_up else ''}；阵法熟练度+18。")
     lines.append(f"今日【{realm_title}】首领挑战成功次数已用尽，重复进入同一秘境不会再触发首领折算奖励。")
+    lines.append(mystic_boss_attempt_status_text(record, today))
     return True, "\n".join(lines)
-
 
 def mystic_success_chance(record: UserRecord, realm: dict[str, Any]) -> float:
     power = battle_power(record)

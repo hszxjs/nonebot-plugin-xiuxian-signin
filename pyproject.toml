@@ -55,7 +55,19 @@ include-package-data = true
 nonebot_plugin_xiuxian_signin = "."
 
 [tool.setuptools.package-data]
-nonebot_plugin_xiuxian_signin = ["py.typed", "assets/fonts/*.ttf"]
+nonebot_plugin_xiuxian_signin = [
+    "py.typed",
+    "assets/fonts/*.ttf",
+    "assets/item_icons/item_icon_records.json",
+    "assets/item_icons/items/*.png",
+    "assets/panel_backgrounds/*.png",
+    "assets/realm_quality_icons/realm_quality_icon_manifest.json",
+    "assets/realm_quality_icons/*.png",
+    "assets/spirit_root_icons/spirit_root_icon_manifest.json",
+    "assets/spirit_root_icons/*.png",
+    "assets/ui_sprite/signin/output/spec/*.json",
+    "assets/ui_sprite/signin/output/sprites/*.png",
+]
 
 [tool.ruff]
 line-length = 120

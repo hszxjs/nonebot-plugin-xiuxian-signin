@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1254, initial-scale=1" />
+  <title>Xiuxian Signin Panel</title>
+  <style>
+    @font-face {
+      font-family: XiuxianUI;
+      src: url("../../../../fonts/NotoSansSC-VF.ttf") format("truetype");
+      font-weight: 100 900;
+    }
+    html, body {
+      margin: 0;
+      width: 1254px;
+      height: 1254px;
+      background: transparent;
+      font-family: XiuxianUI, "Noto Sans SC", sans-serif;
+    }
+    .ui-root {
+      position: relative;
+      width: 1254px;
+      height: 1254px;
+      overflow: hidden;
+      color: #172033;
+    }
+    .sprite {
+      position: absolute;
+      background-repeat: no-repeat;
+      background-size: 100% 100%;
+      pointer-events: none;
+    }
+    .bg {
+      left: 0;
+      top: 0;
+      width: 1254px;
+      height: 1254px;
+      background-image: url("../sprites/signin_background_base.png");
+      z-index: 0;
+    }
+    .avatar {
+      position: absolute;
+      left: 199px;
+      top: 122px;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      overflow: hidden;
+      z-index: 2;
+    }
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(1.0);
+    }
+    .portrait-frame {
+      left: 145px;
+      top: 55px;
+      width: 370px;
+      height: 375px;
+      background-image: url("../sprites/portrait_frame_overlay.png");
+      z-index: 4;
+    }
+    .text {
+      position: absolute;
+      z-index: 5;
+      overflow: hidden;
+      line-height: 1.18;
+      letter-spacing: 0;
+      text-shadow: 0 1px 0 rgba(255,255,255,.42);
+    }
+    .title { left: 545px; top: 150px; width: 355px; height: 56px; font-size: 42px; font-weight: 780; color: #172033; }
+    .name { left: 545px; top: 214px; width: 385px; height: 40px; font-size: 31px; font-weight: 560; color: #4b5565; }
+    .hint { left: 545px; top: 260px; width: 410px; height: 32px; font-size: 20px; font-weight: 650; color: #93702d; }
+    .label { font-size: 17px; font-weight: 720; color: #647084; }
+    .value { color: #7b5cf0; font-weight: 680; }
+    .realm-value { color: #172033; font-size: 34px; font-weight: 740; }
+    .root-label { left: 238px; top: 455px; width: 152px; height: 29px; }
+    .root-value { left: 238px; top: 488px; width: 307px; height: 74px; font-size: 19px; }
+    .purity-label { left: 475px; top: 455px; width: 205px; height: 29px; }
+    .purity-value { left: 475px; top: 492px; width: 315px; height: 68px; font-size: 22px; }
+    .realm-label { left: 835px; top: 440px; width: 170px; height: 28px; }
+    .realm-value { left: 835px; top: 472px; width: 205px; height: 63px; }
+    .sign-label { left: 188px; top: 608px; width: 192px; height: 30px; }
+    .sign-value { left: 188px; top: 650px; width: 312px; height: 54px; color: #172033; font-size: 36px; font-weight: 650; }
+    .total-label { left: 650px; top: 608px; width: 208px; height: 30px; }
+    .total-value { left: 650px; top: 650px; width: 390px; height: 54px; font-size: 36px; }
+    .cell-label { font-size: 17px; font-weight: 760; color: #647084; }
+    .cell-value { font-size: 17px; font-weight: 680; color: #7b5cf0; }
+    .danger { color: #9b3f1e; }
+    .progress-label { left: 320px; top: 1045px; width: 200px; height: 35px; font-size: 24px; font-weight: 780; color: #ffffff; }
+    .progress-value { left: 785px; top: 1045px; width: 280px; height: 35px; font-size: 21px; font-weight: 650; color: #ffffff; }
+    .footer { left: 760px; top: 1130px; width: 325px; height: 30px; font-size: 16px; color: #647084; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="ui-root">
+    <div class="sprite bg"></div>
+    <div class="avatar"><img src="sample_avatar.png" alt=""></div>
+    <div class="sprite portrait-frame"></div>
+    <div class="text title">今日已完成签到</div>
+    <div class="text name">落雨・乱心思</div>
+    <div class="text hint">宿主今日气息稳定，无需重复闭关</div>
+    <div class="text label root-label">灵根</div>
+    <div class="text value root-value">变异灵根<br>极品雷灵根<br>由火+水先天异变</div>
+    <div class="text label purity-label">灵根精纯度</div>
+    <div class="text value purity-value">雷96% / 火96% / 水96%<br>后天：金88% / 木91% / 土91%</div>
+    <div class="text label realm-label">当前境界</div>
+    <div class="text realm-value">炼虚期巅峰</div>
+    <div class="text label sign-label">签到次数</div>
+    <div class="text sign-value">6 次</div>
+    <div class="text label total-label">累计修为</div>
+    <div class="text value total-value">9068 点</div>
+    <div class="text cell-label" style="left:210px;top:754px;width:245px;height:23px;">灵器</div>
+    <div class="text cell-value" style="left:210px;top:781px;width:245px;height:39px;">[天阶极品灵器 太虚斩星剑]</div>
+    <div class="text cell-label" style="left:500px;top:754px;width:255px;height:23px;">功法</div>
+    <div class="text cell-value" style="left:500px;top:781px;width:255px;height:39px;">[天阶上品功法 离火炼界篇]</div>
+    <div class="text cell-label" style="left:800px;top:754px;width:260px;height:23px;">阵盘</div>
+    <div class="text cell-value" style="left:800px;top:781px;width:260px;height:39px;">[玄阶极品阵盘 小五行聚灵盘]</div>
+    <div class="text cell-label" style="left:210px;top:842px;width:245px;height:23px;">阵法熟练</div>
+    <div class="text cell-value" style="left:210px;top:869px;width:245px;height:39px;">熟练度 640/900 ・ 7.4x</div>
+    <div class="text cell-label" style="left:500px;top:842px;width:255px;height:23px;">境界品相</div>
+    <div class="text cell-value" style="left:500px;top:869px;width:255px;height:39px;">洞虚道体</div>
+    <div class="text cell-label" style="left:800px;top:842px;width:260px;height:23px;">战斗属性</div>
+    <div class="text cell-value danger" style="left:800px;top:869px;width:260px;height:39px;">战力93438 / 灵力10230</div>
+    <div class="text cell-label" style="left:210px;top:930px;width:245px;height:23px;">路线</div>
+    <div class="text cell-value" style="left:210px;top:957px;width:245px;height:39px;">炼丹师</div>
+    <div class="text cell-label" style="left:500px;top:930px;width:255px;height:23px;">身份令牌</div>
+    <div class="text cell-value" style="left:500px;top:957px;width:255px;height:39px;">天机阁弟子</div>
+    <div class="text cell-label" style="left:800px;top:930px;width:260px;height:23px;">后天灵根</div>
+    <div class="text cell-value" style="left:800px;top:957px;width:260px;height:39px;">金灵根 / +2条</div>
+    <div class="text progress-label">经验进度</div>
+    <div class="text progress-value">4406/4736</div>
+    <div class="text footer">明日再来，灵气自会积蓄</div>
+  </div>
+</body>
+</html>

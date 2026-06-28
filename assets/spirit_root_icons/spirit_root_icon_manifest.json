@@ -1,0 +1,182 @@
+[
+  {
+    "attribute": "金",
+    "file": "jin.png",
+    "source_cell": {
+      "row": 1,
+      "col": 1,
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "木",
+    "file": "mu.png",
+    "source_cell": {
+      "row": 1,
+      "col": 2,
+      "x": 256,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "水",
+    "file": "shui.png",
+    "source_cell": {
+      "row": 1,
+      "col": 3,
+      "x": 512,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "火",
+    "file": "huo.png",
+    "source_cell": {
+      "row": 1,
+      "col": 4,
+      "x": 768,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "土",
+    "file": "tu.png",
+    "source_cell": {
+      "row": 2,
+      "col": 1,
+      "x": 0,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "雷",
+    "file": "lei.png",
+    "source_cell": {
+      "row": 2,
+      "col": 2,
+      "x": 256,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "冰",
+    "file": "bing.png",
+    "source_cell": {
+      "row": 2,
+      "col": 3,
+      "x": 512,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "风",
+    "file": "feng.png",
+    "source_cell": {
+      "row": 2,
+      "col": 4,
+      "x": 768,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "暗",
+    "file": "an.png",
+    "source_cell": {
+      "row": 3,
+      "col": 1,
+      "x": 0,
+      "y": 512,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "光",
+    "file": "guang.png",
+    "source_cell": {
+      "row": 3,
+      "col": 2,
+      "x": 256,
+      "y": 512,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "剑",
+    "file": "jian.png",
+    "source_cell": {
+      "row": 3,
+      "col": 3,
+      "x": 512,
+      "y": 512,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "药",
+    "file": "yao.png",
+    "source_cell": {
+      "row": 3,
+      "col": 4,
+      "x": 768,
+      "y": 512,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "玄阴",
+    "file": "xuanyin.png",
+    "source_cell": {
+      "row": 4,
+      "col": 1,
+      "x": 0,
+      "y": 768,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "玄阳",
+    "file": "xuanyang.png",
+    "source_cell": {
+      "row": 4,
+      "col": 2,
+      "x": 256,
+      "y": 768,
+      "width": 256,
+      "height": 256
+    }
+  },
+  {
+    "attribute": "空",
+    "file": "kong.png",
+    "source_cell": {
+      "row": 4,
+      "col": 3,
+      "x": 512,
+      "y": 768,
+      "width": 256,
+      "height": 256
+    }
+  }
+]
