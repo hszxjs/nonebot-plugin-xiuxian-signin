@@ -5,14 +5,22 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from .domain import (
     ATTRIBUTE_COLORS,
+    CONSUMABLE_EXP_BASE,
+    FOOD_CATEGORY,
+    GRADE_RANKS,
     Root,
     SigninResult,
+    TIER_RANKS,
     UserRecord,
+    array_layer,
+    array_layer_cap_text,
     array_multiplier,
+    array_proficiency_cap,
+    array_proficiency_value,
     battle_power,
     battle_summary,
     breakthrough_required_text,
@@ -23,6 +31,7 @@ from .domain import (
     hehuan_remaining_text,
     is_breakthrough_bottleneck,
     reward_display_name,
+    tier_exp,
     spirit_stone_text,
     tianji_status_text,
     reward_signature,
@@ -31,13 +40,40 @@ from .domain import (
 )
 
 Color = tuple[int, int, int]
-BUNDLED_FONT_PATH = Path(__file__).parent / "assets" / "fonts" / "NotoSansSC-VF.ttf"
+FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+BUNDLED_FONT_PATH = FONT_DIR / "HarmonyOS_Sans_SC.ttf"
+FALLBACK_BUNDLED_FONT_PATH = FONT_DIR / "NotoSansSC-VF.ttf"
 SIGNIN_UI_SPRITE_DIR = Path(__file__).parent / "assets" / "ui_sprite" / "signin" / "output" / "sprites"
 SIGNIN_PANEL_BG = SIGNIN_UI_SPRITE_DIR / "signin_background_base.png"
 SIGNIN_PORTRAIT_FRAME = SIGNIN_UI_SPRITE_DIR / "portrait_frame_overlay.png"
 SIGNIN_EXPERIENCE_TROUGH = SIGNIN_UI_SPRITE_DIR / "experience_trough.png"
 SIGNIN_EXPERIENCE_LIQUID = SIGNIN_UI_SPRITE_DIR / "experience_trough_1.png"
-ADVENTURE_PANEL_BG = Path(__file__).parent / "assets" / "panel_backgrounds" / "adventure_background.png"
+PANEL_BACKGROUND_DIR = Path(__file__).parent / "assets" / "panel_backgrounds"
+ADVENTURE_PANEL_BG = PANEL_BACKGROUND_DIR / "adventure_background.png"
+FISHING_PANEL_BG = PANEL_BACKGROUND_DIR / "fishing_background.png"
+TEXT_PANEL_BACKGROUND_FILES = {
+    "task": "task_background.png",
+    "bag": "bag_background.png",
+    "artifact": "bag_background.png",
+    "method": "bag_background.png",
+    "array": "bag_background.png",
+    "talisman": "bag_background.png",
+    "puppet": "bag_background.png",
+    "plant": "bag_background.png",
+    "alchemy": "bag_background.png",
+    "shop": "shop_background.png",
+    "catalog": "catalog_background.png",
+    "ability": "catalog_background.png",
+    "scroll": "catalog_background.png",
+    "realm": "catalog_background.png",
+    "breakthrough": "catalog_background.png",
+    "mystic": "mystic_background.png",
+    "divination": "mystic_background.png",
+    "fishing": "fishing_background.png",
+    "adventure": "adventure_background.png",
+    "duel": "battle_background.png",
+    "power": "battle_background.png",
+}
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
 SPIRIT_ROOT_ICON_DIR = Path(__file__).parent / "assets" / "spirit_root_icons"
@@ -63,9 +99,26 @@ _ITEM_ICON_RECORD_CACHE: Optional[list[dict[str, Any]]] = None
 _SPIRIT_ROOT_ICON_CACHE: dict[str, Image.Image] = {}
 _REALM_QUALITY_ICON_CACHE: dict[str, Image.Image] = {}
 _REALM_QUALITY_ICON_MAP: Optional[dict[str, str]] = None
+LEGACY_REALM_QUALITY_ALIASES = {
+    "".join(chr(code) for code in (0x592A, 0x865A, 0x5316, 0x795E)): "星衡化神",
+}
+
+
+def display_realm_quality_name(value: str) -> str:
+    text = str(value or "")
+    replacements = {
+        "普通筑基": "普通道基",
+        "良好筑基": "良好道基",
+        "优秀筑基": "优秀道基",
+        "无瑕道基": "无瑕道基",
+        "完美道基": "无瑕道基",
+        "天道筑基": "天道道基",
+    }
+    replacements.update(LEGACY_REALM_QUALITY_ALIASES)
+    return replacements.get(text, text)
 
 TIER_COLORS = {
-    "帝兵": "#8b1e1e",
+    "仙帝兵": "#8b1e1e",
     "仙阶": "#dc2626",
     "天阶": "#f97316",
     "地阶": "#d6a21e",
@@ -76,6 +129,7 @@ TIER_COLORS = {
 }
 FONT_CANDIDATES = [
     BUNDLED_FONT_PATH,
+    FALLBACK_BUNDLED_FONT_PATH,
     Path("C:/Windows/Fonts/NotoSansSC-VF.ttf"),
     Path("C:/Windows/Fonts/msyh.ttc"),
     Path("C:/Windows/Fonts/msyhbd.ttc"),
@@ -95,6 +149,7 @@ FONT_CANDIDATES = [
 
 BOLD_FONT_CANDIDATES = [
     BUNDLED_FONT_PATH,
+    FALLBACK_BUNDLED_FONT_PATH,
     Path("C:/Windows/Fonts/NotoSansSC-VF.ttf"),
     Path("C:/Windows/Fonts/msyhbd.ttc"),
     Path("C:/Windows/Fonts/simhei.ttf"),
@@ -228,6 +283,24 @@ def make_background(width: int, height: int, accent: str) -> Image.Image:
     draw.ellipse((width - 360, height - 430, width + 220, height + 160), fill=(255, 255, 255, 56))
     return Image.alpha_composite(image, layer)
 
+
+def load_panel_background(path: Path, width: int, height: int, accent: str) -> tuple[Image.Image, bool]:
+    if path.exists():
+        try:
+            image = Image.open(path).convert("RGBA")
+            if image.size != (width, height):
+                image = ImageOps.fit(image, (width, height), method=Image.Resampling.LANCZOS)
+            return image, True
+        except OSError:
+            pass
+    return make_xiuxian_background(width, height, accent), False
+
+
+def text_panel_background_path(icon: str) -> Optional[Path]:
+    filename = TEXT_PANEL_BACKGROUND_FILES.get(str(icon or ""))
+    if not filename:
+        return None
+    return PANEL_BACKGROUND_DIR / filename
 
 def make_xiuxian_background(width: int, height: int, accent: str) -> Image.Image:
     accent_rgb = hex_to_rgb(accent)
@@ -363,13 +436,10 @@ def equipped_title(reward: Optional[dict[str, Any]], empty_text: str) -> str:
 def array_proficiency_text(record: UserRecord) -> str:
     if not record.equipped_array:
         return "未布置阵盘"
-    if not record.equipped_method:
-        return "需先参悟功法"
-    key = reward_signature(record.equipped_method)
-    proficiency = int((record.array_proficiency or {}).get(key, 0))
-    return f"熟练度 {proficiency}/900 · {array_multiplier(record):.1f}x"
-
-
+    layer = array_layer(record, record.equipped_array)
+    proficiency = array_proficiency_value(record, record.equipped_array)
+    cap = array_proficiency_cap(record.equipped_array, layer)
+    return f"第{layer}/{array_layer_cap_text(record.equipped_array)}层 · 熟练度 {proficiency}/{cap} · {array_multiplier(record):.1f}x"
 
 
 def root_brief_summary(record: UserRecord) -> str:
@@ -534,10 +604,17 @@ def realm_quality_icon_map() -> dict[str, str]:
         "普通道基": "普通筑基",
         "良好道基": "良好筑基",
         "优秀道基": "优秀筑基",
+        "完美道基": "无瑕道基",
         "天道道基": "天道筑基",
         "道基未定": "未定品相",
         "天象元婴": "天命元婴",
-        "法相化神": "太虚化神",
+        "法相化神": "星衡化神",
+        "化神未定": "星衡化神",
+        "炼虚未定": "洞虚道体",
+        "合体未定": "天人合一",
+        "大乘未定": "无上大乘",
+        "渡劫未定": "九重雷劫",
+        "真仙未定": "无垢真仙",
     }.items():
         if target in mapping:
             mapping.setdefault(alias, mapping[target])
@@ -546,7 +623,7 @@ def realm_quality_icon_map() -> dict[str, str]:
 
 
 def realm_quality_icon_image(name: str) -> Optional[Image.Image]:
-    key = str(name or "").strip().replace(" ", "")
+    key = display_realm_quality_name(str(name or "").strip()).replace(" ", "")
     if not key:
         return None
     resource_aliases = {
@@ -591,12 +668,12 @@ def sample_icon_item(name: str = "", category: str = "", offset: int = 0) -> Opt
 
 CATEGORY_ICON_BINDINGS: dict[str, tuple[str, str]] = {
     "\u7075\u5668": ("\u5e9a\u91d1\u9752\u7af9\u8702\u4e91\u5251", "\u7075\u5668"),
-    "\u529f\u6cd5": ("\u9752\u5e1d\u957f\u751f\u7ecf", "\u529f\u6cd5"),
-    "\u9635\u76d8": ("\u5468\u5929\u661f\u6597\u9635\u76d8", "\u9635\u76d8"),
-    "\u9635\u6cd5": ("\u5468\u5929\u661f\u6597\u9635\u76d8", "\u9635\u76d8"),
+    "\u529f\u6cd5": ("青衡长生经", "\u529f\u6cd5"),
+    "\u9635\u76d8": ("星衡列宿阵盘", "\u9635\u76d8"),
+    "\u9635\u6cd5": ("星衡列宿阵盘", "\u9635\u76d8"),
     "\u7b26\u7b93": ("\u4e7e\u5764\u632a\u79fb\u7b26", "\u7b26\u7b93"),
     "\u5080\u5121": ("\u9752\u7389\u673a\u5173\u4eba", "\u5080\u5121"),
-    "\u795e\u901a": ("\u516b\u7981", "\u7279\u6b8a\u80fd\u529b"),
+    "\u795e\u901a": ("初阈", "\u795e\u901a"),
     "\u4ea4\u6613": ("\u4e0a\u54c1\u7075\u77f3\u5323", "\u7075\u77f3"),
     "\u4e07\u5b9d\u697c": ("\u4e0a\u54c1\u7075\u77f3\u5323", "\u7075\u77f3"),
     "\u4e39\u836f": ("\u7b51\u57fa\u4e39", "\u4e39\u836f"),
@@ -606,7 +683,7 @@ CATEGORY_ICON_BINDINGS: dict[str, tuple[str, str]] = {
     "\u7075\u6750": ("\u5e9a\u91d1", "\u7075\u6750"),
     "\u7075\u77f3": ("\u4e0a\u54c1\u7075\u77f3\u5323", "\u7075\u77f3"),
     "\u79d8\u5883": ("\u865a\u5929\u9f0e", "\u5947\u7269"),
-    "\u56fe\u9274": ("\u9752\u5e1d\u957f\u751f\u7ecf", "\u529f\u6cd5"),
+    "\u56fe\u9274": ("青衡长生经", "\u529f\u6cd5"),
     "\u6597\u6cd5": ("\u4e7e\u5764\u632a\u79fb\u7b26", "\u7b26\u7b93"),
 }
 
@@ -986,7 +1063,7 @@ def reward_title(reward: dict[str, Any]) -> str:
     return f"[{reward['tier']}{reward['grade']}{reward['category']} {reward['name']}]"
 
 
-def render_fishing_card(
+def _render_fishing_card_legacy(
     record: UserRecord,
     rewards: list[dict[str, Any]],
     nickname: str,
@@ -1007,7 +1084,7 @@ def render_fishing_card(
     avatar = make_avatar(avatar_bytes, 92, accent)
     image.alpha_composite(avatar, (92, 104))
     draw.ellipse((86, 98, 190, 202), outline=accent, width=4)
-    draw.text((220, 104), "诸天万界垂钓", font=title_font, fill="#20283a")
+    draw.text((220, 104), "灵河垂钓", font=title_font, fill="#20283a")
     draw.text((222, 160), nickname or f"QQ {record.user_id}", font=subtitle_font, fill="#596174")
     draw.text((222, 196), f"正在为宿主进行 {len(rewards)} 次垂钓", font=small_font, fill="#7a5d2a")
 
@@ -1020,7 +1097,7 @@ def render_fishing_card(
         title = reward_title(reward)
         item_font = fit_font(draw, title, width - 310, 27, bold=True, min_size=19)
         draw.text((186, y + 11), title, font=item_font, fill=tier_color)
-        desc = str(reward["description"])
+        desc = str(reward.get("growth_deduction_text") or reward["description"])
         required_attribute = reward.get("required_attribute")
         if required_attribute:
             compatible = "契合" if reward.get("compatible") else "暂不契合"
@@ -1031,6 +1108,386 @@ def render_fishing_card(
 
     draw.text((92, height - 100), f"剩余垂钓次数 {record.fishing_chances}", font=small_font, fill="#596174")
     return png_bytes(image)
+
+
+def render_fishing_card(
+    record: UserRecord,
+    rewards: list[dict[str, Any]],
+    nickname: str,
+    avatar_bytes: Optional[bytes],
+    width: int = 900,
+) -> bytes:
+    accent = record.root.color if record.root else "#4f8fd8"
+    if not FISHING_PANEL_BG.exists():
+        return _render_fishing_card_legacy(record, rewards, nickname, avatar_bytes, width)
+
+    try:
+        image = Image.open(FISHING_PANEL_BG).convert("RGBA")
+    except OSError:
+        return _render_fishing_card_legacy(record, rewards, nickname, avatar_bytes, width)
+
+    draw = ImageDraw.Draw(image)
+    base = 1254
+    sx = image.width / base
+    sy = image.height / base
+
+    def sbox(box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+        x1, y1, x2, y2 = box
+        return (round(x1 * sx), round(y1 * sy), round(x2 * sx), round(y2 * sy))
+
+    def sp(value: int) -> int:
+        return max(1, round(value * min(sx, sy)))
+
+    dark = "#172033"
+    ink = "#263547"
+    muted = "#5b6170"
+    gold = "#8a571f"
+
+    title_font = load_font(sp(43), bold=True)
+    subtitle_font = load_font(sp(21), bold=True)
+    value_font = load_font(sp(21), bold=True)
+    small_font = load_font(sp(16), bold=True)
+
+    def panel_text(xy: tuple[int, int], text: str, font: ImageFont.ImageFont, fill: Any = ink, weight: int = 2) -> None:
+        draw_weighted_text(draw, (sp(xy[0]), sp(xy[1])), text, font, fill, weight=weight)
+
+    def draw_centered_text(
+        box: tuple[int, int, int, int],
+        text: str,
+        font: ImageFont.ImageFont,
+        fill: Any,
+        weight: int = 2,
+    ) -> None:
+        x1, y1, x2, y2 = sbox(box)
+        text = truncate_text(draw, str(text or ""), font, max(10, x2 - x1 - sp(10)))
+        tw, th = text_size(draw, text, font)
+        draw_weighted_text(draw, (x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2), text, font, fill, weight=weight)
+
+    def draw_centered_wrapped_text(
+        box: tuple[int, int, int, int],
+        text: str,
+        start_size: int,
+        fill: Any,
+        max_lines: int = 2,
+        weight: int = 2,
+    ) -> None:
+        x1, y1, x2, y2 = sbox(box)
+        max_width = max(10, x2 - x1 - sp(10))
+        max_height = max(10, y2 - y1)
+        font, lines, line_gap = fit_clamped_lines(
+            draw,
+            str(text or ""),
+            max_width,
+            max_height,
+            sp(start_size),
+            bold=True,
+            min_size=sp(8),
+            max_lines=max_lines,
+            line_gap=sp(1),
+        )
+        line_heights = [text_size(draw, line, font)[1] for line in lines]
+        total_h = sum(line_heights) + line_gap * max(0, len(lines) - 1)
+        y = y1 + max(0, (max_height - total_h) // 2)
+        for line, line_h in zip(lines, line_heights):
+            tw, _ = text_size(draw, line, font)
+            draw_weighted_text(draw, (x1 + max(0, (max_width - tw) // 2), y), line, font, fill, weight=weight)
+            y += line_h + line_gap
+
+    def draw_centered_text_lines(
+        box: tuple[int, int, int, int],
+        lines: list[str],
+        start_size: int,
+        fill: Any,
+        weight: int = 2,
+        line_gap: int = 1,
+    ) -> None:
+        x1, y1, x2, y2 = sbox(box)
+        max_width = max(10, x2 - x1 - sp(10))
+        max_height = max(10, y2 - y1)
+        clean_lines = [str(line or "").strip() for line in lines if str(line or "").strip()] or [""]
+        best_font = load_font(sp(8), bold=True)
+        best_lines = [truncate_text(draw, line, best_font, max_width) for line in clean_lines]
+        best_gap = sp(line_gap)
+        for font_size in range(sp(start_size), sp(8) - 1, -1):
+            font = load_font(font_size, bold=True)
+            rendered = [truncate_text(draw, line, font, max_width) for line in clean_lines]
+            line_heights = [text_size(draw, line, font)[1] for line in rendered]
+            total_h = sum(line_heights) + best_gap * max(0, len(rendered) - 1)
+            if total_h <= max_height:
+                best_font = font
+                best_lines = rendered
+                break
+        line_heights = [text_size(draw, line, best_font)[1] for line in best_lines]
+        total_h = sum(line_heights) + best_gap * max(0, len(best_lines) - 1)
+        y = y1 + max(0, (max_height - total_h) // 2)
+        for line, line_h in zip(best_lines, line_heights):
+            tw, _ = text_size(draw, line, best_font)
+            draw_weighted_text(draw, (x1 + max(0, (max_width - tw) // 2), y), line, best_font, fill, weight=weight)
+            y += line_h + best_gap
+
+    def paste_player_avatar(box: tuple[int, int, int, int]) -> None:
+        x1, y1, x2, y2 = sbox(box)
+        size = max(1, min(x2 - x1, y2 - y1))
+        avatar = make_avatar(avatar_bytes, size, accent)
+        px = x1 + (x2 - x1 - size) // 2
+        py = y1 + (y2 - y1 - size) // 2
+        image.alpha_composite(avatar, (px, py))
+
+    def draw_slot_value(
+        text: str,
+        box: tuple[int, int, int, int],
+        color: str,
+        start_size: int,
+        max_lines: int = 2,
+        weight: int = 3,
+    ) -> None:
+        x1, y1, x2, y2 = sbox(box)
+        max_width = max(10, x2 - x1)
+        max_height = max(10, y2 - y1)
+        font, lines, line_gap = fit_clamped_lines(
+            draw,
+            str(text or ""),
+            max_width,
+            max_height,
+            sp(start_size),
+            bold=True,
+            min_size=sp(8),
+            max_lines=max_lines,
+            line_gap=sp(1),
+        )
+        line_heights = [text_size(draw, line, font)[1] for line in lines]
+        total_h = sum(line_heights) + line_gap * max(0, len(lines) - 1)
+        y = y1 + max(0, (max_height - total_h) // 2)
+        for line, line_h in zip(lines, line_heights):
+            tw, _ = text_size(draw, line, font)
+            draw_weighted_text(draw, (x1 + max(0, (max_width - tw) // 2), y), line, font, color, weight=weight)
+            y += line_h + line_gap
+
+    def fallback_icon_for(category: str) -> str:
+        return {
+            "仙缘": "realm",
+            "灵器": "artifact",
+            "功法": "method",
+            "丹药": "pill",
+            "阵盘": "array",
+            "灵材": "stone",
+            "符箓": "talisman",
+            "傀儡": "puppet",
+            "灵植": "plant",
+            "灵石": "stone",
+            "杂物": "misc",
+            "奇物": "curio",
+            "灵食": "food",
+            "神通": "ability",
+        }.get(str(category or ""), "scroll")
+
+    def paste_generated_icon(
+        box: tuple[int, int, int, int],
+        item: Any = None,
+        name: str = "",
+        category: str = "",
+        fallback_icon: str = "scroll",
+    ) -> bool:
+        x1, y1, x2, y2 = sbox(box)
+        icon_path = item_icon_path_for(item, name=name, category=category)
+        if not icon_path:
+            draw_panel_icon(draw, (x1, y1, x2, y2), fallback_icon, accent)
+            return False
+        try:
+            icon_img = Image.open(icon_path).convert("RGBA")
+        except OSError:
+            draw_panel_icon(draw, (x1, y1, x2, y2), fallback_icon, accent)
+            return False
+        bbox = icon_img.getbbox()
+        if bbox:
+            icon_img = icon_img.crop(bbox)
+        icon_img.thumbnail((max(1, x2 - x1), max(1, y2 - y1)), Image.Resampling.LANCZOS)
+        px = x1 + (x2 - x1 - icon_img.width) // 2
+        py = y1 + (y2 - y1 - icon_img.height) // 2
+        image.alpha_composite(icon_img, (px, py))
+        return True
+
+    def reward_category_text(reward: dict[str, Any]) -> str:
+        return str(reward.get("category") or "")
+
+    def reward_name_text(reward: dict[str, Any]) -> str:
+        return str(reward.get("name") or reward.get("item_name") or reward.get("title") or "无名灵物")
+
+    def compact_reward_name(reward: dict[str, Any]) -> str:
+        name = reward_name_text(reward)
+        grade = str(reward.get("grade") or "")
+        if grade and not name.startswith(grade):
+            return f"{grade}{name}"
+        return name
+
+    def tier_color(reward: dict[str, Any]) -> str:
+        return TIER_COLORS.get(str(reward.get("tier") or ""), accent)
+
+    def food_exp_value(reward: dict[str, Any]) -> int:
+        return max(1, tier_exp(CONSUMABLE_EXP_BASE, str(reward.get("tier")), str(reward.get("grade"))) // 2)
+
+    def reward_quality_key(reward: dict[str, Any]) -> tuple[int, int]:
+        tier_rank = TIER_RANKS.get(str(reward.get("tier") or ""), -1)
+        grade_rank = GRADE_RANKS.get(str(reward.get("grade") or ""), -1)
+        return tier_rank, grade_rank
+
+    def random_command_icon_item(label: str, command: str) -> Optional[dict[str, Any]]:
+        records = [
+            record
+            for record in item_icon_records()
+            if str(record.get("item_name") or "").strip()
+            and (ITEM_ICON_ROOT / str(record.get("icon") or "")).exists()
+        ]
+        if not records:
+            return None
+        seed = sum((index + 1) * ord(char) for index, char in enumerate(f"{label}:{command}"))
+        record = records[seed % len(records)]
+        return {
+            "name": record.get("item_name"),
+            "category": record.get("category"),
+            "tier": record.get("tier"),
+            "grade": record.get("grade"),
+        }
+
+    reward_count = len(rewards)
+    top_count = sum(1 for reward in rewards if str(reward.get("tier")) == "天阶" and str(reward.get("grade")) == "极品")
+    food_exp = sum(food_exp_value(reward) for reward in rewards if reward_category_text(reward) == FOOD_CATEGORY)
+    exp_gain = sum(int(reward.get("exp_gain") or 0) for reward in rewards)
+    high_tier_count = sum(1 for reward in rewards if str(reward.get("tier")) == "天阶")
+    backpack_count = len(getattr(record, "rewards", None) or [])
+    nickname_text = nickname or f"QQ {record.user_id}"
+
+    draw_centered_text((410, 31, 844, 82), "灵河垂钓", title_font, dark, weight=4)
+    subtitle_tail = f"本次上钩 {reward_count} 件 · 机缘随潮而至"
+    subtitle_box = (410, 82, 844, 126)
+    if len(nickname_text.strip()) > 5:
+        draw_centered_text_lines(subtitle_box, [nickname_text, subtitle_tail], 17, gold, weight=3, line_gap=0)
+    else:
+        draw_centered_wrapped_text(subtitle_box, f"{nickname_text} · {subtitle_tail}", 21, gold, max_lines=2, weight=3)
+    paste_player_avatar((71, 149, 241, 319))
+
+    left_stats = [
+        ("用户名", nickname_text),
+        ("本次上钩", f"{reward_count}件"),
+        ("天阶灵物", f"{high_tier_count}件"),
+        ("垂钓次数", f"{record.fishing_chances}次"),
+        ("鱼篓", f"{backpack_count}件"),
+    ]
+    left_boxes = [
+        (86, 351, 230, 394),
+        (116, 423, 252, 488),
+        (116, 512, 257, 575),
+        (116, 606, 257, 671),
+        (116, 697, 257, 758),
+    ]
+    for index, ((label, value), box) in enumerate(zip(left_stats, left_boxes)):
+        x1, y1, x2, y2 = box
+        if index == 0:
+            draw_slot_value(value, (x1 + 5, y1 + 5, x2 - 5, y2 - 5), accent, 15, max_lines=1, weight=3)
+            continue
+        draw_slot_value(label, (x1 + 5, y1 + 3, x2 - 5, y1 + 22), muted, 12, max_lines=1, weight=2)
+        draw_slot_value(value, (x1 + 5, y1 + 22, x2 - 5, y2 - 3), accent, 17, max_lines=1, weight=3)
+
+    center_status = "灵光入箧" if reward_count else "静候灵机"
+    panel_text((525, 705), "浮漂微动", value_font, "#f8fafc", weight=4)
+    panel_text((660, 705), center_status, value_font, "#f8fafc", weight=4)
+
+    right_slots = [
+        (1070, 226, 1191, 348),
+        (1070, 358, 1191, 481),
+        (1070, 488, 1191, 612),
+        (1070, 620, 1191, 744),
+        (1070, 752, 1191, 875),
+    ]
+    def draw_right_reward_lines(
+        title: str,
+        meta: str,
+        box: tuple[int, int, int, int],
+        title_color: str,
+        y_offset: int = 0,
+    ) -> None:
+        x1, y1, x2, y2 = sbox((box[0] + 8, box[1] + 74 + y_offset, box[2] - 8, box[3] - 7 + y_offset))
+        max_width = max(10, x2 - x1)
+        title_font_fit = fit_font(draw, title, max_width, sp(11), bold=True, min_size=sp(8))
+        meta_font_fit = fit_font(draw, meta, max_width, sp(10), bold=True, min_size=sp(7))
+        title_text = truncate_text(draw, title, title_font_fit, max_width)
+        meta_text = truncate_text(draw, meta, meta_font_fit, max_width)
+        title_h = text_size(draw, title_text, title_font_fit)[1]
+        meta_h = text_size(draw, meta_text, meta_font_fit)[1]
+        gap = sp(5)
+        total_h = title_h + gap + meta_h
+        y = min(y1, max(y1, y2 - total_h))
+        title_w, _ = text_size(draw, title_text, title_font_fit)
+        meta_w, _ = text_size(draw, meta_text, meta_font_fit)
+        draw_weighted_text(draw, (x1 + max(0, (max_width - title_w) // 2), y), title_text, title_font_fit, title_color, weight=3)
+        draw_weighted_text(draw, (x1 + max(0, (max_width - meta_w) // 2), y + title_h + gap), meta_text, meta_font_fit, muted, weight=2)
+
+    top_rewards = [
+        reward
+        for _, reward in sorted(
+            enumerate(rewards),
+            key=lambda item: (*reward_quality_key(item[1]), -item[0]),
+            reverse=True,
+        )[: len(right_slots)]
+    ]
+    for index, box in enumerate(right_slots):
+        reward = top_rewards[index] if index < len(top_rewards) else None
+        content_y_offset = -10 if index == len(right_slots) - 1 else 0
+        text_y_offset = content_y_offset + (5 if index in {0, 1, 2, len(right_slots) - 1} else 0)
+        if reward is None:
+            draw_panel_icon(draw, sbox((box[0] + 28, box[1] + 18 + content_y_offset, box[2] - 28, box[1] + 78 + content_y_offset)), "fishing", accent)
+            draw_right_reward_lines("待上钩", "灵河·空", box, muted, text_y_offset)
+            continue
+        category = reward_category_text(reward)
+        paste_generated_icon((box[0] + 20, box[1] + 14 + content_y_offset, box[2] - 20, box[1] + 78 + content_y_offset), item=reward, name=reward_name_text(reward), category=category, fallback_icon=fallback_icon_for(category))
+        meta = f"{reward.get('tier', '')}·{category}"
+        draw_right_reward_lines(compact_reward_name(reward), meta, box, tier_color(reward), text_y_offset)
+
+    summary = f"获得 {reward_count} 件灵物，其中天阶极品 {top_count} 件"
+    if exp_gain:
+        summary += f"；仙缘已炼化 +{exp_gain} 修为"
+    if food_exp:
+        summary += f"；灵食入篓，可使用后化为 {food_exp} 修为"
+    summary += "。"
+    draw_slot_value("垂钓结算", (170, 898, 370, 940), dark, 28, max_lines=1, weight=4)
+    draw_slot_value(summary, (250, 938, 1040, 976), muted, 17, max_lines=1, weight=3)
+
+    summary_slots = [
+        (190 + col * 178, 982 + row * 42, 358 + col * 178, 1022 + row * 42)
+        for row in range(2)
+        for col in range(5)
+    ]
+    for index, box in enumerate(summary_slots):
+        if index >= len(rewards):
+            break
+        reward = rewards[index]
+        category = reward_category_text(reward)
+        paste_generated_icon((box[0] + 3, box[1] + 5, box[0] + 35, box[1] + 37), item=reward, name=reward_name_text(reward), category=category, fallback_icon=fallback_icon_for(category))
+        draw_slot_value(compact_reward_name(reward), (box[0] + 39, box[1] + 1, box[2] - 3, box[1] + 20), tier_color(reward), 10, max_lines=1, weight=3)
+        draw_slot_value(f"{reward.get('tier', '')}·{category}", (box[0] + 39, box[1] + 20, box[2] - 3, box[3] - 1), gold, 8, max_lines=1, weight=2)
+
+    command_slots = [
+        ((96, 1118, 220, 1199), "垂钓一次", "垂钓", "fishing", "fishing"),
+        ((329, 1118, 453, 1199), "十连垂钓", "垂钓 十连", "fishing", "fishing"),
+        ((568, 1118, 692, 1199), "查看背包", "背包", "bag", "背包"),
+        ((800, 1118, 924, 1199), "使用灵食", "使用灵食 1", "food", "灵食"),
+        ((1036, 1118, 1165, 1199), "继续修炼", "签到", "realm", "修为"),
+    ]
+    for box, label, command, fallback_icon, category_label in command_slots:
+        if category_label == "灵食":
+            icon_item = category_icon_item(category_label)
+            icon_name = category_label
+            icon_category = category_label
+        else:
+            icon_item = random_command_icon_item(label, command)
+            icon_name = str((icon_item or {}).get("name") or label)
+            icon_category = str((icon_item or {}).get("category") or "")
+        paste_generated_icon((box[0] + 11, box[1] + 12, box[0] + 50, box[1] + 51), item=icon_item, name=icon_name, category=icon_category, fallback_icon=fallback_icon)
+        draw_slot_value(label, (box[0] + 52, box[1] + 12, box[2] - 8, box[1] + 40), dark, 12, max_lines=1, weight=3)
+        draw_slot_value(command, (box[0] + 9, box[1] + 44, box[2] - 9, box[3] - 8), accent, 10, max_lines=1, weight=2)
+
+    return png_bytes(image)
+
 
 PANEL_ICON_ALIASES = {
     "\u7b7e\u5230": "signin",
@@ -1098,11 +1555,10 @@ PANEL_ICON_ALIASES = {
     "\u574a\u5e02": "shop",
     "\u70bc\u4e39": "alchemy",
     "\u4e39\u65b9": "alchemy",
-    "\u7279\u6b8a\u80fd\u529b": "ability",
     "\u795e\u901a": "ability",
-    "\u4e5d\u79d8": "ability",
-    "\u516b\u7981": "ability",
-    "\u795e\u7981": "ability",
+    "星律": "ability",
+    "初阈": "ability",
+    "归极": "ability",
     "\u4f20\u627f": "ability",
     "\u5929\u673a\u5360\u535c": "divination",
     "\u5360\u535c": "divination",
@@ -1571,7 +2027,7 @@ def render_battle_card(
         if cd_items:
             resource += "\uff0cCD " + "\u3001".join(cd_items)
         for label, value, color, weight in [
-            ("\u7279\u6b8a", abilities, "#7c2d12", 2),
+            ("神通", abilities, "#7c2d12", 2),
             ("\u6218\u6280", techs, accent, 2),
             ("\u8d44\u6e90", resource, "#475467", 1),
         ]:
@@ -1653,8 +2109,6 @@ def render_adventure_card(
     ink = "#1f2937"
     muted = "#2f4158"
     gold = "#8a571f"
-    jade = "#176b56"
-    danger = "#8f3218"
     veil = (255, 250, 229, 102)
     veil_soft = (255, 255, 245, 72)
     veil_deep = (52, 36, 70, 78)
@@ -1667,8 +2121,6 @@ def render_adventure_card(
     small_font = load_font(sp(20), bold=True)
     tiny_font = load_font(sp(17), bold=True)
     number_font = load_font(sp(30), bold=True)
-    text_stroke = (255, 248, 226, 230)
-    strong_stroke = (255, 250, 232, 245)
 
     layout = {
         "title": (242, 64, 1015, 152),
@@ -1698,8 +2150,8 @@ def render_adventure_card(
     def draw_region(box: tuple[int, int, int, int], fill: tuple[int, int, int, int] = veil, radius: int = 18) -> tuple[int, int, int, int]:
         return sbox(box)
 
-    def panel_text(xy: tuple[int, int], text: str, font: ImageFont.ImageFont, fill: Any = ink, weight: int = 2, stroke: int = 2) -> None:
-        draw_weighted_text(draw, xy, text, font, fill, weight=weight, stroke_width=sp(stroke), stroke_fill=text_stroke)
+    def panel_text(xy: tuple[int, int], text: str, font: ImageFont.ImageFont, fill: Any = ink, weight: int = 2) -> None:
+        draw_weighted_text(draw, xy, text, font, fill, weight=weight)
 
     def panel_clamped(
         text: str,
@@ -1710,15 +2162,14 @@ def render_adventure_card(
         max_lines: int = 1,
         line_gap: int = 6,
         weight: int = 2,
-        stroke: int = 2,
     ) -> int:
-        return draw_clamped_text(draw, text, xy, font, fill, max_width, max_lines=max_lines, line_gap=line_gap, weight=weight, stroke_width=sp(stroke), stroke_fill=text_stroke)
+        return draw_clamped_text(draw, text, xy, font, fill, max_width, max_lines=max_lines, line_gap=line_gap, weight=weight)
 
     def centered_text(box: tuple[int, int, int, int], text: str, font: ImageFont.ImageFont, fill: Any, y_offset: int = 0, weight: int = 2) -> None:
         x1, y1, x2, y2 = sbox(box)
         text = truncate_text(draw, str(text or ""), font, max(10, x2 - x1 - sp(12)))
         tw, th = text_size(draw, text, font)
-        draw_weighted_text(draw, (x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2 + sp(y_offset)), text, font, fill, weight=weight, stroke_width=sp(2), stroke_fill=text_stroke)
+        draw_weighted_text(draw, (x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2 + sp(y_offset)), text, font, fill, weight=weight)
 
     def slot_text(
         box: tuple[int, int, int, int],
@@ -1804,8 +2255,8 @@ def render_adventure_card(
                 font,
                 color,
                 weight=weight,
-                stroke_width=sp(2),
-                stroke_fill=text_stroke,
+                stroke_width=0,
+                stroke_fill=None,
             )
             y += line_h + line_gap
 
@@ -1866,23 +2317,58 @@ def render_adventure_card(
     def icon_strip(box: tuple[int, int, int, int], title: str, entries: list[tuple[str, Any, str, str]]) -> None:
         x1, y1, x2, y2 = draw_region(box, fill=(255, 250, 229, 72), radius=16)
         panel_text((x1 + sp(14), y1 + sp(18)), title, small_font, muted, weight=3)
-        start_x = x1 + sp(102)
-        gap = sp(83)
-        base_icon_size = sp(50)
-        for index, (label, item, fallback_icon, category) in enumerate(entries[:7]):
-            icon_size = sp(54) if category == "realm_quality" else base_icon_size
-            icon_top = sp(5) if category == "realm_quality" else sp(8)
-            cx = start_x + gap * index
-            slot = (cx, y1 + icon_top, cx + icon_size, y1 + icon_top + icon_size)
-            if item is None and category == "realm_quality":
+        visible_entries = entries[:14]
+        total = len(visible_entries)
+        rows = 2 if total > 1 else 1
+        cols = max(1, min(7, (total + rows - 1) // rows))
+        content_x1 = x1 + sp(92)
+        content_x2 = x2 - sp(12)
+        content_y1 = y1 + sp(5)
+        content_y2 = y2 - sp(6)
+        max_cell_w = sp(86 if title == "神通" else 96)
+        cell_w = min(max(1, content_x2 - content_x1) / cols, max_cell_w)
+        cell_h = max(1, content_y2 - content_y1) / rows
+        is_ability_strip = title == "神通"
+
+        for index, (label, item, fallback_icon, category) in enumerate(visible_entries):
+            row = index // cols
+            col = index % cols
+            cx1 = int(content_x1 + cell_w * col)
+            cy1 = int(content_y1 + cell_h * row)
+            cx2 = int(content_x1 + cell_w * (col + 1)) - sp(2)
+            cy2 = int(content_y1 + cell_h * (row + 1)) - sp(2)
+            draw.rounded_rectangle((cx1, cy1, cx2, cy2), radius=sp(4), fill=(255, 255, 245, 32))
+
+            is_quality_cell = category == "realm_quality"
+            icon_size = sp(27 if is_quality_cell else 25 if is_ability_strip else 31)
+            icon_x = cx1 + sp(3)
+            icon_y = cy1 + max(0, (cy2 - cy1 - icon_size) // 2)
+            slot = (icon_x, icon_y, icon_x + icon_size, icon_y + icon_size)
+            if item is None and is_quality_cell:
                 paste_realm_quality_icon(label, slot, fallback_icon)
             else:
                 paste_generated_icon(slot, item=item, name=label, category=category, fallback_icon=fallback_icon)
-            label_font = fit_font(draw, label, icon_size + sp(12), sp(13), bold=True, min_size=sp(10))
-            label_text = truncate_text(draw, label, label_font, icon_size + sp(12))
-            lw, _ = text_size(draw, label_text, label_font)
-            panel_text((cx + (icon_size - lw) // 2, y2 - sp(22)), label_text, label_font, dark, weight=3, stroke=1)
 
+            label_x1 = icon_x + icon_size + sp(3)
+            label_w = max(sp(20), cx2 - label_x1 - sp(2))
+            label_h = max(sp(16), cy2 - cy1 - sp(3))
+            label_font, label_lines, label_gap = fit_clamped_lines(
+                draw,
+                label,
+                label_w,
+                label_h,
+                sp(9),
+                bold=True,
+                min_size=sp(6),
+                max_lines=2,
+                line_gap=sp(0),
+            )
+            line_heights = [text_size(draw, line, label_font)[1] for line in label_lines]
+            total_h = sum(line_heights) + label_gap * max(0, len(label_lines) - 1)
+            ty = cy1 + max(0, (cy2 - cy1 - total_h) // 2)
+            for line, line_h in zip(label_lines, line_heights):
+                panel_text((label_x1, ty), line, label_font, dark, weight=3)
+                ty += line_h + label_gap
     def paste_realm_quality_icon(name: str, box: tuple[int, int, int, int], fallback_icon: str = "realm") -> bool:
         x1, y1, x2, y2 = box
         icon_img = realm_quality_icon_image(name)
@@ -1910,19 +2396,22 @@ def render_adventure_card(
             paste_realm_quality_icon(label, (lx, y1 + sp(7), lx + icon_size, y1 + sp(65)), icon)
             text_x = lx + sp(68)
             text_w = max(20, col_w - sp(74))
-            panel_text((text_x, y1 + sp(9)), label, tiny_font, muted, weight=3, stroke=1)
+            panel_text((text_x, y1 + sp(9)), label, tiny_font, muted, weight=3)
             value_font_fit = fit_font(draw, value, text_w, sp(18), bold=True, min_size=sp(11))
-            panel_clamped(value, (text_x, y1 + sp(34)), value_font_fit, dark, text_w, max_lines=1, line_gap=0, weight=3, stroke=1)
+            panel_clamped(value, (text_x, y1 + sp(34)), value_font_fit, dark, text_w, max_lines=1, line_gap=0, weight=3)
+
+    def quality_label_for_realm(realm_index: int) -> str:
+        realm_name = REALMS[realm_index] if realm_index < len(REALMS) else f"第{realm_index}境"
+        current_index = int(getattr(record, "realm_index", 0) or 0)
+        if realm_index > current_index:
+            return f"{realm_name}·空"
+        marks = dict(getattr(record, "realm_marks", None) or {})
+        mark = marks.get(str(realm_index))
+        if not mark and realm_index == 2:
+            mark = getattr(record, "foundation_type", None)
+        return compact_realm_quality(mark or "未定品相")
     def compact_realm_quality(value: str) -> str:
-        text = str(value or "")
-        replacements = {
-            "\u666e\u901a\u7b51\u57fa": "\u666e\u901a\u9053\u57fa",
-            "\u826f\u597d\u7b51\u57fa": "\u826f\u597d\u9053\u57fa",
-            "\u4f18\u79c0\u7b51\u57fa": "\u4f18\u79c0\u9053\u57fa",
-            "\u5b8c\u7f8e\u9053\u57fa": "\u5b8c\u7f8e\u9053\u57fa",
-            "\u5929\u9053\u7b51\u57fa": "\u5929\u9053\u9053\u57fa",
-        }
-        return replacements.get(text, text)
+        return display_realm_quality_name(value)
 
     def root_badge(box: tuple[int, int, int, int]) -> None:
         x1, y1, x2, y2 = sbox(box)
@@ -1978,8 +2467,8 @@ def render_adventure_card(
                 glyph_font,
                 attr_color,
                 weight=4,
-                stroke_width=sp(2),
-                stroke_fill=text_stroke,
+                stroke_width=0,
+                stroke_fill=None,
             )
         label_font = fit_font(draw, root_label, max(20, x2 - x1 - sp(4)), sp(13), bold=True, min_size=sp(8))
         label_text = truncate_text(draw, root_label, label_font, max(20, x2 - x1 - sp(4)))
@@ -1991,8 +2480,8 @@ def render_adventure_card(
             label_font,
             tier_color,
             weight=3,
-            stroke_width=sp(1),
-            stroke_fill=text_stroke,
+            stroke_width=0,
+            stroke_fill=None,
         )
 
 
@@ -2028,13 +2517,13 @@ def render_adventure_card(
     nickname_text = nickname or f"QQ {record.user_id}"
 
     draw_region(layout["title"], fill=(232, 245, 250, 78), radius=14)
-    draw_weighted_text(draw, (sp(274), sp(76)), "\u5386\u7ec3\u9762\u677f", title_font, dark, weight=4, stroke_width=sp(2), stroke_fill=strong_stroke)
-    top_line = f"{nickname_text} \u00b7 {summary['realm']} \u00b7 {summary['realm_quality']}"
+    draw_weighted_text(draw, (sp(274), sp(76)), "\u5386\u7ec3\u9762\u677f", title_font, dark, weight=4)
+    top_line = f"{nickname_text} \u00b7 {summary['realm']} \u00b7 {display_realm_quality_name(summary['realm_quality'])}"
     panel_clamped(top_line, (sp(274), sp(121)), subtitle_font, muted, max(20, sp(500)), max_lines=1, line_gap=0, weight=3)
     power_text = f"\u6218\u529b {summary['power']}"
     mana_text = f"{mana_label} {summary['mana']}"
     power_font = fit_font(draw, power_text, sp(220), sp(30), bold=True, min_size=sp(20))
-    draw_weighted_text(draw, (sp(760), sp(82)), power_text, power_font, accent, weight=4, stroke_width=sp(2), stroke_fill=strong_stroke)
+    draw_weighted_text(draw, (sp(760), sp(82)), power_text, power_font, accent, weight=4)
     panel_text((sp(760), sp(120)), mana_text, small_font, gold, weight=3)
 
     item_slot(layout["left_square"], "主手", main_weapon, "artifact", accent, item=main_item)
@@ -2074,37 +2563,22 @@ def render_adventure_card(
 
 
     ability_entries: list[tuple[str, Any, str, str]] = []
-    for ability in special_names[:7]:
-        ability_entries.append((str(ability), {"name": str(ability), "category": "\u7279\u6b8a\u80fd\u529b"}, "power", "\u7279\u6b8a\u80fd\u529b"))
+    for ability in special_names[:14]:
+        ability_entries.append((str(ability), {"name": str(ability), "category": "\u795e\u901a"}, "power", "\u795e\u901a"))
     if not ability_entries:
         ability_entries.append(("\u6682\u65e0\u795e\u901a", None, "power", ""))
 
-    realm_entries: list[tuple[str, Any, str, str]] = []
-    marks = dict(getattr(record, "realm_marks", None) or {})
-    for realm_index in range(2, 9):
-        realm_name = REALMS[realm_index] if realm_index < len(REALMS) else f"\u7b2c{realm_index}\u5883"
-        if realm_index <= int(getattr(record, "realm_index", 0) or 0):
-            mark = marks.get(str(realm_index))
-            if not mark and realm_index == 2:
-                mark = getattr(record, "foundation_type", None)
-            label = compact_realm_quality(mark or "\u672a\u5b9a\u54c1\u76f8")
-        else:
-            label = f"{realm_name}\u00b7\u7a7a"
-        realm_entries.append((label, None, "realm", "realm_quality"))
+    lower_realm_entries: list[tuple[str, Any, str, str]] = []
+    for realm_index in range(2, 6):
+        lower_realm_entries.append((quality_label_for_realm(realm_index), None, "realm", "realm_quality"))
 
-    boss_limit = 4 + max(0, int(getattr(record, "mystic_boss_daily_bonus", 0) or 0))
-    boss_used = max(0, int(getattr(record, "mystic_boss_daily_attempts", 0) or 0))
-    boss_left = max(0, boss_limit - boss_used)
-    resource_entries_text = [
-        ("\u7075\u77f3\u50a8\u5907", str(summary.get("spirit_stones_text") or spirit_stone_text(getattr(record, "spirit_stones", 0))), "bag"),
-        ("\u7cbe\u7eaf\u7075\u6db2", f"{int(getattr(record, 'spirit_liquid', 0) or 0)}", "curio"),
-        ("BOSS\u6311\u6218", f"{boss_left}/{boss_limit}", "duel"),
-    ]
+    high_realm_entries: list[tuple[str, Any, str, str]] = []
+    for realm_index in range(6, 11):
+        high_realm_entries.append((quality_label_for_realm(realm_index), None, "realm", "realm_quality"))
 
-    icon_strip(layout["row_1"], "\u795e\u901a", ability_entries)
-    icon_strip(layout["row_2"], "\u5883\u754c", realm_entries)
-    resource_strip(layout["row_3"], "\u8d44\u6e90", resource_entries_text)
-
+    icon_strip(layout["row_1"], "神通", ability_entries)
+    icon_strip(layout["row_2"], "境界", lower_realm_entries)
+    icon_strip(layout["row_3"], "高阶品相", high_realm_entries)
     command_slot(layout["cmd_1"], "\u7075\u5668", "\u88c5\u5907\u7075\u5668", "artifact")
     command_slot(layout["cmd_2"], "\u529f\u6cd5", "\u53c2\u609f\u529f\u6cd5", "method")
     command_slot(layout["cmd_3"], "\u9635\u76d8", "\u5e03\u7f6e\u9635\u76d8", "array")
@@ -2167,9 +2641,16 @@ def render_text_panel(
     footer_reserved = 60 if footer else 0
     card_outer_bottom = 58
     height = max(520, content_start_y + content_height + footer_reserved + content_bottom_padding + card_outer_bottom)
-    image = make_xiuxian_background(width, height, accent)
+    background_path = text_panel_background_path(icon)
+    if background_path is not None:
+        image, themed_background = load_panel_background(background_path, width, height, accent)
+    else:
+        image, themed_background = make_xiuxian_background(width, height, accent), False
     draw = ImageDraw.Draw(image)
-    draw_card(image, (58, 62, width - 58, height - 58))
+    if themed_background:
+        draw.rounded_rectangle((58, 62, width - 58, height - 58), radius=28, fill=(255, 250, 238, 108), outline=(234, 218, 184, 150), width=2)
+    else:
+        draw_card(image, (58, 62, width - 58, height - 58))
 
     draw_panel_icon(draw, (104, 112, 208, 216), icon, accent)
     draw_weighted_text(draw, (238, 112), title, title_font, "#172033", weight=4)
@@ -2206,3 +2687,5 @@ def render_text_panel(
         footer_font = fit_font(draw, footer, width - 208, 26, bold=True, min_size=18)
         draw_weighted_text(draw, (104, height - 108), footer, footer_font, "#667085", weight=1)
     return png_bytes(image)
+
+
