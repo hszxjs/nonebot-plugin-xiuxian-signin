@@ -10,8 +10,8 @@ BG_PATH = ROOT / "assets/panel_backgrounds/signin_background.png"
 OLD_PATH = Path(
     r"C:\Users\hszxjs\Documents\Tencent Files\3305167706\nt_qq\nt_data\Pic\2026-06\Ori\6013980e9e6913183936ee99485ced48.png"
 )
-FONT_PATH = ROOT / "assets/fonts/NotoSansSC-VF.ttf"
-OUT_DIR = ROOT / "assets/panel_previews"
+FONT_PATH = ROOT / "assets/fonts/HarmonyOS_Sans_SC.ttf"
+OUT_DIR = ROOT / "build/previews"
 OUT_PATH = OUT_DIR / "signin_preview_native_bg_v3.png"
 
 ACCENT = "#7b5cf0"
@@ -40,7 +40,7 @@ TEXT = {
 }
 
 GRID_ITEMS = [
-    ("\u7075\u5668", "[\u5929\u9636\u6781\u54c1\u7075\u5668 \u592a\u865a\u65a9\u661f\u5251]"),
+    ("\u7075\u5668", "[\u5929\u9636\u6781\u54c1\u7075\u5668 星阙断岳剑]"),
     ("\u529f\u6cd5", "[\u5929\u9636\u4e0a\u54c1\u529f\u6cd5 \u79bb\u706b\u70bc\u754c\u7bc7]"),
     ("\u9635\u76d8", "[\u7384\u9636\u6781\u54c1\u9635\u76d8 \u5c0f\u4e94\u884c\u805a\u7075\u76d8]"),
     ("\u9635\u6cd5\u719f\u7ec3", "\u719f\u7ec3\u5ea6 610/900 \u30fb 7.1x"),

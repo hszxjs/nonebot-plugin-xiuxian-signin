@@ -20,12 +20,14 @@ from nonebot import get_bot, get_driver, logger, on_message, require
 
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as localstore
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent, MessageSegment, PrivateMessageEvent
 from nonebot.matcher import Matcher
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 
+from . import beast_realm as beast_realm_game
 from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_signin_card, render_text_panel, set_font_paths
+from .character_assets import beast_portrait_bytes
 from .config import Config
 from .domain import (
     CANCEL_WORDS,
@@ -48,7 +50,13 @@ from .domain import (
     apply_rank_reward,
     apply_signin,
     artifact_power,
+    artifact_realm_catalog_summary_text,
+    item_required_realm_index,
+    array_layer,
+    array_layer_cap_text,
     array_multiplier,
+    array_proficiency_cap,
+    array_proficiency_value,
     available_arrays,
     available_artifacts,
 
@@ -67,6 +75,10 @@ from .domain import (
     battle_power,
     battle_summary,
     breakthrough_realm,
+    breakthrough_requirement_key_for_realm_index,
+    breakthrough_source_realm_index,
+    breakthrough_target_realm,
+    breakthrough_target_realm_index,
     breakthrough_item_quality_cap_text,
     breakthrough_quality_relation_text,
     breakthrough_status,
@@ -130,7 +142,9 @@ from .domain import (
     refine_artifact_root,
     regress_cultivation,
     refine_spirit_stone,
+    refine_demon_core,
     refine_spirit_stones_batch,
+    refine_demon_cores_batch,
     refine_spirit_liquid,
     reward_display_name,
 
@@ -155,78 +169,120 @@ from .domain import (
     use_pills_batch,
     use_talisman,
 )
+from .admin import AdminManager, start_admin_server
 from .storage import JsonStore
 
 __version__ = "0.5.1"
 
-PICMENU_NEXT_FUNCS = [{'func': '开始修仙',
-  'trigger_method': '签到 / 面板 / 帮助',
-  'trigger_condition': '首次签到会抽取灵根；帮助会打开内置说明',
-  'brief_des': '从签到、个人面板和新手说明开始',
-  'detail_des': '`签到` 每日修炼并获得 1 次垂钓；`面板` 查看个人状态；`帮助` 查看修为提升路径与常用入口。'},
- {'func': '背包与图鉴',
-  'trigger_method': '背包 / 图鉴 / 神通 / 神通图鉴 / 炼器图鉴 / 仙种图鉴 / 帝兵图鉴',
-  'trigger_condition': '图鉴无需拥有物品，可直接查看',
-  'brief_des': '查看道具、神通、丹药、符箓、灵器、功法、仙种和帝兵',
-  'detail_des': '`背包` 查看已获得物品；支持 `批量使用丹药 10`、`批量炼化灵石 全部`、`批量使用灵食 10`；`图鉴 灵材名` 可反查配方用途；`神通` 查看已领悟能力和传承材料；`炼器图鉴` 查看可炼制灵器配方；`仙种图鉴`、`帝兵图鉴` 查看高阶唯一奖励和拥有者。'},
- {'func': '突破与修为',
-  'trigger_method': '突破 / 散功 / 炼化灵液 / 后天灵根 / 境界图鉴 / 突破图鉴 / 品相图鉴',
-  'trigger_condition': '境界圆满后进入瓶颈，需突破后继续增长修为',
-  'brief_des': '查看境界瓶颈、突破材料和重修机会',
-  'detail_des': '瓶颈后修为不会继续增加，溢出修为会凝成精纯灵液；突破道具按名称区分品相上限，基础道具易得但不能直接冲到最高品相；化神破炼虚需五行补全，可用 `后天灵根` 查看丹灵根/器灵根炼化方式；`炼化灵液` 可把已沉淀灵液转为修为。'},
- {'func': '历练与装备',
-  'trigger_method': '历练 / 灵器 / 装备灵器 1 主手 / 祭炼本命灵器 1 / 装备仙种 1 / 阵法推演 1 / 战力',
-  'trigger_condition': '编号来自对应面板；主手、副手、护甲各可装备一件灵器',
-  'brief_des': '管理三槽灵器、本命灵器、仙种、符箓栏、功法阵盘并计算战力',
-  'detail_des': '`装备灵器 1 主手`、`装备灵器 2 副手`、`装备灵器 3 护甲` 管理灵器槽；`祭炼本命灵器 1` 设为本命灵器；`装备仙种 1` 在真仙后生效；`阵法推演 '
-                '1` 以同名阵盘合成升品。'},
- {'func': '秘境与任务',
-  'trigger_method': '秘境 / 探索 1 / 天机秘境 / 秘境救援 1000 / 救援列表 / 每日任务',
-  'trigger_condition': '秘境入口 60 秒内选择；任务签到后生成',
-  'brief_des': '限时秘境、每日任务和每日商店',
-  'detail_des': '`秘境` 会抽取 60 秒限时入口，并有概率出现高危险地。普通秘境首领挑战会转为私聊生死斗法，每日共享 4 次机会，胜利可折算 10 次探索奖励和首领妖丹；高危险地 5 选 2 '
-                '生路，无首领挑战，不会被天机秘境选中。每日任务查看、接取和完成结算会优先私聊发送。反噬后可发送 `秘境救援 1000` 委托其他修士救场。'},
- {'func': '路线与身份',
-  'trigger_method': '路线 / 选择路线 剑修 / 选择路线 炼器师 / 选择身份 天机阁弟子',
-  'trigger_condition': '主路线同一时间只能一种；邪修可额外同修',
-  'brief_des': '选择主修路线、炼丹/炼器/阵法专长、邪修同修和宗门身份令牌',
-  'detail_des': '`路线` 会显示所有路线效果、天机阁/合欢宗身份门槛、身份令牌次数和示例指令。'},
- {'func': '炼丹炼器与符箓',
-  'trigger_method': '炼丹 / 炼丹 筑基丹 / 炼器 / 炼器图鉴 / 图鉴 灵材名 / 绘制符箓 1',
-  'trigger_condition': '炼丹需炼丹师路线；炼器需炼器师路线；绘制符箓需修为和灵石',
-  'brief_des': '炼制丹药、灵器、阵盘和符箓',
-  'detail_des': '材料品阶和品质会影响炼丹成功率与成丹品质；所有垂钓灵材均接入至少一条炼丹或炼器用途；`炼器` 按图谱消耗灵材和灵石炼制青竹蜂云剑、庚金青竹蜂云剑、仿制帝兵等；突破符令需对应境界巅峰才可绘制。'},
- {'func': '交易与资源处理',
-  'trigger_method': '万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1 / 交易 @对方 灵器 1 100 / 批量出售 杂物 20 / 批量炼化灵石 全部',
-  'trigger_condition': '群聊内使用；万宝楼自动按系统回收价 1.5 倍定价',
-  'brief_des': '万宝楼公开寄售、玩家指定交易和批量出售背包资源',
-  'detail_des': '`万宝楼挂售 灵器 1` 会自动估价并公开寄售；`万宝楼购买 1` 付款取货；`万宝楼下架 1` 撤回本人寄售；`交易 @对方 灵器 1 100` 保留为指定交易；`批量出售 杂物 20` 按类别一次性兑换灵石，唯一道具不会被批量出售。'},
- {'func': '趣味玩法',
-  'trigger_method': '天机占卜 / 坐堂 / 占卜 今日运势 / 斗地主 / 斗地主开桌 / 人机斗地主',
-  'trigger_condition': '趣味休闲玩法；斗地主需群聊使用',
-  'brief_des': '天机问卦与群聊斗地主，支持威压抢地主、加倍和春天',
-  'detail_des': '`天机占卜` 需本群天机阁门人坐堂后才能问卦；其他天机阁门人可发送 `坐堂` 加入占卜润资分润。`斗地主帮助` 查看独立规则。'},
- {'func': '排行',
-  'trigger_method': '排行 / 修为榜 / 战力榜',
-  'trigger_condition': '群聊内使用',
-  'brief_des': '查看群修为榜、战力榜和每日话痨结算',
-  'detail_des': '每日 22:00 自动发布话痨榜并发奖，同时同步群修为榜和群战力榜。'}]
+PICMENU_NEXT_FUNCS = [
+    {
+        'func': '入门与状态',
+        'trigger_method': '签到 / 面板 / 新手教程 / 帮助',
+        'trigger_condition': '首次签到会抽取灵根；每天签到获得修为和 1 次垂钓',
+        'brief_des': '开始修炼，查看个人境界、灵根、资源和新手说明',
+        'detail_des': '`签到` 获得每日修为和灵河垂钓次数；`面板` 查看境界、灵根、修为、灵石和当前装备；私聊 `新手教程` 打开入门引导；`帮助` 查看完整说明。',
+    },
+    {
+        'func': '历练面板',
+        'trigger_method': '历练 / 历练面板 / 战力 / 灵器 / 功法 / 阵盘 / 神通',
+        'trigger_condition': '签到入门后可查看；灵器、功法、阵盘、符箓和神通会影响战力',
+        'brief_des': '汇总战力、装备槽位、功法阵盘、符箓、神通和常用历练入口',
+        'detail_des': '`历练` 或 `历练面板` 会输出专用图片面板，集中展示主手、副手、护甲、本命灵器、功法、阵盘、傀儡、符箓、仙源、境界品相、神通与常用装备指令；`战力` 查看文字版战力计算。',
+    },
+    {
+        'func': '背包与图鉴',
+        'trigger_method': '背包 / 图鉴 / 神通 / 神通图鉴 / 灵器图鉴 / 功法图鉴 / 唯一装备图鉴',
+        'trigger_condition': '图鉴无需拥有物品；背包编号以当前面板为准',
+        'brief_des': '查看物品、用途、获取途径和已领悟神通',
+        'detail_des': '`背包` 管理丹药、符箓、灵石、妖丹、灵食、奇物和材料；`图鉴 名称` 查询用途和故事；`神通` 查看传承材料；`神通图鉴` 查看可领悟路线。',
+    },
+    {
+        'func': '修为与突破',
+        'trigger_method': '突破 / 炼化灵液 / 炼化妖丹 1 / 后天灵根 / 散功',
+        'trigger_condition': '境界圆满后进入瓶颈，需要对应突破道具',
+        'brief_des': '处理瓶颈、灵液、妖丹和五行补全',
+        'detail_des': '瓶颈后多余修为会凝成精纯灵液；`炼化灵液` 转回修为；`炼化妖丹 编号` 获得修为；化神破炼虚需要五行补全，可用 `后天灵根` 查看丹灵根和器灵根。',
+    },
+    {
+        'func': '灵器与战力',
+        'trigger_method': '灵器 / 装备灵器 1 主手 / 卸下灵器 / 祭炼本命灵器 1 / 战力',
+        'trigger_condition': '灵器按境界绑定；同境界内凡品到天阶均可存在',
+        'brief_des': '管理主手、副手、护甲、本命灵器和战力榜',
+        'detail_des': '低境界只能装备本境界能驾驭的灵器；假仙后可获得仙器；仙帝兵和其他唯一装备归入唯一装备体系。发送 `战力` 查看当前计算。',
+    },
+    {
+        'func': '功法与阵盘',
+        'trigger_method': '功法 / 学习功法 1 / 参悟功法 1 / 阵盘 / 布置阵盘 1 / 阵法推演 1',
+        'trigger_condition': '重复获得同名功法或阵盘会转为推演成长',
+        'brief_des': '提升签到收益、技能倍率、阵法倍率和熟练度上限',
+        'detail_des': '功法唯一存在，重复获得会推演升层；阵盘可升品升阶，熟练度继承。仙阶极品后可以继续无限推演。',
+    },
+    {
+        'func': '炼丹炼器与符箓',
+        'trigger_method': '炼丹 / 炼丹 筑基丹 / 炼器 / 炼器图鉴 / 绘制符箓 1',
+        'trigger_condition': '炼丹师、炼器师等路线会开放对应制作能力',
+        'brief_des': '制作丹药、灵器、阵盘、傀儡和符箓',
+        'detail_des': '材料品阶和品质会影响成品；`炼器图鉴` 查看配方；`绘制符箓` 可制作普通符箓和突破符令。',
+    },
+    {
+        'func': '秘境与任务',
+        'trigger_method': '秘境 / 探索 1 / 天机秘境 / 每日任务 / 秘境救援 1000',
+        'trigger_condition': '秘境入口 60 秒内选择；任务每日签到后生成',
+        'brief_des': '探索秘境、挑战首领、完成任务并处理反噬救援',
+        'detail_des': '`秘境` 抽取限时入口；进入后发送 `探索 编号`；首领挑战胜利可折算多次探索奖励并获得妖丹；失败后可发布 `秘境救援 金额`。',
+    },
+    {
+        'func': '御兽秘境',
+        'trigger_method': '御兽秘境开局 PVE / 御兽秘境开局 PVP / 加入御兽秘境 / 御兽秘境图鉴',
+        'trigger_condition': '群聊开局，私聊在任务堂招募随从；PVP/PVE均需4人，单人1V2在私聊开启',
+        'brief_des': '类酒馆战棋的4人排位斗兽、4V4秘境演武与单人1V2试炼',
+        'detail_des': '`御兽秘境开局 PVE` 开启4名修士对4名bot代理的秘境演武；`御兽秘境开局 PVP` 开启4人排位战，每回合随机两场1V1。私聊 `御兽秘境1V2` 可开启单人PVE。开始后系统私聊任务堂，使用 `购买 1`、`施法 1 2`、`升堂`、`完成招募` 完成每回合操作。',
+    },
+    {
+        'func': '路线与身份',
+        'trigger_method': '修炼路线 / 选择路线 剑修 / 选择身份 天机阁弟子 / 双修 @群友',
+        'trigger_condition': '主路线同一时间只能选择一种；身份有境界和签到天数门槛',
+        'brief_des': '选择剑修、术修、炼丹师、炼器师、阵法师和身份令牌',
+        'detail_des': '`修炼路线` 查看效果；`选择路线 名称` 切换主路线；天机阁提供秘境示警和占卜坐堂，合欢宗提供双修次数。',
+    },
+    {
+        'func': '交易与商店',
+        'trigger_method': '商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20 / 万宝楼 / 交易 @对方 灵器 1 100',
+        'trigger_condition': '交易、万宝楼和排行榜主要在群聊使用',
+        'brief_des': '购买、出售、公开寄售和玩家间交易',
+        'detail_des': '`商店` 每日刷新；`万宝楼挂售 类别 编号` 公开寄售；`交易 @对方 类别 编号 价格` 指定交易；唯一装备不会被批量出售。',
+    },
+    {
+        'func': '休闲与排行',
+        'trigger_method': '天机占卜 / 坐堂 / 斗地主 / 斗地主帮助 / 排行 / 战力榜',
+        'trigger_condition': '休闲玩法不影响主线修炼；斗地主需群聊',
+        'brief_des': '问卦、斗地主、修为榜、战力榜和每日话痨榜',
+        'detail_des': '`天机占卜` 需要本群有天机阁门人坐堂；`斗地主帮助` 查看牌局规则；`排行`、`战力榜` 查看群内排名。',
+    },
+    {
+        'func': '后台管理',
+        'trigger_method': '浏览器访问 /xiuxian-admin',
+        'trigger_condition': '服主需要在 NoneBot 后端启用管理页，可配置管理 Token',
+        'brief_des': '查看和修改玩家档案、物品属性、灵器规则、秘境掉落配置',
+        'detail_des': '后台可备份 users.json，编辑玩家记录，查看全部物品用途、故事、获取途径，并调整灵器境界限制与秘境掉落权重。',
+    },
+]
 
 
 __plugin_meta__ = PluginMetadata(
     name="修仙签到",
-    description="以图片面板输出的修仙签到、灵根抽取、神通领悟、境界突破、历练道具、秘境探索与诸天万界垂钓插件。",
+    description="以图片面板输出的修仙签到、境界突破、灵器战力、功法阵盘、神通、秘境探索、交易和后台管理插件。",
     usage=(
-        "签到：每日签到，首次抽取灵根\n"
-        "我的修为：查看当前修炼状态\n"
-        "垂钓：消耗已有诸天万界垂钓次数\n"
-        "每日话痨榜：群聊发言自动统计，每晚 22:00 发布并发奖\n"
-        "修为榜：查看本群修为排行榜\n"
-        "历练：主手/副手/护甲三槽灵器、符箓栏、功法阵盘、PK 与战力榜\n"
-        "突破/散功：突破境界瓶颈，或回退至上一境界后期重修\n"
-        "背包：使用丹药、灵石、灵食、奇物和杂物；装备符箓进入符箓栏，炼化灵液可转为修为\n"
-        "神通：查看九秘残页、八禁感悟、神禁烙印等传承材料；领悟神通 1 进行参悟\n"
-        "秘境：60秒限时入口，进入后发送 探索 1-6；首领挑战胜利可折算10次探索奖励"
+        "入门：签到 / 面板 / 历练 / 新手教程 / 帮助，首次签到抽取灵根，每天获得修为和 1 次灵河垂钓\n"
+        "修为：突破 / 炼化灵液 / 炼化妖丹 1 / 后天灵根，处理瓶颈、灵液、妖丹和五行补全\n"
+        "背包：背包 / 图鉴 / 图鉴 名称，查看物品用途、故事、获取方式和制作素材\n"
+        "灵器：灵器 / 装备灵器 1 主手 / 战力，灵器按境界绑定，假仙后可获得仙器\n"
+        "功法阵盘：功法 / 参悟功法 1 / 阵法推演 1，重复获得会推演升层或升品\n"
+        "神通：神通 / 神通图鉴 / 领悟神通 1，查看传承材料并在斗法中触发\n"
+        "秘境：秘境 / 探索 1 / 天机秘境 / 秘境救援 1000，探索、挑战首领和处理反噬\n"
+        "御兽秘境：御兽秘境开局 PVE / PVP，私聊任务堂招募随从，群聊播报战报\n"
+        "交易：商店 / 万宝楼 / 交易 @对方 灵器 1 100 / 批量出售 杂物 20\n"
+        "后台：浏览器访问 /xiuxian-admin，可查看玩家档案、物品属性、灵器规则和秘境掉落配置"
     ),
     type="application",
     homepage="https://github.com/hszxjs/nonebot-plugin-xiuxian-signin",
@@ -260,12 +316,10 @@ CATALOG_TEXTS = {
     "\u9053\u5177\u54c1\u76f8\u56fe\u9274",
     "\u4e39\u836f\u56fe\u9274",
     "\u7b26\u7b93\u56fe\u9274",
-    "\u6b66\u5668\u56fe\u9274",
     "\u7075\u5668\u56fe\u9274",
     "\u529f\u6cd5\u56fe\u9274",
     "\u9635\u76d8\u56fe\u9274",
     "\u6750\u6599\u56fe\u9274",
-    "\u7279\u6b8a\u80fd\u529b\u56fe\u9274",
     "\u795e\u901a\u56fe\u9274",
     "\u7075\u6750\u56fe\u9274",
 }
@@ -275,7 +329,8 @@ CULTIVATION_RANK_TEXTS = {"\u4fee\u4e3a\u699c", "\u7fa4\u4fee\u4e3a\u699c", "\u5
 POWER_RANK_TEXTS = {"战力榜", "群战力榜"}
 POWER_TEXTS = {"战力", "我的战力"}
 ADVENTURE_TEXTS = {"历练", "历练面板", "历练帮助"}
-ARTIFACT_LIST_TEXTS = {"\u7075\u5668", "\u6211\u7684\u7075\u5668", "\u7075\u5668\u5217\u8868", "\u88c5\u5907\u5217\u8868", "\u6b66\u5668", "\u6211\u7684\u6b66\u5668", "\u6b66\u5668\u5217\u8868"}
+NEWBIE_TUTORIAL_TEXTS = {"新手教程"}
+ARTIFACT_LIST_TEXTS = {"\u7075\u5668", "\u6211\u7684\u7075\u5668", "\u7075\u5668\u5217\u8868", "\u88c5\u5907\u5217\u8868"}
 METHOD_LIST_TEXTS = {"功法", "我的功法", "功法列表"}
 ARRAY_LIST_TEXTS = {"阵盘", "我的阵盘", "阵盘列表", "阵法", "我的阵法"}
 PUPPET_LIST_TEXTS = {"傀儡", "我的傀儡", "傀儡列表"}
@@ -290,10 +345,10 @@ SHOP_TEXTS = {"商店", "坊市", "每日商店"}
 ALCHEMY_TEXTS = {"炼丹", "丹方"}
 REFINING_TEXTS = {'炼器', '炼器图鉴', '炼器帮助'}
 ARRAY_DEDUCTION_TEXTS = {'阵法推演', '推演阵法'}
-IMMORTAL_SEED_TEXTS = {'仙种', '我的仙种', '仙种图鉴'}
-EMPEROR_CATALOG_TEXTS = {'帝兵图鉴', '极道帝兵', '极道帝兵图鉴'}
+IMMORTAL_SEED_TEXTS = {'仙源', '我的仙源', '仙源图鉴', '仙种', '我的仙种', '仙种图鉴'}
+EMPEROR_CATALOG_TEXTS = {'唯一装备图鉴'}
 TALISMAN_DRAW_TEXTS = {"\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7b26\u7b93\u7ed8\u5236", "\u7ed8\u7b26"}
-TIANJI_MYSTIC_TEXTS = {"天机秘境", "天机探索", "特殊秘境"}
+TIANJI_MYSTIC_TEXTS = {"天机秘境", "天机探索", "天机示警"}
 DIVINATION_TEXTS = {"\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366"}
 TIANJI_SIT_TEXTS = {"\u5750\u5802", "\u5929\u673a\u5750\u5802", "\u7533\u8bf7\u5750\u5802"}
 DOUDIZHU_HELP_TEXTS = {"斗地主帮助", "斗地主规则", "斗牌帮助"}
@@ -337,6 +392,8 @@ PILL_BATCH_USE_PREFIXES = ("批量使用丹药", "批量服用丹药", "批量�
 TALISMAN_USE_PREFIXES = ("使用符箓", "激发符箓", "用符")
 STONE_USE_PREFIXES = ("炼化灵石", "使用灵石", "吸收灵石")
 STONE_BATCH_USE_PREFIXES = ("批量炼化灵石", "批量使用灵石", "批量吸收灵石", "一键炼化灵石", "一键使用灵石")
+DEMON_CORE_USE_PREFIXES = ("炼化妖丹", "吸收妖丹", "使用妖丹")
+DEMON_CORE_BATCH_USE_PREFIXES = ("批量炼化妖丹", "批量吸收妖丹", "一键炼化妖丹", "一键吸收妖丹")
 SPIRIT_LIQUID_USE_PREFIXES = ("炼化灵液", "炼化精纯灵液", "吸收灵液", "吸收精纯灵液", "使用灵液", "使用精纯灵液")
 FOOD_USE_PREFIXES = ("使用灵食", "食用灵食", "吃灵食")
 FOOD_BATCH_USE_PREFIXES = ("批量使用灵食", "批量食用灵食", "批量吃灵食", "一键吃灵食", "一键使用灵食")
@@ -356,7 +413,7 @@ ALCHEMY_PREFIXES = ("炼丹",)
 REFINING_PREFIXES = ('炼器',)
 ARRAY_DEDUCTION_PREFIXES = ('阵法推演', '推演阵法')
 LIFE_ARTIFACT_PREFIXES = ('祭炼本命灵器', '本命灵器', '祭炼本命')
-IMMORTAL_SEED_EQUIP_PREFIXES = ('装备仙种', '纳入仙种')
+IMMORTAL_SEED_EQUIP_PREFIXES = ('装备仙源', '纳入仙源', '装备仙种', '纳入仙种')
 BATCH_SELL_PREFIXES = ('批量出售', '批量卖出', '一键出售')
 TRADE_OFFER_PREFIXES = ('交易', '出售给')
 TRADE_ACCEPT_PREFIXES = ('接受交易', '购买交易')
@@ -404,7 +461,10 @@ pending_divinations: dict[str, dict[str, Any]] = {}
 normal_duel_queue: dict[str, dict[str, Any]] = {}
 normal_duel_sessions: dict[str, dict[str, Any]] = {}
 doudizhu_tables: dict[str, dict[str, Any]] = {}
+beast_realm_tables: dict[str, dict[str, Any]] = {}
+beast_realm_private_routes: dict[str, str] = {}
 rank_scheduler_task: Optional[asyncio.Task] = None
+admin_http_server = None
 
 
 async def send_mystic_timeout_notice(
@@ -476,6 +536,7 @@ def get_data_dir() -> Path:
 
 
 store = JsonStore(get_data_dir())
+admin_manager = AdminManager(store, get_data_dir(), config.xiuxian_signin_admin_token or "")
 
 
 def normalized_plain_text(event: MessageEvent) -> str:
@@ -697,6 +758,7 @@ def is_item_use_command_text(text: str) -> bool:
             FOOD_USE_PREFIXES,
             CURIO_USE_PREFIXES,
             MISC_USE_PREFIXES,
+            DEMON_CORE_USE_PREFIXES,
         )
     )
 
@@ -800,7 +862,7 @@ def parse_batch_sell(text: str) -> Optional[tuple[str, int]]:
     return None
 
 
-TRADE_CATEGORIES = ("仙缘", "灵器", "功法", "丹药", "阵盘", "灵材", "符箓", "傀儡", "灵植", "灵石", "杂物", "奇物", "特殊能力", "灵食", "仙种")
+TRADE_CATEGORIES = ("仙缘", "灵器", "功法", "丹药", "阵盘", "灵材", "符箓", "傀儡", "灵植", "灵石", "杂物", "奇物", "神通", "灵食", "仙源", "仙种")
 
 
 def parse_catalog_query(text: str) -> Optional[str]:
@@ -948,6 +1010,7 @@ def parse_batch_item_use(text: str) -> Optional[tuple[str, int]]:
         ("丹药", PILL_BATCH_USE_PREFIXES),
         ("灵石", STONE_BATCH_USE_PREFIXES),
         ("灵食", FOOD_BATCH_USE_PREFIXES),
+        ("妖丹", DEMON_CORE_BATCH_USE_PREFIXES),
     ]
     for category, prefixes in mapping:
         for prefix in prefixes:
@@ -961,6 +1024,7 @@ def parse_batch_item_use(text: str) -> Optional[tuple[str, int]]:
         ("丹药", PILL_USE_PREFIXES),
         ("灵石", STONE_USE_PREFIXES),
         ("灵食", FOOD_USE_PREFIXES),
+        ("妖丹", DEMON_CORE_USE_PREFIXES),
     ]
     for category, prefixes in direct_mapping:
         for prefix in prefixes:
@@ -978,6 +1042,7 @@ def parse_item_use(text: str) -> Optional[tuple[str, int]]:
         ("符箓", TALISMAN_USE_PREFIXES),
         ("灵石", STONE_USE_PREFIXES),
         ("灵食", FOOD_USE_PREFIXES),
+        ("妖丹", DEMON_CORE_USE_PREFIXES),
         ("奇物", CURIO_USE_PREFIXES),
         ("杂物", MISC_USE_PREFIXES),
     ]
@@ -1018,7 +1083,7 @@ def parse_shop_buy_index(text: str) -> Optional[int]:
 
 
 def parse_sell_item(text: str) -> Optional[tuple[str, int]]:
-    categories = ("灵器", "功法", "丹药", "阵盘", "灵材", "符箓", "傀儡", "灵植", "灵石", "杂物", "奇物", "灵食", "特殊能力")
+    categories = ("灵器", "功法", "丹药", "阵盘", "灵材", "符箓", "傀儡", "灵植", "灵石", "杂物", "奇物", "灵食", "神通")
     for prefix in SELL_PREFIXES:
         if not text.startswith(prefix):
             continue
@@ -1117,6 +1182,7 @@ def is_managed_command_text(text: str) -> bool:
         text in SIGNIN_TEXTS
         or text in STATUS_TEXTS
         or text in HELP_TEXTS
+        or text in NEWBIE_TUTORIAL_TEXTS
         or text in CATALOG_TEXTS
         or parse_catalog_query(text) is not None
         or text in BREAKTHROUGH_TEXTS
@@ -1150,6 +1216,8 @@ def is_managed_command_text(text: str) -> bool:
         or is_tianji_mystic_command_text(text)
         or is_divination_command_text(text)
         or is_doudizhu_command_text(text)
+        or beast_realm_game.is_beast_realm_group_command(text)
+        or beast_realm_game.is_beast_realm_private_command(text)
         or is_dual_cultivation_command_text(text)
         or text in UNEQUIP_TEXTS
         or is_equip_talisman_command_text(text)
@@ -1431,7 +1499,7 @@ def normal_duel_prepare_cards(record, nickname: str) -> list[tuple[str, str, str
                     f"\u5f53\u524d\u529f\u6cd5\uff1a{reward_display_name(record.equipped_method) if record.equipped_method else '\u672a\u53c2\u609f\u529f\u6cd5'}",
                     "\u53ef\u7528\u6218\u6280\uff1a",
                     *technique_lines,
-                    f"\u7279\u6b8a\u80fd\u529b\uff1a{abilities}",
+                    f"\u795e\u901a\uff1a{abilities}",
                     "\u6218\u6280\u4f1a\u6d88\u8017\u7075\u529b\u5e76\u8fdb\u5165CD\uff1b\u672a\u547d\u4e2d\u7684\u53d1\u8a00\u4f1a\u4f5c\u4e3a\u5373\u5174\u672f\u5f0f\u3002",
                 ]
             ),
@@ -1495,11 +1563,13 @@ async def send_mystic_boss_duel_report(user_id: str, record, result: dict[str, A
         return False
     try:
         left = result.get("left", {})
+        right = result.get("right", {})
         left_avatar = await fetch_avatar(str(left.get("user_id") or user_id))
+        right_avatar = beast_portrait_bytes(str(right.get("nickname") or ""))
         image = render_battle_card(
             result,
             left_avatar=left_avatar,
-            right_avatar=None,
+            right_avatar=right_avatar,
             width=config.xiuxian_signin_image_width,
         )
         await get_bot().send_private_msg(user_id=int(user_id), message=MessageSegment.image(BytesIO(image)))
@@ -1551,7 +1621,7 @@ async def finish_normal_duel(group_id: str, session: dict[str, Any]) -> None:
             group_id=int(group_id),
             message=panel_segment(
                 "\u666e\u901a\u6597\u6cd5",
-                "\u6597\u6cd5\u5df2\u5f00\u59cb\uff0c60\u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u7279\u6b8a\u80fd\u529b\u3001\u8868\u60c5\u6216\u5373\u5174\u672f\u5f0f\u3002",
+                "\u6597\u6cd5\u5df2\u5f00\u59cb\uff0c60\u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u795e\u901a\u3001\u8868\u60c5\u6216\u5373\u5174\u672f\u5f0f\u3002",
                 icon="duel",
             ),
         )
@@ -2285,20 +2355,23 @@ def format_artifact_list(record) -> str:
     summary = battle_summary(record)
     lines = ["\u3010\u6211\u7684\u7075\u5668\u3011"]
     lines.append(f"\u5f53\u524d\u69fd\u4f4d\uff1a{summary['artifact_slots']}")
-    lines.append("\u69fd\u4f4d\u8bf4\u660e\uff1a\u4e3b\u624b100%\u6218\u529b\uff0c\u526f\u624b65%\u6218\u529b\uff0c\u62a4\u7532/\u62a4\u76fe85%\u6218\u529b\u3002")
+    lines.append("\u69fd\u4f4d\u8bf4\u660e\uff1a\u4e3b\u624b100%\u6218\u529b\uff0c\u526f\u624b65%\u6218\u529b\uff0c\u62a4\u7532/\u62a4\u76fe85%\u6218\u529b\uff1b\u540c\u540d\u7075\u5668\u4e0d\u53ef\u53cc\u6301\uff0c\u62a4\u7532\u69fd\u53ea\u63a5\u53d7\u62a4\u7532/\u62a4\u76fe\u7c7b\u7075\u5668\u3002")
     if not artifacts:
         lines.append("\u6682\u65e0\u53ef\u88c5\u5907\u7075\u5668\uff0c\u8fdb\u884c\u8bf8\u5929\u4e07\u754c\u5782\u9493\u3001\u79d8\u5883\u6216\u5546\u5e97\u6709\u673a\u4f1a\u83b7\u5f97\u3002")
         return "\n".join(lines)
     for index, artifact in enumerate(artifacts, start=1):
         required = artifact.get("required_attribute")
-        compatible = "\u53ef\u88c5\u5907" if not required or required in record.root_attributes else "\u7075\u6839\u4e0d\u5951\u5408"
+        required_realm = item_required_realm_index(artifact)
+        realm_text = REALMS[required_realm] if required_realm < len(REALMS) else "未知"
+        realm_ok = record.realm_index >= required_realm
+        compatible = "\u53ef\u88c5\u5907" if realm_ok and (not required or required in record.root_attributes) else ("\u4fee\u4e3a\u672a\u8db3" if not realm_ok else "\u7075\u6839\u4e0d\u5951\u5408")
         bonus = artifact_power(artifact, record)
         default_slot = parse_artifact_slot(str(artifact.get("name") or "")) or "\u4e3b\u624b"
         lines.append(
             f"{index}. {reward_display_name(artifact)}\uff0c\u9ed8\u8ba4{default_slot}\uff0c\u9700\u6c42{required or '\u65e0'}\u7075\u6839\uff0c"
-            f"{compatible}\uff0c\u57fa\u7840\u6218\u529b+{bonus}"
+            f"\u6700\u4f4e{realm_text}\uff0c{compatible}\uff0c\u57fa\u7840\u6218\u529b+{bonus}"
         )
-    lines.append("\u53d1\u9001\u201c\u88c5\u5907\u7075\u5668 \u7f16\u53f7 \u4e3b\u624b/\u526f\u624b/\u62a4\u7532\u201d\u88c5\u5907\u5230\u6307\u5b9a\u69fd\uff1b\u4e0d\u5199\u69fd\u4f4d\u4f1a\u6309\u7075\u5668\u7c7b\u578b\u81ea\u52a8\u5224\u65ad\u3002")
+    lines.append("\u53d1\u9001\u201c\u88c5\u5907\u7075\u5668 \u7f16\u53f7 \u4e3b\u624b/\u526f\u624b/\u62a4\u7532\u201d\u88c5\u5907\u5230\u6307\u5b9a\u69fd\uff1b\u4e0d\u5199\u69fd\u4f4d\u4f1a\u6309\u7075\u5668\u7c7b\u578b\u81ea\u52a8\u5224\u65ad\u3002\u5929\u9636\u7075\u5668\u9700\u81f3\u5c11\u5316\u795e\u671f\u624d\u80fd\u9a7e\u9a6d\uff1b\u975e\u5251\u5929\u9636\u7075\u5668\u5df2\u6309\u5668\u578b\u8865\u8db3\u6218\u529b\u3002")
     lines.append("\u53d1\u9001\u201c\u5378\u4e0b\u7075\u5668 \u526f\u624b\u201d\u53ef\u5378\u4e0b\u6307\u5b9a\u69fd\uff1b\u53d1\u9001\u201c\u5378\u4e0b\u7075\u5668\u201d\u5378\u4e0b\u5168\u90e8\u7075\u5668\u3002")
     return "\n".join(lines)
 
@@ -2318,7 +2391,7 @@ def format_method_list(record) -> str:
         profile = method_profile(method, record)
         tech_count = len(profile.get("techniques", []))
         lines.append(
-            f"{index}. {reward_display_name(method)}\uff0c{profile['kind']}\uff0c\u7b2c{profile['layer']}\u5c42\uff0c"
+            f"{index}. {reward_display_name(method)}\uff0c{profile['kind']}\uff0c\u7b2c{profile['layer']}/{profile['max_layer_text']}\u5c42\uff0c"
             f"\u6218\u6280{tech_count}\u5f0f\uff0c\u9700\u6c42{required or '\u65e0'}\u7075\u6839\uff0c{compatible}\uff0c\u6218\u529b+{bonus}"
         )
     lines.append("\u53d1\u9001\u201c\u5b66\u4e60\u529f\u6cd5 \u7f16\u53f7\u201d\u67e5\u770b\u529f\u6cd5\u9875\uff1b\u53d1\u9001\u201c\u53c2\u609f\u529f\u6cd5 \u7f16\u53f7\u201d\u8bbe\u4e3a\u5f53\u524d\u529f\u6cd5\u3002")
@@ -2331,20 +2404,24 @@ def format_array_list(record) -> str:
     lines.append(f"当前阵盘：{reward_display_name(record.equipped_array) if record.equipped_array else '未布置阵盘'}")
     lines.append(f"当前阵法倍率：{array_multiplier(record):.1f}x")
     if not arrays:
-        lines.append("暂无阵盘，进行诸天万界垂钓有机会获得。")
+        lines.append("暂无阵盘，进行灵河垂钓、秘境探索或交易有机会获得。")
         return "\n".join(lines)
     for index, array in enumerate(arrays, start=1):
-        lines.append(f"{index}. {reward_display_name(array)}")
-    lines.append("发送“布置阵盘 编号”即可布置；阵法熟练度随签到和聊天修炼提升。")
+        layer = array_layer(record, array)
+        proficiency = array_proficiency_value(record, array)
+        cap = array_proficiency_cap(array, layer)
+        lines.append(
+            f"{index}. {reward_display_name(array)}，第{layer}/{array_layer_cap_text(array)}层，熟练度 {proficiency}/{cap}，倍率上限约{1 + cap / 100:.1f}x"
+        )
+    lines.append("发送“布置阵盘 编号”即可布置；重复获得同名阵盘会自动推演，仙阶极品后可无限提升。")
     return "\n".join(lines)
-
 
 def format_puppet_list(record) -> str:
     puppets = available_puppets(record)
     lines = ["【我的傀儡】"]
     lines.append(f"当前傀儡：{reward_display_name(record.equipped_puppet) if record.equipped_puppet else '未唤醒傀儡'}")
     if not puppets:
-        lines.append("暂无傀儡，诸天万界垂钓或秘境探索有机会获得。")
+        lines.append("暂无傀儡，灵河垂钓、炼器或秘境探索有机会获得。")
         return "\n".join(lines)
     for index, puppet in enumerate(puppets, start=1):
         lines.append(f"{index}. {reward_display_name(puppet)}，战力+{puppet_power(puppet, record)}")
@@ -2357,7 +2434,7 @@ def format_plant_list(record) -> str:
     lines = ["【我的灵植】"]
     lines.append(f"当前灵植：{reward_display_name(record.planted_spirit_plant) if record.planted_spirit_plant else '未栽种灵植'}")
     if not plants:
-        lines.append("暂无灵植，诸天万界垂钓或秘境探索有机会获得。")
+        lines.append("暂无灵植，灵河垂钓、秘境探索或商店刷新有机会获得。")
         return "\n".join(lines)
     for index, plant in enumerate(plants, start=1):
         lines.append(f"{index}. {reward_display_name(plant)}，栽种后签到修为获得灵植加成")
@@ -2371,9 +2448,19 @@ def append_item_lines(lines: list[str], title: str, items: list[dict[str, Any]],
         lines.append("暂无")
     else:
         for index, item in enumerate(items, start=1):
-            lines.append(f"{index}. {reward_display_name(item)}")
+            lines.append(f"{index}. {item_list_display(item)}")
     lines.append(usage)
 
+
+def item_list_display(item: dict[str, Any]) -> str:
+    title = reward_display_name(item)
+    if str(item.get("category")) == "\u7075\u6750" and "\u5996\u4e39" in str(item.get("name", "")):
+        exp = item.get("cultivation_exp") or item.get("exp")
+        realm = item.get("beast_realm") or "\u672a\u77e5"
+        element = item.get("element") or item.get("required_attribute") or "\u672a\u5b9a"
+        if exp:
+            title += f"｜{element}行{realm}，炼化修为+{exp}"
+    return title
 
 def format_item_list(record) -> str:
     lines = ["\u3010\u80cc\u5305\u9053\u5177\u3011"]
@@ -2390,8 +2477,8 @@ def format_item_list(record) -> str:
         ("\u4e39\u836f", available_pills(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u4e39\u836f \u7f16\u53f7\uff1b\u7a81\u7834\u9053\u5177\u8bf7\u53d1\u9001\u201c\u7a81\u7834\u201d"),
         ("\u7b26\u7b93", available_talismans(record), "\u7528\u6cd5\uff1a\u88c5\u5907\u7b26\u7b93 \u7f16\u53f7 \u653e\u5165\u7b26\u7b93\u680f\uff0c\u666e\u901a\u6597\u6cd5\u751f\u6548\u4e14\u4e0d\u6d88\u8017\uff1b\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7 \u4e3a\u4e00\u6b21\u6027\u6fc0\u53d1\uff1b\u7ed8\u5236\u7b26\u7b93 \u7f16\u53f7\u53ef\u81ea\u884c\u5236\u7b26"),
         ("\u7075\u77f3", available_spirit_stones(record), "\u7528\u6cd5\uff1a\u70bc\u5316\u7075\u77f3 \u7f16\u53f7\uff1b\u74f6\u9888\u65f6\u4f1a\u8f6c\u4e3a\u7cbe\u7eaf\u7075\u6db2"),
-        ("\u7075\u6750", available_materials(record), "\u7528\u6cd5\uff1a\u70bc\u4e39\u6750\u6599\uff1b\u5996\u4e39\u53ef\u53d1\u9001\u201c\u70bc\u5316\u4e39\u7075\u6839 \u7f16\u53f7\u201d\uff1b\u51fa\u552e\u7075\u6750 \u7f16\u53f7\u53ef\u6362\u7075\u77f3"),
-        ("\u7279\u6b8a\u80fd\u529b", available_special_ability_items(record), "\u7528\u6cd5\uff1a\u9886\u609f\u7279\u6b8a\u80fd\u529b \u7f16\u53f7\uff1b\u53ef\u83b7\u5f97\u4e5d\u79d8\u3001\u516b\u7981\u3001\u795e\u7981\u7b49\u80fd\u529b"),
+        ("\u7075\u6750", available_materials(record), "\u7528\u6cd5\uff1a\u70bc\u4e39\u6750\u6599\uff1b\u5996\u4e39\u53ef\u53d1\u9001\u201c\u70bc\u5316\u5996\u4e39 \u7f16\u53f7\u201d\u63d0\u5347\u4fee\u4e3a\uff0c\u6216\u201c\u70bc\u5316\u4e39\u7075\u6839 \u7f16\u53f7\u201d\u8865\u5168\u4e94\u884c\uff1b\u51fa\u552e\u7075\u6750 \u7f16\u53f7\u53ef\u6362\u7075\u77f3"),
+        ("\u795e\u901a", available_special_ability_items(record), "\u7528\u6cd5\uff1a\u9886\u609f\u795e\u901a \u7f16\u53f7\uff1b\u53ef\u83b7\u5f97星律、初阈、重阈、归极域等能力"),
         ("\u7075\u98df", available_foods(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u7075\u98df \u7f16\u53f7\uff1b\u74f6\u9888\u65f6\u4f1a\u8f6c\u4e3a\u7cbe\u7eaf\u7075\u6db2"),
         ("\u5947\u7269", available_curios(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u5947\u7269 \u7f16\u53f7\uff1b\u53ef\u80fd\u5f97\u5230\u4fee\u4e3a\u3001\u5782\u9493\u6216\u5939\u5c42\u9053\u5177"),
         ("\u6742\u7269", available_misc_items(record), "\u7528\u6cd5\uff1a\u9274\u5b9a\u6742\u7269 \u7f16\u53f7\uff1b\u53ef\u80fd\u9274\u51fa\u7269\u54c1\u6216\u6b8b\u4f59\u7075\u6c14"),
@@ -2403,44 +2490,90 @@ def format_item_list(record) -> str:
             lines.append("\u6682\u65e0")
         else:
             for index, item in enumerate(items, start=1):
-                lines.append(f"{index}. {reward_display_name(item)}")
+                lines.append(f"{index}. {item_list_display(item)}")
         lines.append(usage)
     return "\n".join(lines)
 
 def format_help_text() -> str:
     return "\n".join(
         [
-            "\u3010\u4fee\u4ed9\u5e2e\u52a9\u3011",
-            "\u5e38\u7528\u5165\u53e3\uff1a\u7b7e\u5230 / \u9762\u677f / \u80cc\u5305 / \u56fe\u9274 / \u5386\u7ec3 / \u79d8\u5883 / \u7a81\u7834 / \u540e\u5929\u7075\u6839 / \u6392\u884c / \u5546\u5e97 / \u5929\u673a\u5360\u535c",
+            "【修仙帮助】",
+            "新手三步：1. 发送 签到 入门；2. 发送 面板 和 历练 看状态；3. 发送 背包 和 图鉴 了解物品用途。",
+            "每天建议：签到 -> 灵河垂钓 -> 背包处理资源 -> 历练查看配置 -> 突破或秘境。",
             "",
-            "\u3010\u4fee\u4e3a\u63d0\u5347\u8def\u5f84\u3011",
-            "1. \u7b7e\u5230\uff1a\u6bcf\u65e5\u589e\u52a0\u4fee\u4e3a\uff0c\u9996\u6b21\u62bd\u53d6\u7075\u6839\uff0c\u6bcf\u6b21\u7b7e\u5230\u83b7\u5f97 1 \u6b21\u5782\u9493\u3002",
-            "2. \u529f\u6cd5\uff1a\u53c2\u609f\u540e\u53ef\u63d0\u5347\u7b7e\u5230\u6536\u76ca\uff0c\u804a\u5929\u65f6\u4e5f\u80fd\u6309\u6761\u6570\u4ea7\u751f\u4fee\u4e3a\u3002",
-            "3. \u7075\u690d/\u7075\u98df/\u4e39\u836f/\u7075\u77f3\uff1a\u5728\u80cc\u5305\u4e2d\u4f7f\u7528\uff0c\u6216\u7528\u4e8e\u70bc\u4e39\u3001\u7a81\u7834\u3002",
-            "4. \u74f6\u9888\uff1a\u5883\u754c\u5706\u6ee1\u540e\u4fee\u4e3a\u4e0d\u518d\u589e\u957f\uff0c\u6ea2\u51fa\u4fee\u4e3a 50% \u4f1a\u51dd\u6210\u7cbe\u7eaf\u7075\u6db2\uff1b\u7a81\u7834\u540e\u53ef\u53d1\u9001\u201c\u70bc\u5316\u7075\u6db2\u201d\u8f6c\u56de\u4fee\u4e3a\u3002",
-            "5. \u6c89\u6dc0\uff1a\u74f6\u9888\u540e\u6bcf\u5929\u7b7e\u5230\u6c89\u6dc0\u4e00\u6b21\uff0c\u7b7e\u5230/\u5782\u9493\u5bb9\u6613\u83b7\u5f97\u7a81\u7834\u9053\u5177\uff1b\u9053\u5177\u540d\u79f0\u51b3\u5b9a\u54c1\u76f8\u4e0a\u9650\uff0c\u54c1\u9636\u548c\u54c1\u8d28\u53ea\u5728\u4e0a\u9650\u5185\u63d0\u5347\u7a81\u7834\u54c1\u76f8\u3002",
-            "6. \u540e\u5929\u7075\u6839\uff1a\u5316\u795e\u7834\u70bc\u865a\u9700\u4e94\u884c\u8865\u5168\uff0c\u53d1\u9001\u201c\u540e\u5929\u7075\u6839\u201d\u67e5\u770b\uff1b\u5996\u4e39\u7528\u201c\u70bc\u5316\u4e39\u7075\u6839 1\u201d\uff0c\u9002\u914d\u7075\u5668\u7528\u201c\u70bc\u5316\u5668\u7075\u6839 1\u201d\u3002",
+            "【修为与突破】",
+            "突破：境界圆满后发送 突破，系统会提示需要的道具。",
+            "灵液：瓶颈后多余修为会变成精纯灵液，突破后发送 炼化灵液。",
+            "妖丹：发送 炼化妖丹 1 或 批量炼化妖丹 全部，可按妖丹参数获得修为。",
+            "五行：化神破炼虚需要五行补全，发送 后天灵根 查看丹灵根和器灵根。",
             "",
-            "\u3010\u8def\u7ebf\u4e0e\u8eab\u4efd\u3011",
-            "\u53d1\u9001\u201c\u8def\u7ebf\u201d\u67e5\u770b\u5251\u4fee\u3001\u672f\u4fee\u3001\u70bc\u4e39\u5e08\u3001\u9635\u6cd5\u5e08\u7684\u6548\u679c\uff0c\u4e5f\u4f1a\u663e\u793a\u5929\u673a\u9601\u4e0e\u5408\u6b22\u5b97\u8eab\u4efd\u7684\u95e8\u69db\u3002",
-            "\u4e3b\u8def\u7ebf\u793a\u4f8b\uff1a\u9009\u62e9\u8def\u7ebf \u5251\u4fee\uff1b\u5b97\u95e8\u793a\u4f8b\uff1a\u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50\u3002",
+            "【物品与图鉴】",
+            "背包：查看丹药、符箓、灵石、妖丹、灵食、奇物、材料和神通传承。",
+            "图鉴：发送 图鉴 查看分类入口；发送 图鉴 物品名 查看用途、故事、来源和配方。",
+            "常用分类：境界图鉴 / 突破图鉴 / 品相图鉴 / 灵器图鉴 / 功法图鉴 / 阵盘图鉴 / 神通图鉴 / 唯一装备图鉴。",
             "",
-            "\u3010\u56fe\u9274\u5165\u53e3\u3011",
-            "\u56fe\u9274 / \u56fe\u9274 \u7834\u865a\u7075\u5f15 / \u5883\u754c\u56fe\u9274 / \u7a81\u7834\u56fe\u9274 / \u4e39\u836f\u56fe\u9274 / \u7b26\u7b93\u56fe\u9274 / \u6b66\u5668\u56fe\u9274 / \u529f\u6cd5\u56fe\u9274 / \u7279\u6b8a\u80fd\u529b\u56fe\u9274",
-            "\u3010\u7279\u6b8a\u80fd\u529b\u3011",
-            "\u7279\u6b8a\u80fd\u529b / \u9886\u609f\u7279\u6b8a\u80fd\u529b 1 / \u7279\u6b8a\u80fd\u529b\u56fe\u9274\uff1a\u67e5\u770b\u3001\u9886\u609f\u5e76\u8ffd\u6c42\u4e5d\u79d8\u3001\u516b\u7981\u3001\u795e\u7981\u7b49\u80fd\u529b\u3002",
-            "\u3010\u6597\u6cd5\u3011",
-            "\u7533\u8bf7\u666e\u901a\u6597\u6cd5\uff1a\u4e24\u4eba\u5339\u914d\u540e 1 \u5206\u949f\u51c6\u5907\uff0c60 \u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u7279\u6b8a\u80fd\u529b\u6216\u5373\u5174\u53f0\u8bcd\uff0c\u7ed3\u675f\u540e\u8f93\u51fa\u6218\u62a5\u56fe\u3002",
-            "\u3010\u8da3\u5473\u73a9\u6cd5\u3011",
-            "\u5929\u673a\u5360\u535c / \u5360\u535c \u4eca\u65e5\u8fd0\u52bf / \u7b97\u547d \u59fb\u7f18\uff1a\u53c2\u8003\u5468\u6613\u5366\u8c61\u4e0e\u9053\u6559\u7b7e\u8bed\u751f\u6210\u8da3\u5473\u65ad\u8bed\uff0c\u4e0d\u6d88\u8017\u4fee\u4e3a\u6216\u9053\u5177\u3002",
-            "万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1：公开寄售按系统回收价 1.5 倍自动定价。",
-            "斗地主 / 斗地主帮助 / 人机斗地主：群聊三人斗牌，炸弹在修仙牌局中显示为雷劫，王炸显示为天罚雷劫。",
+            "【灵器与战力】",
+            "灵器按境界绑定：元婴只能装备元婴修士能驾驭的灵器，同阶内也有凡品到天阶。",
+            "装备：灵器 / 装备灵器 1 主手 / 装备灵器 2 副手 / 装备灵器 3 护甲 / 卸下灵器。",
+            "成长：祭炼本命灵器 1 可设为本命；假仙后可获得仙器；仙帝兵和其他唯一装备可看 唯一装备图鉴。",
+            "历练面板：发送 历练 或 历练面板，可查看灵器槽位、功法、阵盘、符箓、神通、战力和常用入口。",
+            "",
+            "【功法、阵盘、神通】",
+            "功法：功法 / 学习功法 1 / 参悟功法 1。功法唯一存在，重复获得会推演升层。",
+            "阵盘：阵盘 / 布置阵盘 1 / 阵法推演 1。重复阵盘可升品升阶，熟练度继承。",
+            "神通：神通 / 神通图鉴 / 领悟神通 1。斗法中可发送神通名或新别名，如 开启初阈、星律流影、风掣疾行。",
+            "",
+            "【秘境、任务、路线】",
+            "秘境：发送 秘境 抽入口，60 秒内选 1-3；进入后发送 探索 1。首领挑战胜利会给多次探索奖励和妖丹。",
+            "救援：秘境反噬后可发送 秘境救援 1000，其他玩家可接取。",
+            "任务：每日任务 / 接取任务 / 完成任务 1。路线：修炼路线 / 选择路线 剑修 / 选择身份 天机阁弟子。",
+            "御兽秘境：群聊发送 御兽秘境开局 PVE 或 御兽秘境开局 PVP；开始后私聊任务堂购买随从、施放法术、升堂并完成招募。",
+            "",
+            "【交易、休闲、后台】",
+            "商店：商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20。",
+            "万宝楼：万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1 / 万宝楼下架 1。",
+            "休闲：天机占卜 / 坐堂 / 斗地主 / 斗地主帮助 / 御兽秘境 / 排行 / 战力榜。",
+            "后台：服主可在浏览器访问 /xiuxian-admin，查看玩家档案、物品属性、灵器规则和秘境掉落配置。",
         ]
     )
 
-
+def format_newbie_tutorial_text(record=None, nickname: str = "") -> str:
+    if record is not None and getattr(record, "root", None):
+        status = f"当前状态：{nickname or '宿主'}已入门，境界为{record.realm}，进度{record.realm_exp}/{record.progress_required}。"
+    else:
+        status = "当前状态：尚未入门，先私聊发送 签到，即可抽取灵根并获得第一份修为。"
+    return "\n".join(
+        [
+            "【新手教程】",
+            "这是一套慢慢养成的修仙小游戏：每天签到拿修为，修为满了突破境界，物品和装备会让你更容易变强。",
+            status,
+            "私聊发送 新手教程 可随时重复打开；大多数玩法也可以在群聊使用。",
+            "",
+            "【先认识三个数】",
+            "修为：可以理解为经验值。签到、丹药、灵石、妖丹、灵食、秘境和任务都可能增加修为。",
+            "境界：可以理解为等级。修为进度满后会进入瓶颈，发送 突破 查看所需道具。",
+            "灵根：开局天赋和属性，首次签到抽取；它影响每日修为收益和面板配色。",
+            "",
+            "【第一天推荐】",
+            "1. 签到：抽取灵根，获得修为和 1 次灵河垂钓。",
+            "2. 面板：查看境界、灵根、修为、灵石、装备和当前进度。",
+            "3. 灵河垂钓：签到后会提示是否垂钓，回复 是/好/y/十连 即可抽取资源。",
+            "4. 背包：查看钓到或获得的丹药、符箓、灵石、妖丹、材料和奇物。",
+            "5. 图鉴：不知道物品用途时，发送 图鉴 或 图鉴 物品名。",
+            "",
+            "【接下来做什么】",
+            "历练面板：发送 历练 或 历练面板，查看战力、灵器槽位、功法、阵盘、符箓、神通和常用入口。",
+            "突破：境界满了发送 突破；缺道具时看 突破图鉴 或继续垂钓、秘境。",
+            "装备：发送 灵器、功法、阵盘、神通 查看可用内容，再按面板编号装备或领悟。",
+            "秘境和任务：发送 秘境、每日任务，可获得更多资源；失败反噬时可使用 秘境救援。",
+            "",
+            "【不确定时】",
+            "编号永远以当前面板为准；刚看完 背包/灵器/功法 后再操作最稳。",
+            "常用求助：帮助 / 图鉴 / 新手教程。先每天签到和垂钓，后面的系统会自然接上。",
+        ]
+    )
 def reward_catalog_lines(category: str, title: str) -> list[str]:
-    tier_order = ["帝兵", "仙阶", "\u5929\u9636", "\u5730\u9636", "\u7384\u9636", "\u9ec4\u9636", "\u51e1\u54c1"]
+    tier_order = ["仙帝兵", "仙阶", "\u5929\u9636", "\u5730\u9636", "\u7384\u9636", "\u9ec4\u9636", "\u51e1\u54c1"]
     seen: dict[str, set[str]] = {tier: set() for tier in tier_order}
     for tier, _grade, item_category, name, _desc, _weight in FISHING_REWARDS:
         if item_category == category:
@@ -2461,26 +2594,27 @@ def format_catalog_text(text: str) -> str:
         detail = catalog_item_detail_text(query)
         if detail:
             return detail
-        return f"【{query}图鉴】\n暂未收录这个条目的图鉴。可尝试发送“丹药图鉴 / 符箓图鉴 / 材料图鉴 / 帝兵图鉴”查看完整分类。"
+        return f"【{query}图鉴】\n暂未收录这个条目的图鉴。可尝试发送“丹药图鉴 / 符箓图鉴 / 材料图鉴 / 唯一装备图鉴”查看完整分类。"
     if text in {"\u56fe\u9274", "\u56fe\u5f55"}:
         return "\n".join(
             [
-                "\u3010\u5185\u7f6e\u56fe\u9274\u3011",
-                "\u5883\u754c\u56fe\u9274\uff1a\u5883\u754c\u3001\u9636\u6bb5\u548c\u74f6\u9888\u8bf4\u660e\u3002",
-                "\u7a81\u7834\u56fe\u9274\uff1a\u6bcf\u4e2a\u74f6\u9888\u9700\u8981\u7684\u4e39\u836f\u3001\u7b26\u4ee4\u3001\u610f\u5883\u6216\u6cd5\u65e8\u3002",
-                "\u54c1\u76f8\u56fe\u9274\uff1a\u67e5\u770b\u7a81\u7834\u9053\u5177\u540d\u79f0\u4e0e\u6700\u7ec8\u5883\u754c\u54c1\u76f8\u4e0a\u9650\u7684\u5bf9\u5e94\u5173\u7cfb\u3002",
-                "\u4e39\u836f\u56fe\u9274\uff1a\u4e39\u836f\u4e0e\u7a81\u7834\u4e39\u6536\u5f55\uff0c\u70bc\u4e39\u6750\u6599\u54c1\u8d28\u4f1a\u5f71\u54cd\u6210\u4e39\u3002",
-                "\u7b26\u7b93\u56fe\u9274\uff1a\u666e\u901a\u7b26\u7b93\u4e0e\u7a81\u7834\u7b26\u4ee4\u3001\u7b26\u8bcf\u3001\u6cd5\u65e8\u3002",
-                "\u6b66\u5668\u56fe\u9274\uff1a\u5404\u7cfb\u7075\u6839\u53ef\u7528\u7684\u7075\u5668\u3002",
-                "\u529f\u6cd5\u56fe\u9274\uff1a\u4fee\u70bc\u7c7b\u3001\u6218\u6280\u7c7b\u7b49\u529f\u6cd5\u6536\u5f55\u3002",
-                "\u6750\u6599\u56fe\u9274\uff1a\u7075\u6750\u3001\u7075\u690d\u548c\u70bc\u4e39\u6240\u9700\u539f\u6599\u3002",
-                "\u7279\u6b8a\u80fd\u529b\u56fe\u9274\uff1a\u4e5d\u79d8\u3001\u516b\u7981\u3001\u795e\u7981\u548c\u5176\u4ed6\u4f20\u627f\u80fd\u529b\u3002",
+                "【图鉴入口】",
+                "图鉴 名称：查询单个物品的类型、品阶、用途、故事、获取方式和制作素材。",
+                "境界图鉴：查看所有境界、阶段和瓶颈位置。",
+                "突破图鉴：查看每个瓶颈需要的突破道具。",
+                "品相图鉴：查看突破道具名与突破品相上限。",
+                "丹药图鉴 / 符箓图鉴 / 材料图鉴：查看消耗品、制作材料和使用方式。",
+                "灵器图鉴：查看普通灵器、仙器和境界装备规则。",
+                "功法图鉴 / 阵盘图鉴：查看可获得功法、阵盘和成长方式。",
+                "神通图鉴：查看星律、初阈、重阈、归极域和其他神通传承。",
+                "仙源图鉴 / 唯一装备图鉴：查看真仙后仙源、仙帝兵和其他唯一装备。",
             ]
         )
     if text == "\u5883\u754c\u56fe\u9274":
         lines = ["\u3010\u5883\u754c\u56fe\u9274\u3011", "\u9636\u6bb5\uff1a\u521d\u671f / \u4e2d\u671f30% / \u540e\u671f60% / \u5706\u6ee1100% / \u5dc5\u5cf0\uff08\u74f6\u9888\u672a\u7a81\u7834\uff09"]
         for index, realm in enumerate(REALMS, start=1):
-            suffix = "\uff08\u6709\u74f6\u9888\uff09" if index - 1 in BREAKTHROUGH_REQUIREMENTS else ""
+            requirement_key = breakthrough_requirement_key_for_realm_index(index - 1)
+            suffix = "\uff08\u6709\u74f6\u9888\uff09" if requirement_key in BREAKTHROUGH_REQUIREMENTS else ""
             lines.append(f"{index}. {realm}{suffix}")
         return "\n".join(lines)
     if text in {"品相图鉴", "突破品相图鉴", "道具品相图鉴"}:
@@ -2488,13 +2622,16 @@ def format_catalog_text(text: str) -> str:
     if text == "\u7a81\u7834\u56fe\u9274":
         lines = ["\u3010\u7a81\u7834\u56fe\u9274\u3011", "\u4fee\u4e3a\u8fbe\u5230\u5706\u6ee1\u540e\u4f1a\u8fdb\u5165\u74f6\u9888\uff0c\u9700\u6d88\u8017\u5bf9\u5e94\u9053\u5177\u624d\u80fd\u7a81\u7834\u3002", "\u9053\u5177\u540d\u79f0\u51b3\u5b9a\u54c1\u76f8\u4e0a\u9650\uff1b\u54c1\u9636/\u54c1\u8d28\u53ea\u5728\u8be5\u4e0a\u9650\u5185\u63d0\u5347\u7ed3\u679c\uff0c\u57fa\u7840\u9053\u5177\u5373\u4f7f\u62bd\u5230\u5929\u9636\u4e5f\u4e0d\u4f1a\u76f4\u63a5\u89e3\u9501\u6700\u9ad8\u54c1\u76f8\u3002"]
         for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
-            current = REALMS[realm_index]
-            target = str(requirement.get("target", "\u4e0b\u4e00\u5883"))
+            source_index = breakthrough_source_realm_index(realm_index)
+            target_index = breakthrough_target_realm_index(realm_index)
+            current = REALMS[source_index]
+            target = breakthrough_target_realm(realm_index, requirement)
             items = " / ".join(
-                f"{item}（{breakthrough_item_quality_cap_text(str(item), realm_index + 1)}）"
+                f"{item}\uff08{breakthrough_item_quality_cap_text(str(item), target_index)}\uff09"
                 for item in requirement.get("items", [])
             )
             lines.append(f"{current} -> {target}\uff1a{items}")
+        lines.append("\u5047\u4ed9\u5883\u662f\u6e21\u52ab\u540e\u7684\u4e03\u65e5\u4ed9\u5143\u529b\u8f6c\u5316\u9636\u6bb5\uff0c\u4e0d\u989d\u5916\u6d88\u8017\u7a81\u7834\u9053\u5177\uff1b\u5b8c\u6210\u540e\u8fdb\u5165\u771f\u4ed9\u5883\u3002")
         lines.append("\u74f6\u9888\u65f6\u7b7e\u5230/\u5782\u9493\u83b7\u5f97\u7a81\u7834\u9053\u5177\u7684\u6982\u7387\u4f1a\u5927\u5e45\u63d0\u5347\uff0c\u4f46\u6700\u7ec8\u54c1\u76f8\u9700\u540c\u65f6\u770b\u9053\u5177\u540d\u79f0\u3001\u54c1\u9636\u548c\u54c1\u8d28\u3002")
         return "\n".join(lines)
     if text in SPECIAL_ABILITY_CATALOG_TEXTS:
@@ -2509,16 +2646,15 @@ def format_catalog_text(text: str) -> str:
                 mats += f"\u7b49{len(recipe['materials'])}\u4ef6"
             lines.append(f"{name}\uff1a{recipe['tier']}{recipe['grade']}{recipe.get('category', '\u7075\u5668')}\uff5c\u9700{REALMS[int(recipe.get('required_realm', 0))]}\uff5c\u6750\u6599\uff1a{mats}")
         return "\n".join(lines)
-    if text == "\u4ed9\u79cd\u56fe\u9274":
-        lines = ["\u3010\u4ed9\u79cd\u56fe\u9274\u3011", "\u4ed9\u79cd\u4e3a\u5b8c\u7f8e\u4e16\u754c\u7cfb\u79d8\u5883\u4ea7\u51fa\uff0c\u771f\u4ed9\u5883\u540e\u53ef\u88c5\u5907\uff0c\u90e8\u5206\u4ed9\u79cd\u5177\u6709\u5168\u5c40\u552f\u4e00\u6027\u3002"]
+    if text in {"仙源图鉴", "仙种图鉴"}:
+        lines = ["【仙源图鉴】", "仙源主要来自高危险秘境和真仙后机缘，真仙境后可纳入；部分仙源具有全局唯一性。"]
         for name, info in IMMORTAL_SEED_INFOS.items():
             lines.append(f"{name}\uff1a{info.get('effect', '')}")
         return "\n".join(lines)
     category_map = {
         "\u4e39\u836f\u56fe\u9274": ("\u4e39\u836f", "\u4e39\u836f\u56fe\u9274"),
         "\u7b26\u7b93\u56fe\u9274": ("\u7b26\u7b93", "\u7b26\u7b93\u56fe\u9274"),
-        "\u6b66\u5668\u56fe\u9274": ("\u7075\u5668", "\u7075\u5668/\u6b66\u5668\u56fe\u9274"),
-        "\u7075\u5668\u56fe\u9274": ("\u7075\u5668", "\u7075\u5668/\u6b66\u5668\u56fe\u9274"),
+        "\u7075\u5668\u56fe\u9274": ("\u7075\u5668", "\u7075\u5668\u56fe\u9274"),
         "\u529f\u6cd5\u56fe\u9274": ("\u529f\u6cd5", "\u529f\u6cd5\u56fe\u9274"),
         "\u9635\u76d8\u56fe\u9274": ("\u9635\u76d8", "\u9635\u76d8\u56fe\u9274"),
         "\u6750\u6599\u56fe\u9274": ("\u7075\u6750", "\u7075\u6750/\u6750\u6599\u56fe\u9274"),
@@ -2533,6 +2669,7 @@ def format_catalog_text(text: str) -> str:
             lines.append("\u7528\u6cd5\uff1a\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7\uff1b\u7ed8\u5236\u7b26\u7b93 \u7f16\u53f7\u53ef\u81ea\u884c\u5236\u7b26\u3002")
         if category == "\u7075\u5668":
             lines.append("\u7528\u6cd5\uff1a\u7075\u5668 / \u88c5\u5907\u7075\u5668 \u7f16\u53f7\uff1b\u7075\u6839\u5951\u5408\u624d\u80fd\u88c5\u5907\u90e8\u5206\u7075\u5668\u3002")
+            lines.append(artifact_realm_catalog_summary_text())
         if category == "\u529f\u6cd5":
             lines.append("\u7528\u6cd5\uff1a\u529f\u6cd5 / \u5b66\u4e60\u529f\u6cd5 \u7f16\u53f7 / \u53c2\u609f\u529f\u6cd5 \u7f16\u53f7\uff1b\u529f\u6cd5\u4f1a\u5f71\u54cd\u4fee\u4e3a\u3001\u8840\u91cf\u3001\u795e\u9b42\u611f\u77e5\u548c\u6597\u6cd5\u6218\u6280\u3002")
         return "\n".join(lines)
@@ -2553,19 +2690,21 @@ def item_icon_for_category(category: str) -> str:
         "奇物": "curio",
         "灵材": "stone",
         "杂物": "misc",
-        "特殊能力": "ability",
+        "神通": "ability",
     }.get(category, "bag")
 
 
 def format_mystic_entries(entries: list[dict[str, Any]]) -> str:
-    lines = ["叮！目前为宿主查找到以下秘境："]
+    if not entries:
+        return "当前后台未开启任何秘境入口。"
+    lines = ["当前发现以下秘境入口："]
     for index, entry in enumerate(entries, start=1):
         title = mystic_realm_title_from_entry(entry)
         recommended = str(entry.get("recommended") or "未知")
         lines.append(f"{index}、{title}（推荐修为：{recommended}）")
     if any(entry.get("insight") for entry in entries):
         lines.append("天机示警已开启：进入后会标出坏结局选项。")
-    lines.append("（请在60s内回复，超时恐被其他修士捷足先登）")
+    lines.append("请在 60 秒内回复入口编号，超时后入口会关闭。")
     return "\n".join(lines)
 
 
@@ -2589,7 +2728,7 @@ def format_power_status(record, nickname: str) -> str:
         f"\u7075\u77f3\u50a8\u5907\uff1a{summary['spirit_stones_text']}",
         f"\u4fee\u70bc\u8def\u7ebf\uff1a{summary['route']}",
         f"\u8eab\u4efd\u4ee4\u724c\uff1a{summary['identity']}",
-        f"\u7279\u6b8a\u80fd\u529b\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd\uff1b\u6218\u529b+{summary['special_ability_power']}",
+        f"\u795e\u901a\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd\uff1b\u6218\u529b+{summary['special_ability_power']}",
         f"\u5929\u673a\u79d8\u5883\uff1a{summary['tianji_status']}\uff1b\u53cc\u4fee\u6b21\u6570\uff1a{summary['hehuan_remaining']}",
         f"\u79d8\u5883\uff1a{summary['mystic_realm']}",
         f"\u88c5\u5907\u52a0\u6210\uff1a{summary['equipment_power']}",
@@ -2608,7 +2747,7 @@ def format_adventure_panel(record) -> str:
             f"\u5f53\u524d\u6218\u529b\uff1a{summary['power']}\uff1b{summary['mana_label']}\u4e0a\u9650\uff1a{summary['mana']}",
             f"\u5f53\u524d\u7075\u5668\u69fd\uff1a{summary['artifact_slots']}",
             f"\u672c\u547d\u7075\u5668\uff1a{summary['life_artifact']}",
-            f"\u4ed9\u79cd\uff1a{summary['immortal_seed']}\uff08\u6218\u529b+{summary['immortal_seed_power']}\uff09",
+            f"仙源：{summary['immortal_seed']}（战力+{summary['immortal_seed_power']}）",
             f"\u5f53\u524d\u7b26\u7b93\u680f\uff1a{summary['talisman']}\uff08\u6218\u529b+{summary['talisman_power']}\uff09",
             f"\u5f53\u524d\u529f\u6cd5\uff1a{summary['method']}",
             f"\u5f53\u524d\u9635\u76d8\uff1a{summary['array']}\uff08{summary['array_multiplier']:.1f}x\uff09",
@@ -2622,7 +2761,7 @@ def format_adventure_panel(record) -> str:
             "\u8def\u7ebf / \u9009\u62e9\u8def\u7ebf \u5251\u4fee / \u9009\u62e9\u8def\u7ebf \u70bc\u5668\u5e08 / \u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50",
             "\u6bcf\u65e5\u4efb\u52a1 / \u5b8c\u6210\u4efb\u52a1 1 / \u5546\u5e97 / \u8d2d\u4e70 1 / \u51fa\u552e \u4e39\u836f 1",
             "\u70bc\u4e39 / \u70bc\u5668 / \u70bc\u5668\u56fe\u9274 / \u9635\u6cd5\u63a8\u6f14 1 / \u796d\u70bc\u672c\u547d\u7075\u5668 1",
-            "\u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u795e\u901a / \u4ed9\u79cd / \u5e1d\u5175\u56fe\u9274\uff1a\u67e5\u770b\u53ef\u7528\u914d\u7f6e",
+            "\u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u795e\u901a / \u4ed9\u79cd / \u552f\u4e00\u88c5\u5907\u56fe\u9274\uff1a\u67e5\u770b\u53ef\u7528\u914d\u7f6e",
             "\u5080\u5121 / \u7075\u690d / \u80cc\u5305\uff1a\u67e5\u770b\u5386\u7ec3\u8d44\u6e90",
             "\u88c5\u5907\u7075\u5668 1 \u4e3b\u624b / \u88c5\u5907\u7075\u5668 2 \u526f\u624b / \u88c5\u5907\u7075\u5668 3 \u62a4\u7532 / \u88c5\u5907\u7b26\u7b93 1",
             "\u53c2\u609f\u529f\u6cd5 1 / \u5e03\u7f6e\u9635\u76d8 1 / \u88c5\u5907\u4ed9\u79cd 1 / \u5378\u4e0b\u7075\u5668 \u526f\u624b",
@@ -2634,7 +2773,7 @@ def format_adventure_panel(record) -> str:
     )
 
 def format_shop_panel(record, date_text: str) -> str:
-    items = shop_items_for_date(date_text)
+    items = shop_items_for_date(date_text, record)
     lines = ["【每日商店】", f"今日灵石：{spirit_stone_text(record.spirit_stones)}"]
     for index, item in enumerate(items, start=1):
         price = int(item.get("price", 0))
@@ -2738,14 +2877,126 @@ async def rank_scheduler() -> None:
 
 @driver.on_startup
 async def start_rank_scheduler() -> None:
-    global rank_scheduler_task
+    global admin_http_server, rank_scheduler_task
+    if config.xiuxian_signin_admin_enabled:
+        try:
+            admin_http_server = start_admin_server(
+                admin_manager,
+                config.xiuxian_signin_admin_host,
+                config.xiuxian_signin_admin_port,
+                config.xiuxian_signin_admin_path,
+            )
+            logger.info(
+                "修仙签到后台已启动："
+                f"http://{admin_http_server.host}:{admin_http_server.port}{admin_http_server.base_path}"
+            )
+        except Exception:
+            logger.exception(
+                f"修仙签到后台启动失败：{config.xiuxian_signin_admin_host}:{config.xiuxian_signin_admin_port}"
+            )
+            admin_manager.apply_config()
+    else:
+        admin_manager.apply_config()
     rank_scheduler_task = asyncio.create_task(rank_scheduler())
 
 
+@driver.on_shutdown
+async def stop_admin_http_server() -> None:
+    global admin_http_server
+    if admin_http_server is not None:
+        admin_http_server.stop()
+        admin_http_server = None
 
+
+def beast_realm_group_key_from_event(event: GroupMessageEvent) -> str:
+    return beast_realm_game.group_key(str(event.group_id))
+
+
+def beast_realm_group_id_from_key(group_key: str) -> str:
+    return str(group_key).split(":", 1)[-1]
+
+
+def cleanup_beast_realm_table(group_key: str) -> None:
+    table = beast_realm_tables.pop(group_key, None)
+    if not table:
+        return
+    for player in beast_realm_game.active_human_players(table):
+        user_id = str(player.get("id"))
+        if beast_realm_private_routes.get(user_id) == group_key:
+            beast_realm_private_routes.pop(user_id, None)
+
+
+def route_beast_realm_players(table: dict[str, Any]) -> None:
+    group_key = str(table.get("group_id"))
+    for player in beast_realm_game.active_human_players(table):
+        beast_realm_private_routes[str(player.get("id"))] = group_key
+
+
+async def send_beast_realm_leader_panel(table: dict[str, Any], player: dict[str, Any]) -> bool:
+    route_beast_realm_players(table)
+    user_id = str(player.get("id"))
+    record = await store.get_user(user_id)
+    return await send_private_panel(
+        user_id,
+        "峰主选择",
+        beast_realm_game.leader_choice_text(player),
+        record,
+        icon="mystic",
+        footer="开局前发送“选择峰主 1/2/3”。所有修士选定峰主后，群聊由峰主发送“开始御兽秘境”。",
+    )
+
+
+async def send_beast_realm_recruit_panels(table: dict[str, Any]) -> None:
+    route_beast_realm_players(table)
+    group_key = str(table.get("group_id"))
+    mode = str(table.get("mode", "pve"))
+    footer = (
+        "私聊完成招募后发送“完成招募”，会立即结算本回合1V2战报。"
+        if mode == "solo_pve"
+        else "私聊完成招募后发送“完成招募”，全员准备后群聊自动播报战报。"
+    )
+    failed: list[str] = []
+    for player in beast_realm_game.live_human_players(table):
+        user_id = str(player.get("id"))
+        record = await store.get_user(user_id)
+        sent = await send_private_panel(
+            user_id,
+            "任务堂",
+            beast_realm_game.player_text(player, table),
+            record,
+            icon="mystic",
+            footer=footer,
+        )
+        if not sent:
+            failed.append(str(player.get("name") or user_id))
+    if failed and group_key.startswith("group:"):
+        try:
+            await get_bot().send_group_msg(
+                group_id=int(beast_realm_group_id_from_key(group_key)),
+                message=panel_segment(
+                    "任务堂私聊失败",
+                    "、".join(failed) + " 的任务堂私聊发送失败，请检查好友或临时会话权限。",
+                    icon="warning",
+                ),
+            )
+        except Exception:
+            logger.debug("发送任务堂私聊失败提示失败")
+
+
+async def send_beast_realm_group_report(table: dict[str, Any], title: str, content: str) -> None:
+    group_key = str(table.get("group_id"))
+    if not group_key.startswith("group:"):
+        return
+    await get_bot().send_group_msg(
+        group_id=int(beast_realm_group_id_from_key(group_key)),
+        message=panel_segment(title, content, icon="mystic"),
+    )
 async def is_help_message(event: MessageEvent) -> bool:
     return normalized_plain_text(event) in HELP_TEXTS
 
+
+async def is_newbie_tutorial_message(event: MessageEvent) -> bool:
+    return isinstance(event, PrivateMessageEvent) and normalized_plain_text(event) in NEWBIE_TUTORIAL_TEXTS
 
 async def is_catalog_message(event: MessageEvent) -> bool:
     text = normalized_plain_text(event)
@@ -3010,7 +3261,40 @@ async def is_duel_message(event: MessageEvent) -> bool:
     return isinstance(event, GroupMessageEvent) and is_duel_command_text(normalized_plain_text(event))
 
 
+
+async def is_beast_realm_group_message(event: MessageEvent) -> bool:
+    if not isinstance(event, GroupMessageEvent):
+        return False
+    text = normalized_plain_text(event)
+    if not text:
+        return False
+    group_key = beast_realm_group_key_from_event(event)
+    return beast_realm_game.is_beast_realm_group_command(text) or (
+        group_key in beast_realm_tables and beast_realm_game.is_beast_realm_group_command(text)
+    )
+
+
+async def is_beast_realm_private_message(event: MessageEvent) -> bool:
+    if not isinstance(event, PrivateMessageEvent):
+        return False
+    text = normalized_plain_text(event)
+    if beast_realm_game.is_beast_realm_private_entry_command(text):
+        return True
+    if not beast_realm_game.is_beast_realm_private_command(text):
+        return False
+    group_key = beast_realm_private_routes.get(event.get_user_id())
+    if not group_key:
+        return False
+    table = beast_realm_tables.get(group_key)
+    if not table or table.get("phase") not in {"lobby", "recruit"}:
+        return False
+    player = beast_realm_game.table_player(table, event.get_user_id())
+    return bool(player and not player.get("bot"))
+
+beast_realm_group_cmd = on_message(rule=Rule(is_beast_realm_group_message), priority=10, block=True)
+beast_realm_private_cmd = on_message(rule=Rule(is_beast_realm_private_message), priority=7, block=True)
 help_cmd = on_message(rule=Rule(is_help_message), priority=10, block=True)
+newbie_tutorial_cmd = on_message(rule=Rule(is_newbie_tutorial_message), priority=10, block=True)
 catalog_cmd = on_message(rule=Rule(is_catalog_message), priority=10, block=True)
 signin = on_message(rule=Rule(is_signin_message), priority=10, block=True)
 status = on_message(rule=Rule(is_status_message), priority=10, block=True)
@@ -3068,11 +3352,161 @@ chat_rank_counter = on_message(rule=Rule(is_group_chat_for_rank), priority=99, b
 
 
 
+
+@beast_realm_group_cmd.handle()
+async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -> None:
+    await remember_group_member(event)
+    user_id = event.get_user_id()
+    record = await store.get_user(user_id)
+    text_value = normalized_plain_text(event)
+    group_key = beast_realm_group_key_from_event(event)
+
+    if text_value == "御兽秘境帮助" or (text_value == "御兽秘境" and group_key not in beast_realm_tables):
+        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon="mystic")
+    if text_value in {"御兽秘境图鉴", "御兽卡牌", "御兽卡牌图鉴"}:
+        await finish_panel(matcher, "御兽秘境图鉴", beast_realm_game.catalog_text(), record, icon="mystic")
+
+    table = beast_realm_tables.get(group_key)
+    if table and table.get("phase") == "lobby" and float(table.get("expires_at", 0)) < time.monotonic():
+        cleanup_beast_realm_table(group_key)
+        table = None
+
+    if beast_realm_game.is_beast_realm_private_entry_command(text_value):
+        await finish_panel(matcher, "御兽秘境1V2", "1V2单人PVE仅支持私聊开启，请私聊发送 御兽秘境1V2。", record, icon="warning")
+
+    if text_value.startswith("御兽秘境开局") or text_value.startswith("开启御兽秘境") or text_value in {"御兽秘境PVE", "御兽秘境PVP"}:
+        if table:
+            await finish_panel(matcher, "御兽秘境", beast_realm_game.status_text(table), record, icon="mystic")
+        mode = beast_realm_game.parse_mode(text_value)
+        if mode == "solo_pve":
+            await finish_panel(matcher, "御兽秘境1V2", "1V2单人PVE仅支持私聊开启，请私聊发送 御兽秘境1V2。", record, icon="warning")
+        table = beast_realm_game.create_table(group_key, user_id, nickname_from_event(event) or f"QQ {user_id}", mode)
+        beast_realm_tables[group_key] = table
+        route_beast_realm_players(table)
+        host_player = beast_realm_game.table_player(table, user_id)
+        sent = await send_beast_realm_leader_panel(table, host_player) if host_player else False
+        hint = "\n\n峰主候选已发送到私聊，请发送 选择峰主 1/2/3。" if sent else "\n\n峰主候选私聊发送失败，请检查好友或临时会话权限；也可私聊发送 峰主 查看。"
+        await finish_panel(matcher, "御兽秘境开局", beast_realm_game.lobby_text(table) + hint, record, icon="mystic")
+
+    if not table:
+        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon="mystic")
+
+    if text_value in {"御兽秘境", "御兽秘境状态"}:
+        await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon="mystic")
+
+    if text_value == "加入御兽秘境":
+        ok, message = beast_realm_game.add_player(table, user_id, nickname_from_event(event) or f"QQ {user_id}")
+        if ok:
+            route_beast_realm_players(table)
+            player = beast_realm_game.table_player(table, user_id)
+            sent = await send_beast_realm_leader_panel(table, player) if player else False
+            message += "\n\n峰主候选已发送到私聊，请发送 选择峰主 1/2/3。" if sent else "\n\n峰主候选私聊发送失败，请检查好友或临时会话权限；也可私聊发送 峰主 查看。"
+        await finish_panel(matcher, "加入御兽秘境" if ok else "操作失败", message, record, icon="mystic" if ok else "warning")
+
+    if text_value == "退出御兽秘境":
+        ok, message = beast_realm_game.remove_player(table, user_id)
+        if beast_realm_private_routes.get(user_id) == group_key:
+            beast_realm_private_routes.pop(user_id, None)
+        if ok and not beast_realm_game.active_human_players(table):
+            cleanup_beast_realm_table(group_key)
+        await finish_panel(matcher, "退出御兽秘境" if ok else "操作失败", message, record, icon="mystic" if ok else "warning")
+
+    if text_value == "结束御兽秘境":
+        player = beast_realm_game.table_player(table, user_id)
+        if str(table.get("host_id")) != user_id and not player:
+            await finish_panel(matcher, "操作失败", "只有峰主或本局修士可以结束御兽秘境。", record, icon="warning")
+        cleanup_beast_realm_table(group_key)
+        await finish_panel(matcher, "御兽秘境", "本群御兽秘境已结束。", record, icon="mystic")
+
+    if text_value == "开始御兽秘境":
+        if str(table.get("host_id")) != user_id:
+            await finish_panel(matcher, "操作失败", "只有峰主可以开始御兽秘境。", record, icon="warning")
+        ok, message = beast_realm_game.start_table(table)
+        if not ok:
+            await finish_panel(matcher, "操作失败", message, record, icon="warning")
+        await send_beast_realm_recruit_panels(table)
+        await finish_panel(matcher, "御兽秘境", message, record, icon="mystic")
+
+    if text_value == "御兽结算":
+        player = beast_realm_game.table_player(table, user_id)
+        if str(table.get("host_id")) != user_id and not player:
+            await finish_panel(matcher, "操作失败", "只有峰主或本局修士可以强制结算。", record, icon="warning")
+        if table.get("phase") != "recruit":
+            await finish_panel(matcher, "操作失败", "当前不在招募阶段。", record, icon="warning")
+        report = beast_realm_game.resolve_round(table)
+        await send_beast_realm_group_report(table, "御兽秘境战报", report)
+        if table.get("phase") == "ended":
+            cleanup_beast_realm_table(group_key)
+        else:
+            await send_beast_realm_recruit_panels(table)
+        await matcher.finish()
+
+    await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon="mystic")
+
+
+@beast_realm_private_cmd.handle()
+async def handle_beast_realm_private(matcher: Matcher, event: PrivateMessageEvent) -> None:
+    user_id = event.get_user_id()
+    record = await store.get_user(user_id)
+    text_value = normalized_plain_text(event)
+    group_key = beast_realm_private_routes.get(user_id)
+    table = beast_realm_tables.get(group_key or "")
+    if (not group_key or not table) and beast_realm_game.is_beast_realm_private_entry_command(text_value):
+        group_key = beast_realm_game.private_key(user_id)
+        table = beast_realm_game.create_table(group_key, user_id, nickname_from_event(event) or f"QQ {user_id}", "solo_pve")
+        beast_realm_tables[group_key] = table
+        route_beast_realm_players(table)
+        player = beast_realm_game.table_player(table, user_id)
+        await finish_panel(matcher, "御兽秘境1V2", beast_realm_game.leader_choice_text(player), record, icon="mystic", footer="选择峰主后发送“开始御兽秘境”，全流程在私聊完成。")
+    if not group_key or not table or table.get("phase") not in {"lobby", "recruit"}:
+        if group_key and not table:
+            cleanup_beast_realm_table(group_key)
+        await finish_panel(matcher, "御兽秘境", "当前没有可操作的御兽秘境。", record, icon="warning")
+    player = beast_realm_game.table_player(table, user_id)
+    if not player or player.get("bot"):
+        await finish_panel(matcher, "御兽秘境", "没有找到你的御兽秘境席位。", record, icon="warning")
+
+    was_ready = bool(player.get("ready"))
+    if table.get("phase") == "lobby" and str(table.get("mode")) == "solo_pve" and text_value == "开始御兽秘境":
+        ok, message = beast_realm_game.start_table(table)
+        if not ok:
+            await finish_panel(matcher, "操作失败", message, record, icon="warning")
+        await matcher.send(panel_segment("御兽秘境1V2", message, record, icon="mystic"))
+        await send_beast_realm_recruit_panels(table)
+        return
+
+    title, content = beast_realm_game.private_action(table, player, text_value)
+    await matcher.send(panel_segment(title, content, record, icon="mystic" if title != "操作失败" else "warning"))
+    if table.get("phase") == "lobby":
+        return
+
+    ready_command = text_value in {"完成招募", "结束招募", "准备"}
+    if ready_command and not was_ready and beast_realm_game.all_humans_ready(table):
+        report = beast_realm_game.resolve_round(table)
+        if str(table.get("mode")) == "solo_pve":
+            await matcher.send(panel_segment("御兽秘境战报", report, record, icon="mystic"))
+        else:
+            await send_beast_realm_group_report(table, "御兽秘境战报", report)
+        if table.get("phase") == "ended":
+            cleanup_beast_realm_table(group_key)
+            return
+        await send_beast_realm_recruit_panels(table)
 @help_cmd.handle()
 async def handle_help(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     await finish_panel(matcher, "\u4fee\u4ed9\u5e2e\u52a9", format_help_text(), icon="scroll")
 
+@newbie_tutorial_cmd.handle()
+async def handle_newbie_tutorial(matcher: Matcher, event: PrivateMessageEvent) -> None:
+    record = await store.get_user(event.get_user_id())
+    await finish_panel(
+        matcher,
+        "新手教程",
+        format_newbie_tutorial_text(record, nickname_from_event(event)),
+        record,
+        icon="scroll",
+        footer="以后在私聊发送“新手教程”，可随时重新打开这份引导。",
+    )
 
 @catalog_cmd.handle()
 async def handle_catalog(matcher: Matcher, event: MessageEvent) -> None:
@@ -3385,10 +3819,10 @@ async def handle_immortal_seed(matcher: Matcher, event: MessageEvent) -> None:
     text = normalized_plain_text(event)
     index = parse_immortal_seed_equip_index(text)
     if index is None:
-        await finish_panel(matcher, "\u4ed9\u79cd", immortal_seed_text(record), record, icon="ability")
+        await finish_panel(matcher, "仙源", immortal_seed_text(record), record, icon="ability")
     success, message = equip_immortal_seed(record, index)
     await store.save_user(record)
-    await finish_panel(matcher, "\u4ed9\u79cd" if success else "\u88c5\u5907\u5931\u8d25", message, record, icon="ability" if success else "warning")
+    await finish_panel(matcher, "仙源" if success else "纳入失败", message, record, icon="ability" if success else "warning")
 
 
 @emperor_catalog_cmd.handle()
@@ -3396,7 +3830,7 @@ async def handle_emperor_catalog(matcher: Matcher, event: MessageEvent) -> None:
     owners = await store.get_unique_artifacts()
     owner_lookup = {name: str(info.get("nickname") or info.get("user_id") or "") for name, info in owners.items() if isinstance(info, dict)}
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "\u5e1d\u5175\u56fe\u9274", emperor_artifact_catalog_text(owner_lookup), record, icon="artifact")
+    await finish_panel(matcher, "\u552f\u4e00\u88c5\u5907\u56fe\u9274", emperor_artifact_catalog_text(owner_lookup), record, icon="artifact")
 
 
 @trade_cmd.handle()
@@ -3798,13 +4232,14 @@ async def handle_item_use(matcher: Matcher, event: MessageEvent) -> None:
             "丹药": use_pills_batch,
             "灵石": refine_spirit_stones_batch,
             "灵食": use_foods_batch,
+            "妖丹": refine_demon_cores_batch,
         }
         success, message = batch_handlers[category](record, limit)
         if success:
             await store.save_user(record)
         await finish_panel(
             matcher,
-            f"批量{category}使用" if success else "操作失败",
+            f"批量{category}炼化" if category == "妖丹" and success else (f"批量{category}使用" if success else "操作失败"),
             f"{message}\n当前境界：{record.realm if record.root else '未入门'}\n当前战力：{battle_power(record)}",
             record,
             icon=item_icon_for_category(category) if success else "warning",
@@ -3812,13 +4247,14 @@ async def handle_item_use(matcher: Matcher, event: MessageEvent) -> None:
         return
     parsed = parse_item_use(text)
     if parsed is None:
-        await finish_panel(matcher, "操作提示", "请发送“使用丹药 1 / 批量使用丹药 10 / 使用符箓 1 / 炼化灵石 1 / 批量炼化灵石 全部 / 使用灵食 1”等格式。", record, icon="bag")
+        await finish_panel(matcher, "操作提示", "请发送“使用丹药 1 / 批量使用丹药 10 / 使用符箓 1 / 炼化灵石 1 / 批量炼化灵石 全部 / 炼化妖丹 1 / 批量炼化妖丹 全部 / 使用灵食 1”等格式。", record, icon="bag")
     category, item_index = parsed
     handlers = {
         "丹药": use_pill,
         "符箓": use_talisman,
         "灵石": refine_spirit_stone,
         "灵食": use_food,
+        "妖丹": refine_demon_core,
         "奇物": use_curio,
         "杂物": identify_misc_item,
     }
@@ -3827,7 +4263,7 @@ async def handle_item_use(matcher: Matcher, event: MessageEvent) -> None:
         await store.save_user(record)
     await finish_panel(
         matcher,
-        f"{category}使用" if success else "操作失败",
+        f"{category}炼化" if category == "妖丹" and success else (f"{category}使用" if success else "操作失败"),
         f"{message}\n当前境界：{record.realm if record.root else '未入门'}\n当前战力：{battle_power(record)}",
         record,
         icon=item_icon_for_category(category) if success else "warning",
@@ -3857,6 +4293,8 @@ async def handle_mystic_entry(matcher: Matcher, event: MessageEvent) -> None:
     if record.mystic_realm:
         await finish_panel(matcher, "秘境探索", mystic_realm_options_text(record), record, icon="mystic")
     entries = draw_mystic_entrances(record)
+    if not entries:
+        await finish_panel(matcher, "秘境入口", "当前后台未开启任何秘境入口。", record, icon="mystic")
     key = mystic_pending_key(event)
     expires_at = time.monotonic() + MYSTIC_ENTRY_TTL
     pending_mystic_entries[key] = {
@@ -3972,6 +4410,14 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
                 result.record,
                 icon="realm",
             )
+        if isinstance(event, GroupMessageEvent):
+            await send_panel(
+                matcher,
+                "私聊提醒",
+                "首次入门完成。若要接收每日任务、秘境战报等私聊提醒，并打开新手教程，请先主动私聊 Bot 发送任意消息或“新手教程”。",
+                result.record,
+                icon="warning",
+            )
 
     if result.pending_exp_applied:
         await send_panel(matcher, "日榜奖励", f"日榜暂存修为已汇入丹田，修炼进度+{result.pending_exp_applied}", result.record, icon="rank")
@@ -3984,6 +4430,16 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
 
     image = await build_signin_image(event, result)
     await send_image(matcher, image)
+
+    if result.is_first and not result.already_signed and isinstance(event, PrivateMessageEvent):
+        await send_panel(
+            matcher,
+            "新手教程",
+            format_newbie_tutorial_text(result.record, nickname_from_event(event)),
+            result.record,
+            icon="scroll",
+            footer="以后在私聊发送“新手教程”，可随时重新打开这份引导。",
+        )
 
     if not result.already_signed and result.daily_tasks:
         task_content = daily_tasks_text(result.record, local_today())
@@ -4003,8 +4459,8 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
         pending_fishing_users[user_id] = time.monotonic() + PENDING_FISHING_TTL
         await send_panel(
             matcher,
-            "诸天万界垂钓",
-            f"检测到宿主有 {result.record.fishing_chances} 次诸天万界垂钓次数，是否垂钓？可累加进行 10 连抽。回复 是/好/y/十连。",
+            "灵河垂钓",
+            f"检测到宿主有 {result.record.fishing_chances} 次灵河垂钓次数，是否垂钓？可累加进行 10 连抽。回复 是/好/y/十连。",
             result.record,
             icon="fishing",
         )
@@ -4026,7 +4482,7 @@ async def handle_fishing_command(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
     if record.fishing_chances <= 0:
-        await finish_panel(matcher, "诸天万界垂钓", "宿主暂无诸天万界垂钓次数，每次签到可获得 1 次。", record, icon="fishing")
+        await finish_panel(matcher, "灵河垂钓", "宿主暂无灵河垂钓次数，每次签到可获得 1 次。", record, icon="fishing")
     text = normalized_plain_text(event)
     arg = parse_fishing_arg(text) or ""
     count = fishing_count_from_text(arg, record.fishing_chances)
@@ -4041,7 +4497,7 @@ async def handle_fishing_reply(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(user_id)
     if text in CANCEL_WORDS:
         pending_fishing_users.pop(user_id, None)
-        await finish_panel(matcher, "诸天万界垂钓", "已收起钓竿，诸天万界垂钓次数仍为你保留。", record, icon="fishing")
+        await finish_panel(matcher, "灵河垂钓", "已收起钓竿，灵河垂钓次数仍为你保留。", record, icon="fishing")
     count = fishing_count_from_text(text, record.fishing_chances)
     await do_fishing(matcher, event, count)
 
@@ -4162,7 +4618,7 @@ async def handle_normal_duel_apply(matcher: Matcher, event: GroupMessageEvent) -
     await finish_panel(
         matcher,
         "\u666e\u901a\u6597\u6cd5",
-        f"\u5339\u914d\u6210\u529f\uff1a{left_name} \u5bf9\u9635 {right_name}\n\u5df2\u8fdb\u51651\u5206\u949f\u51c6\u5907\u671f\uff0c\u7cfb\u7edf\u5c06\u79c1\u804a\u53cc\u65b9\u53d1\u9001\u4fee\u4e3a\u3001\u6218\u6280\u3001\u9635\u76d8\u548c\u7b26\u7b93\u51c6\u5907\u5361\u3002\n\u5f00\u6218\u540e 60 \u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u7279\u6b8a\u80fd\u529b\u3001\u8868\u60c5\u6216\u5373\u5174\u53f0\u8bcd\u3002",
+        f"\u5339\u914d\u6210\u529f\uff1a{left_name} \u5bf9\u9635 {right_name}\n\u5df2\u8fdb\u51651\u5206\u949f\u51c6\u5907\u671f\uff0c\u7cfb\u7edf\u5c06\u79c1\u804a\u53cc\u65b9\u53d1\u9001\u4fee\u4e3a\u3001\u6218\u6280\u3001\u9635\u76d8\u548c\u7b26\u7b93\u51c6\u5907\u5361\u3002\n\u5f00\u6218\u540e 60 \u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u795e\u901a\u3001\u8868\u60c5\u6216\u5373\u5174\u53f0\u8bcd\u3002",
         icon="duel",
     )
 
@@ -4571,9 +5027,9 @@ async def do_fishing(matcher: Matcher, event: MessageEvent, count: int) -> None:
     record = await store.get_user(user_id)
     if record.fishing_chances <= 0:
         pending_fishing_users.pop(user_id, None)
-        await finish_panel(matcher, "诸天万界垂钓", "宿主暂无诸天万界垂钓次数。", record, icon="fishing")
+        await finish_panel(matcher, "灵河垂钓", "宿主暂无灵河垂钓次数。", record, icon="fishing")
     count = max(1, min(count, record.fishing_chances, 10))
-    await send_panel(matcher, "诸天万界垂钓", f"正在为宿主进行{count}次垂钓。", record, icon="fishing")
+    await send_panel(matcher, "灵河垂钓", f"正在为宿主进行{count}次垂钓。", record, icon="fishing")
     rewards = apply_fishing(record, count)
     unique_note = await enforce_unique_rewards(record, event)
     pending_fishing_users.pop(user_id, None)

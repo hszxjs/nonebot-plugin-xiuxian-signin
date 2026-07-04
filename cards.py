@@ -31,6 +31,7 @@ from .domain import (
     hehuan_remaining_text,
     is_breakthrough_bottleneck,
     reward_display_name,
+    root_attribute_name,
     tier_exp,
     spirit_stone_text,
     tianji_status_text,
@@ -42,7 +43,6 @@ from .domain import (
 Color = tuple[int, int, int]
 FONT_DIR = Path(__file__).parent / "assets" / "fonts"
 BUNDLED_FONT_PATH = FONT_DIR / "HarmonyOS_Sans_SC.ttf"
-FALLBACK_BUNDLED_FONT_PATH = FONT_DIR / "NotoSansSC-VF.ttf"
 SIGNIN_UI_SPRITE_DIR = Path(__file__).parent / "assets" / "ui_sprite" / "signin" / "output" / "sprites"
 SIGNIN_PANEL_BG = SIGNIN_UI_SPRITE_DIR / "signin_background_base.png"
 SIGNIN_PORTRAIT_FRAME = SIGNIN_UI_SPRITE_DIR / "portrait_frame_overlay.png"
@@ -129,17 +129,11 @@ TIER_COLORS = {
 }
 FONT_CANDIDATES = [
     BUNDLED_FONT_PATH,
-    FALLBACK_BUNDLED_FONT_PATH,
-    Path("C:/Windows/Fonts/NotoSansSC-VF.ttf"),
     Path("C:/Windows/Fonts/msyh.ttc"),
     Path("C:/Windows/Fonts/msyhbd.ttc"),
     Path("C:/Windows/Fonts/simhei.ttf"),
     Path("C:/Windows/Fonts/Deng.ttf"),
     Path("C:/Windows/Fonts/simsun.ttc"),
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf"),
-    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
-    Path("/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf"),
     Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
     Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
     Path("/usr/share/fonts/truetype/arphic/uming.ttc"),
@@ -149,15 +143,9 @@ FONT_CANDIDATES = [
 
 BOLD_FONT_CANDIDATES = [
     BUNDLED_FONT_PATH,
-    FALLBACK_BUNDLED_FONT_PATH,
-    Path("C:/Windows/Fonts/NotoSansSC-VF.ttf"),
     Path("C:/Windows/Fonts/msyhbd.ttc"),
     Path("C:/Windows/Fonts/simhei.ttf"),
     Path("C:/Windows/Fonts/Dengb.ttf"),
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"),
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Bold.otf"),
-    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc"),
-    Path("/usr/share/fonts/truetype/noto/NotoSansSC-Bold.ttf"),
     Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
     Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
     Path("/System/Library/Fonts/PingFang.ttc"),
@@ -1101,7 +1089,7 @@ def _render_fishing_card_legacy(
         required_attribute = reward.get("required_attribute")
         if required_attribute:
             compatible = "契合" if reward.get("compatible") else "暂不契合"
-            desc = f"{desc} 需求{required_attribute}灵根，{compatible}。"
+            desc = f"{desc} 需求{root_attribute_name(required_attribute)}，{compatible}。"
         desc_font_fit = fit_font(draw, desc, width - 300, 21, min_size=16)
         draw.text((188, y + 44), desc, font=desc_font_fit, fill="#596174")
         y += 86
@@ -1912,9 +1900,16 @@ def fit_clamped_lines(
     line_gap: int = 8,
 ) -> tuple[ImageFont.ImageFont, list[str], int]:
     text = str(text or "")
+
+    def wrapped_lines(font: ImageFont.ImageFont) -> list[str]:
+        lines: list[str] = []
+        for part in text.splitlines() or [""]:
+            lines.extend(wrap_panel_text(draw, part, font, max_width))
+        return lines or [""]
+
     for font_size in range(size, min_size - 1, -2):
         font = load_font(font_size, bold=bold)
-        lines = wrap_panel_text(draw, text, font, max_width)
+        lines = wrapped_lines(font)
         if len(lines) > max_lines:
             lines = lines[:max_lines]
             lines[-1] = append_ellipsis(draw, lines[-1], font, max_width)
@@ -1924,7 +1919,7 @@ def fit_clamped_lines(
             return font, lines, line_gap
 
     font = load_font(min_size, bold=bold)
-    lines = wrap_panel_text(draw, text, font, max_width)
+    lines = wrapped_lines(font)
     if len(lines) > max_lines:
         lines = lines[:max_lines]
         lines[-1] = append_ellipsis(draw, lines[-1], font, max_width)
@@ -2109,6 +2104,8 @@ def render_adventure_card(
     ink = "#1f2937"
     muted = "#2f4158"
     gold = "#8a571f"
+    jade = "#0f766e"
+    danger = "#b42318"
     veil = (255, 250, 229, 102)
     veil_soft = (255, 255, 245, 72)
     veil_deep = (52, 36, 70, 78)
@@ -2314,52 +2311,66 @@ def render_adventure_card(
         centered_text((box[0] + 6, box[1] + 74, box[2] - 6, box[3] - 13), label, small_font, dark, weight=3)
 
 
+    def composited_round_rect(box: tuple[int, int, int, int], radius: int, fill: tuple[int, int, int, int]) -> None:
+        overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        ImageDraw.Draw(overlay).rounded_rectangle(box, radius=radius, fill=fill)
+        image.alpha_composite(overlay)
+
     def icon_strip(box: tuple[int, int, int, int], title: str, entries: list[tuple[str, Any, str, str]]) -> None:
         x1, y1, x2, y2 = draw_region(box, fill=(255, 250, 229, 72), radius=16)
         panel_text((x1 + sp(14), y1 + sp(18)), title, small_font, muted, weight=3)
-        visible_entries = entries[:14]
-        total = len(visible_entries)
-        rows = 2 if total > 1 else 1
-        cols = max(1, min(7, (total + rows - 1) // rows))
+        visible_entries = entries[:16]
+        is_quality_strip = bool(visible_entries) and all(entry[3] == "realm_quality" for entry in visible_entries)
+        rows = 2
+        cols = 8
         content_x1 = x1 + sp(92)
         content_x2 = x2 - sp(12)
         content_y1 = y1 + sp(5)
         content_y2 = y2 - sp(6)
-        max_cell_w = sp(86 if title == "神通" else 96)
-        cell_w = min(max(1, content_x2 - content_x1) / cols, max_cell_w)
-        cell_h = max(1, content_y2 - content_y1) / rows
+        gap = sp(3)
+        cell_w = max(1, (content_x2 - content_x1 - gap * (cols - 1)) / cols)
+        cell_h = max(1, (content_y2 - content_y1 - gap * (rows - 1)) / rows)
         is_ability_strip = title == "神通"
 
-        for index, (label, item, fallback_icon, category) in enumerate(visible_entries):
+        for index in range(rows * cols):
+            entry = visible_entries[index] if index < len(visible_entries) else None
             row = index // cols
             col = index % cols
-            cx1 = int(content_x1 + cell_w * col)
-            cy1 = int(content_y1 + cell_h * row)
-            cx2 = int(content_x1 + cell_w * (col + 1)) - sp(2)
-            cy2 = int(content_y1 + cell_h * (row + 1)) - sp(2)
-            draw.rounded_rectangle((cx1, cy1, cx2, cy2), radius=sp(4), fill=(255, 255, 245, 32))
+            cx1 = int(content_x1 + (cell_w + gap) * col)
+            cy1 = int(content_y1 + (cell_h + gap) * row)
+            cx2 = int(cx1 + cell_w)
+            cy2 = int(cy1 + cell_h)
 
+            is_quality_cell = bool(entry and entry[3] == "realm_quality")
+            composited_round_rect((cx1, cy1, cx2, cy2), radius=sp(4), fill=(255, 255, 245, 64 if is_quality_strip else 34))
+            if entry is None:
+                continue
+
+            label, item, fallback_icon, category = entry
             is_quality_cell = category == "realm_quality"
-            icon_size = sp(27 if is_quality_cell else 25 if is_ability_strip else 31)
+            icon_size = sp(26 if is_ability_strip else 22)
             icon_x = cx1 + sp(3)
             icon_y = cy1 + max(0, (cy2 - cy1 - icon_size) // 2)
             slot = (icon_x, icon_y, icon_x + icon_size, icon_y + icon_size)
+            label_lines_for_icon = label.splitlines()
+            icon_label = label_lines_for_icon[-1] if is_quality_cell and label_lines_for_icon else label
             if item is None and is_quality_cell:
-                paste_realm_quality_icon(label, slot, fallback_icon)
+                if icon_label != "空":
+                    paste_realm_quality_icon(icon_label, slot, fallback_icon)
             else:
                 paste_generated_icon(slot, item=item, name=label, category=category, fallback_icon=fallback_icon)
 
-            label_x1 = icon_x + icon_size + sp(3)
-            label_w = max(sp(20), cx2 - label_x1 - sp(2))
-            label_h = max(sp(16), cy2 - cy1 - sp(3))
+            label_x1 = cx1 + sp(5) if is_quality_cell and icon_label == "空" else icon_x + icon_size + sp(2)
+            label_w = max(sp(12), cx2 - label_x1 - sp(2))
+            label_h = max(sp(10), cy2 - cy1 - sp(2))
             label_font, label_lines, label_gap = fit_clamped_lines(
                 draw,
                 label,
                 label_w,
                 label_h,
-                sp(9),
+                sp(8),
                 bold=True,
-                min_size=sp(6),
+                min_size=sp(5),
                 max_lines=2,
                 line_gap=sp(0),
             )
@@ -2404,12 +2415,12 @@ def render_adventure_card(
         realm_name = REALMS[realm_index] if realm_index < len(REALMS) else f"第{realm_index}境"
         current_index = int(getattr(record, "realm_index", 0) or 0)
         if realm_index > current_index:
-            return f"{realm_name}·空"
+            return f"{realm_name}\n空"
         marks = dict(getattr(record, "realm_marks", None) or {})
         mark = marks.get(str(realm_index))
         if not mark and realm_index == 2:
             mark = getattr(record, "foundation_type", None)
-        return compact_realm_quality(mark or "未定品相")
+        return f"{realm_name}\n{compact_realm_quality(mark or '未定品相')}"
     def compact_realm_quality(value: str) -> str:
         return display_realm_quality_name(value)
 
@@ -2548,7 +2559,7 @@ def render_adventure_card(
     round_slot(layout["badge_2"], "\u5080\u5121", f"+{summary['puppet_power']}", "puppet", jade, item=record.equipped_puppet)
     root_badge(layout["badge_3"])
     round_slot(layout["badge_4"], "\u7b26\u7b93", f"+{summary['talisman_power']}", "talisman", danger, item=record.equipped_talisman)
-    round_slot(layout["badge_5"], "\u4ed9\u79cd", f"+{summary['immortal_seed_power']}", "realm", gold, item=record.equipped_immortal_seed)
+    round_slot(layout["badge_5"], "仙源", f"+{summary['immortal_seed_power']}", "realm", gold, item=record.equipped_immortal_seed)
 
     slot_text(
         layout["summary"],
@@ -2568,13 +2579,14 @@ def render_adventure_card(
     if not ability_entries:
         ability_entries.append(("\u6682\u65e0\u795e\u901a", None, "power", ""))
 
-    lower_realm_entries: list[tuple[str, Any, str, str]] = []
-    for realm_index in range(2, 6):
-        lower_realm_entries.append((quality_label_for_realm(realm_index), None, "realm", "realm_quality"))
-
-    high_realm_entries: list[tuple[str, Any, str, str]] = []
-    for realm_index in range(6, 11):
-        high_realm_entries.append((quality_label_for_realm(realm_index), None, "realm", "realm_quality"))
+    quality_realm_start = 2
+    current_realm_index = max(0, min(len(REALMS) - 1, int(getattr(record, "realm_index", 0) or 0)))
+    all_realm_entries: list[tuple[str, Any, str, str]] = [
+        (quality_label_for_realm(realm_index), None, "realm", "realm_quality")
+        for realm_index in range(quality_realm_start, current_realm_index + 1)
+    ]
+    lower_realm_entries = all_realm_entries[:16]
+    high_realm_entries = all_realm_entries[16:] if len(all_realm_entries) > 16 else []
 
     icon_strip(layout["row_1"], "神通", ability_entries)
     icon_strip(layout["row_2"], "境界", lower_realm_entries)
@@ -2687,5 +2699,3 @@ def render_text_panel(
         footer_font = fit_font(draw, footer, width - 208, 26, bold=True, min_size=18)
         draw_weighted_text(draw, (104, height - 108), footer, footer_font, "#667085", weight=1)
     return png_bytes(image)
-
-

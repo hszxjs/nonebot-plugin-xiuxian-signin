@@ -11,8 +11,8 @@ BG_PATH = ROOT / "assets/panel_backgrounds/signin_background.png"
 OLD_PATH = Path(
     r"C:\Users\hszxjs\Documents\Tencent Files\3305167706\nt_qq\nt_data\Pic\2026-06\Ori\6013980e9e6913183936ee99485ced48.png"
 )
-FONT_PATH = ROOT / "assets/fonts/NotoSansSC-VF.ttf"
-OUT_DIR = ROOT / "assets/panel_previews"
+FONT_PATH = ROOT / "assets/fonts/HarmonyOS_Sans_SC.ttf"
+OUT_DIR = ROOT / "build/previews"
 OUT_PATH = OUT_DIR / "signin_preview_native_bg_v2.png"
 
 ACCENT = "#7b5cf0"
@@ -203,7 +203,7 @@ def main() -> None:
     columns = [(130, 440), (470, 780), (810, 1120)]
     rows = [(870, 936), (966, 1032), (1062, 1128)]
     entries = [
-        ("灵器", "[天阶极品灵器 太虚斩星剑]"),
+        ("灵器", "[天阶极品灵器 星阙断岳剑]"),
         ("功法", "[天阶上品功法 离火炼界篇]"),
         ("阵盘", "[玄阶极品阵盘 小五行聚灵盘]"),
         ("阵法熟练", "熟练度 610/900 ・ 7.1x"),

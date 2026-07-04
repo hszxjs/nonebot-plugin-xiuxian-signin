@@ -24,12 +24,26 @@ GRADE_POOL = [
     ("下品", 0, 0.35),
 ]
 
-TIER_ORDER = ["凡品", "黄阶", "玄阶", "地阶", "天阶", "仙阶", "帝兵"]
+TIER_ORDER = ["凡品", "黄阶", "玄阶", "地阶", "天阶", "仙阶", "仙帝兵"]
 GRADE_ORDER = ["下品", "中品", "上品", "极品"]
+METHOD_GROWTH_TIERS = ["凡品", "黄阶", "玄阶", "地阶", "天阶", "仙阶"]
+METHOD_LAYER_STEP = 10
+METHOD_UNLIMITED_LAYER_MAX = 10**9
+ARRAY_GROWTH_TIERS = METHOD_GROWTH_TIERS
+ARRAY_LAYER_STEP = 10
+ARRAY_UNLIMITED_LAYER_MAX = 10**9
+ARRAY_MULTIPLIER_CAP_BY_TIER = {
+    "凡品": 5.0,
+    "凡阶": 5.0,
+    "黄阶": 10.0,
+    "玄阶": 20.0,
+    "地阶": 50.0,
+    "天阶": 100.0,
+}
 TIER_RANKS = {name: rank for name, rank, _ in QUALITY_TIER_POOL}
 TIER_RANKS["变异灵根"] = 5
 TIER_RANKS["仙阶"] = 5
-TIER_RANKS["帝兵"] = 6
+TIER_RANKS["仙帝兵"] = 6
 GRADE_RANKS = {name: rank for name, rank, _ in GRADE_POOL}
 
 ATTRIBUTES = ["金", "木", "水", "火", "土", "雷", "冰"]
@@ -55,12 +69,32 @@ ATTRIBUTE_NAMES = {
 }
 
 BASE_FIVE_ELEMENTS = ("金", "木", "水", "火", "土")
+ROOT_ATTRIBUTE_ALIASES = {"道": "先天道体"}
+
+
+def normalize_root_attribute(attribute: Optional[str]) -> str:
+    text = str(attribute or "").strip()
+    return ROOT_ATTRIBUTE_ALIASES.get(text, text)
+
+
+def root_attribute_label(attribute: Optional[str]) -> str:
+    normalized = normalize_root_attribute(attribute)
+    return "道" if normalized == "先天道体" else normalized
+
+
+def root_attribute_name(attribute: Optional[str]) -> str:
+    normalized = normalize_root_attribute(attribute)
+    label = root_attribute_label(normalized)
+    return ATTRIBUTE_NAMES.get(normalized, f"{label}灵根")
+
+
 MUTATION_ROOT_SOURCES = {
     "雷": (("金", "水"), ("火", "水")),
     "冰": (("水", "木"),),
     "风": (("木", "火"),),
     "暗": (("金", "土"),),
     "光": (("火", "土"),),
+    "混沌": (BASE_FIVE_ELEMENTS,),
 }
 SPECIAL_ROOT_SOURCES = {
     "剑": ("金",),
@@ -72,18 +106,36 @@ SPECIAL_ROOT_SOURCES = {
     "先天道体": BASE_FIVE_ELEMENTS,
 }
 ROOT_ATTRIBUTES = list(dict.fromkeys(list(ATTRIBUTES) + list(MUTATION_ROOT_SOURCES) + list(SPECIAL_ROOT_SOURCES)))
+ARTIFACT_MUTATION_ATTRIBUTES = ["雷", "冰", "风", "光", "暗", "先天道体", "混沌"]
+ARTIFACT_ATTRIBUTES = list(
+    dict.fromkeys(list(ATTRIBUTES) + [attr for attr in ARTIFACT_MUTATION_ATTRIBUTES if attr not in ATTRIBUTES])
+)
+ROOT_ATTRIBUTE_ORDER = {
+    attribute: index
+    for index, attribute in enumerate(
+        list(dict.fromkeys(list(ROOT_ATTRIBUTES) + [attr for attr in ARTIFACT_ATTRIBUTES if attr not in ROOT_ATTRIBUTES]))
+    )
+}
+
+
+def root_attribute_sort_key(attribute: Optional[str]) -> tuple[int, str]:
+    normalized = normalize_root_attribute(attribute)
+    return (ROOT_ATTRIBUTE_ORDER.get(normalized, len(ROOT_ATTRIBUTE_ORDER)), normalized)
+
+
 ATTRIBUTE_COLORS.update(
     {
         "风": "#58b88f",
         "暗": "#5b4b73",
         "光": "#f2c84b",
+        "混沌": "#7f6bc8",
         "剑": "#c8d3df",
         "药": "#58b46f",
         "玄阴": "#5b8ccf",
         "玄阳": "#e66a3d",
         "空": "#6d8be8",
         "时": "#b58adf",
-        "先天道体": "#e0b85a",
+        "先天道体": "#d8b85f",
     }
 )
 ATTRIBUTE_NAMES.update(
@@ -91,13 +143,14 @@ ATTRIBUTE_NAMES.update(
         "风": "风灵根",
         "暗": "暗灵根",
         "光": "光灵根",
+        "混沌": "混沌灵根",
         "剑": "剑灵根",
         "药": "药灵根",
         "玄阴": "玄阴灵根",
         "玄阳": "玄阳灵根",
         "空": "空灵根",
         "时": "时灵根",
-        "先天道体": "先天道体",
+        "先天道体": "道灵根",
     }
 )
 ROOT_TRAITS = {
@@ -111,13 +164,14 @@ ROOT_TRAITS = {
     "风": "御风：先手、身法与追击提高",
     "暗": "匿影：陷阱识破与偷袭伤害提高",
     "光": "明净：破邪、治疗与抗心魔提高",
+    "混沌": "混沌：五行归一，灵器与功法兼容面极广",
     "剑": "极锋：剑类灵器与剑诀大幅契合",
     "药": "药心：炼丹、灵植与丹药吸收提高",
     "玄阴": "阴极：神魂、控制与冰水功法契合",
     "玄阳": "阳极：气血、火法与锻体功法契合",
     "空": "空间：秘境探索与闪避更有优势",
     "时": "时间：冷却与修炼沉淀更有优势",
-    "先天道体": "道体：全属性兼容，功法契合极高",
+    "先天道体": "道韵：全属性兼容，功法契合极高",
 }
 
 REALMS = [
@@ -165,9 +219,9 @@ REWARD_CATEGORIES = [
     "杂物",
     "奇物",
     "灵食",
-    "特殊能力",
+    "神通",
 ]
-REWARD_MIN_COUNTS = {"仙缘": 5, "阵盘": 3, "灵器": 7, "功法": 7, "特殊能力": 5}
+REWARD_MIN_COUNTS = {"仙缘": 5, "阵盘": 3, "灵器": 7, "功法": 7, "神通": 5}
 REWARD_GRADES_BY_COUNT = {
     2: ["上品", "中品"],
     3: ["极品", "上品", "中品"],
@@ -188,7 +242,7 @@ REWARD_CATEGORY_WEIGHT_RATIO = {
     "阵盘": 0.9,
     "灵材": 0.9,
     "奇物": 0.95,
-    "特殊能力": 0.22,
+    "神通": 0.22,
 }
 REWARD_DESCRIPTIONS = {
     "仙缘": "天地机缘凝成的{name}，可为修行添一线逆天命数。",
@@ -204,26 +258,26 @@ REWARD_DESCRIPTIONS = {
     "杂物": "{name}来历不明，细看又似乎藏着一点门道。",
     "奇物": "{name}气息古怪，说不上用途但绝非凡品。",
     "灵食": "{name}入口温和，可补充气血与灵力。",
-    "特殊能力": "{name}中藏着一段失落感悟，参悟后有机会领悟神通。",
-    "仙种": "{name}蕴着仙古大道种子，真仙之后可纳入己身。",
+    "神通": "{name}中藏着一段失落感悟，参悟后有机会领悟神通。",
+    "仙源": "{name}凝成一缕可纳入灵台的仙源，真仙之后可纳入己身。",
 }
 FISHING_REWARD_NAMES = {
     "仙缘": {
-        "天阶": ["鸿蒙一气", "混沌莲胎", "大道真种", "太初仙契", "造化玉露"],
-        "地阶": ["洞天福脉", "星河道胎", "玄黄命砂", "青莲仙引", "云海灵契"],
+        "天阶": ["元初一气", "浑元灵胎", "万道真种", "星初仙契", "造化玉露"],
+        "地阶": ["洞府福脉", "星河灵胎", "玄黄命砂", "青华仙引", "云海灵契"],
         "玄阶": ["古洞机缘", "残碑悟道", "月华灵髓", "雾隐仙芽", "灵台清光"],
         "黄阶": ["山神馈赠", "灵泉一盏", "旧庙香火", "药园残运", "云游道人指点"],
         "凡品": ["半页机缘签", "梦里仙人一笑", "井底月光", "小摊旧铜钱", "破庙避雨缘"],
     },
     "灵器": {
-        "天阶": ["九霄镇海印", "太虚斩星剑"],
+        "天阶": ["云海镇澜印", "星阙断岳剑"],
         "地阶": ["青冥飞剑", "玄都镇魂铃"],
         "玄阶": ["寒铁护心镜", "流云缚妖索"],
         "黄阶": ["赤铜伏魔杖", "青竹听风剑"],
         "凡品": ["外门铁剑", "木柄小灵锤"],
     },
     "功法": {
-        "天阶": ["太虚观想篇", "万象归元经"],
+        "天阶": ["星墟观想篇", "万象归元经"],
         "地阶": ["沧海听雷诀", "九转炼神录"],
         "玄阶": ["碧落御风诀", "青木长生功"],
         "黄阶": ["小周天吐纳术", "烈阳锻体篇"],
@@ -237,21 +291,21 @@ FISHING_REWARD_NAMES = {
         "凡品": ["辟谷小丸", "苦口补气散"],
     },
     "阵盘": {
-        "天阶": ["周天星斗阵盘", "太虚锁界盘", "九曜归墟盘"],
-        "地阶": ["四象护山盘", "玄武镇宅盘", "青龙引雷盘"],
+        "天阶": ["星罗天衡阵盘", "星墟锁界盘", "星律归墟盘"],
+        "地阶": ["四仪护山盘", "玄甲镇宅盘", "青麟引雷盘"],
         "玄阶": ["小五行聚灵盘", "云纹迷踪盘", "水月镜花盘"],
         "黄阶": ["三才守门盘", "风火警戒盘", "土行稳基盘"],
         "凡品": ["石子迷阵盘", "草绳护院盘", "旧木罗盘"],
     },
     "灵材": {
-        "天阶": ["混沌星砂", "太白仙金"],
+        "天阶": ["浑元星砂", "白曜仙金"],
         "地阶": ["星陨玄铁", "玄冰玉髓"],
         "玄阶": ["赤霞铜精", "青藤灵骨"],
         "黄阶": ["百炼寒铁", "紫纹灵木"],
         "凡品": ["发亮矿渣", "溪边圆石"],
     },
     "符箓": {
-        "天阶": ["乾坤挪移符", "太上清宁符"],
+        "天阶": ["移形换位符", "太上清宁符"],
         "地阶": ["小挪移符", "五雷辟邪符"],
         "玄阶": ["御风疾影符", "金甲护身符"],
         "黄阶": ["疾行符", "清心符"],
@@ -286,7 +340,7 @@ FISHING_REWARD_NAMES = {
         "凡品": ["外门扫帚", "磨损练功木牌"],
     },
     "奇物": {
-        "天阶": ["昆仑镜碎光", "逆命铜铃"],
+        "天阶": ["镜湖碎光", "逆命铜铃"],
         "地阶": ["会自己翻页的书", "星砂沙漏"],
         "玄阶": ["会发光的圆石", "低语玉佩"],
         "黄阶": ["不熄小灯", "自热茶盏"],
@@ -302,7 +356,7 @@ FISHING_REWARD_NAMES = {
 }
 
 ARTIFACT_NAMES_BY_TIER_ATTR = {
-    "天阶": {"金": "太虚斩星剑", "木": "青帝长生杖", "水": "九霄镇海印", "火": "焚天离火旗", "土": "山河社稷印", "雷": "紫霄御雷槌", "冰": "玄冥封天镜"},
+    "天阶": {"金": "星阙断岳剑", "木": "青衡万木杖", "水": "云海镇澜印", "火": "焚天离火旗", "土": "坤舆镇岳印", "雷": "玄雷破劫槌", "冰": "寒冥锁天镜"},
     "地阶": {"金": "青冥飞剑", "木": "万木回春尺", "水": "沧海分潮珠", "火": "赤阳炼魔炉", "土": "玄都镇魂铃", "雷": "五雷荡邪鼓", "冰": "寒魄凝霜环"},
     "玄阶": {"金": "寒铁护心镜", "木": "青藤缚妖索", "水": "水月流光佩", "火": "赤霞焚影刀", "土": "厚土镇岳盾", "雷": "奔雷破阵枪", "冰": "凝冰照影针"},
     "黄阶": {"金": "赤铜伏魔杖", "木": "青竹听风剑", "水": "碧波纳气瓶", "火": "烈焰短戟", "土": "黄玉护身符", "雷": "引雷桃木剑", "冰": "霜纹短刃"},
@@ -310,7 +364,7 @@ ARTIFACT_NAMES_BY_TIER_ATTR = {
 }
 
 METHOD_NAMES_BY_TIER_ATTR = {
-    "天阶": {"金": "太白斩星经", "木": "青帝长生经", "水": "玄冥归海经", "火": "焚天真阳录", "土": "厚土载道篇", "雷": "紫霄神雷诀", "冰": "太阴玄冰录"},
+    "天阶": {"金": "白衡斩星经", "木": "青衡生息经", "水": "寒冥归海经", "火": "焚天真阳录", "土": "厚土载道篇", "雷": "玄霄神雷诀", "冰": "玄阴冰魄录"},
     "地阶": {"金": "庚金剑典", "木": "万木回春功", "水": "沧海听雷诀", "火": "离火炼神诀", "土": "玄黄镇岳功", "雷": "五雷正法", "冰": "寒魄凝真诀"},
     "玄阶": {"金": "金锋破云诀", "木": "青木长生功", "水": "碧海潮生诀", "火": "赤霞炼气篇", "土": "山岳稳基法", "雷": "奔雷锻脉诀", "冰": "霜华凝息术"},
     "黄阶": {"金": "锐金吐纳术", "木": "草木养气诀", "水": "小云雨诀", "火": "烈阳锻体篇", "土": "黄庭培元功", "雷": "引雷入门诀", "冰": "寒息入静篇"},
@@ -321,12 +375,12 @@ METHOD_NAMES_BY_TIER_ATTR = {
 EXTRA_ARTIFACT_NAMES_BY_TIER_ATTR = {
     "天阶": {
         "金": ["斩道庚金剑", "白帝镇天戈", "星河断岳刃"],
-        "木": ["扶桑万灵弓", "青莲开天尺", "建木归墟杖"],
+        "木": ["青桑万灵弓", "青华开岳尺", "巨木归墟杖"],
         "水": ["归墟沧海珠", "玄水量天瓶", "天河镇魔印"],
-        "火": ["朱雀焚世旗", "太阳炼神炉", "离火吞星钟"],
+        "火": ["赤羽焚世旗", "赤阳炼神炉", "离火吞星钟"],
         "土": ["息壤万山玺", "玄黄镇界碑", "厚土载天鼎"],
-        "雷": ["紫霄万劫剑", "九天雷祖锤", "劫海镇魂鼓"],
-        "冰": ["太阴封界轮", "寒狱照神镜", "玄霜葬天枪"],
+        "雷": ["玄雷万劫剑", "九天雷祖锤", "劫海镇魂鼓"],
+        "冰": ["玄阴封界轮", "寒狱照神镜", "玄霜葬天枪"],
     },
     "地阶": {
         "金": ["碎星金鳞剑", "庚金裂空斧", "白虹穿云枪"],
@@ -343,7 +397,7 @@ EXTRA_ARTIFACT_NAMES_BY_TIER_ATTR = {
         "水": ["水云护身佩", "碧浪分潮叉", "寒泉聚灵盏"],
         "火": ["赤焰伏虎环", "火羽流星镖", "丹霞炼气炉"],
         "土": ["山纹镇邪印", "黄沙缚影袋", "岩心护命盾"],
-        "雷": ["奔雷啸月枪", "雷竹引劫剑", "震魂小鼓"],
+        "雷": ["奔雷啸月枪", "雷枝引劫剑", "震魂小鼓"],
         "冰": ["冰纹照影剑", "寒晶护心镜", "霜花缚妖索"],
     },
     "黄阶": {
@@ -366,18 +420,280 @@ EXTRA_ARTIFACT_NAMES_BY_TIER_ATTR = {
     },
 }
 
+ARTIFACT_STANDARD_TIERS = ["凡品", "黄阶", "玄阶", "地阶", "天阶"]
+ARTIFACT_IMMORTAL_TIER = "仙阶"
+ARTIFACT_REALM_BOUND_TIERS = ARTIFACT_STANDARD_TIERS + [ARTIFACT_IMMORTAL_TIER]
+ARTIFACT_FAKE_IMMORTAL_INDEX = REALMS.index("假仙境") if "假仙境" in REALMS else REALMS.index("真仙境")
+ARTIFACT_REALM_STEMS = [
+    "锻骨", "聚气", "筑基", "丹元", "元婴", "神照", "虚衡", "合真", "乘云", "渡厄",
+    "半仙", "真仙", "金仙", "太乙", "大罗", "混元", "准圣", "圣人", "混罗", "无极",
+    "天道", "大道", "道祖", "半脱", "超脱", "永恒",
+]
+ARTIFACT_TIER_STEMS = {"凡品": "素纹", "黄阶": "明纹", "玄阶": "玄纹", "地阶": "岳纹", "天阶": "天纹", "仙阶": "仙纹"}
+ARTIFACT_GRADE_STEMS = {"下品": "初成", "中品": "凝华", "上品": "上清", "极品": "极曜"}
+ARTIFACT_ATTRIBUTE_STEMS = {
+    "金": "金衡",
+    "木": "青榆",
+    "水": "沧澜",
+    "火": "赤曜",
+    "土": "坤岳",
+    "雷": "霆渊",
+    "冰": "霜镜",
+    "风": "扶摇",
+    "光": "明昼",
+    "暗": "幽冥",
+    "先天道体": "道衡",
+    "混沌": "混元",
+}
+ARTIFACT_SHAPES_BY_ATTRIBUTE = {
+    "金": ["剑", "戈", "刀", "环"],
+    "木": ["杖", "弓", "尺", "铃"],
+    "水": ["珠", "瓶", "扇", "印"],
+    "火": ["旗", "炉", "戟", "钟"],
+    "土": ["盾", "玺", "鼎", "甲"],
+    "雷": ["锤", "鼓", "枪", "钺"],
+    "冰": ["镜", "轮", "针", "链"],
+    "风": ["扇", "羽", "铃", "翼"],
+    "光": ["镜", "轮", "灯", "冠"],
+    "暗": ["刃", "灯", "幡", "匣"],
+    "先天道体": ["印", "箓", "盘", "简"],
+    "混沌": ["珠", "鼎", "钟", "胚"],
+}
+
+ARTIFACT_STORY_PLACES = {
+    "金": ["陨铁谷", "西岭剑冢", "白帝旧炉", "天河沉金滩"],
+    "木": ["青梧灵圃", "万藤古井", "药王山后崖", "春雷林"],
+    "水": ["沧澜寒潭", "归墟潮眼", "月照泉", "天河渡口"],
+    "火": ["赤霞火窟", "离焰炉心", "落日熔原", "朱雀旧坛"],
+    "土": ["坤岳地宫", "玄黄石室", "息壤台", "古矿龙脉"],
+    "雷": ["惊雷崖", "劫云台", "霆渊断岭", "九霄雷池"],
+    "冰": ["霜镜雪原", "玄冰洞天", "寒月冰窟", "北冥裂谷"],
+    "风": ["扶摇天台", "青岚古道", "风雷峡", "九霄云栈"],
+    "光": ["明昼天池", "日轮旧坛", "琉璃净土", "破晓山门"],
+    "暗": ["幽影古井", "无灯地宫", "月蚀荒原", "玄冥暗河"],
+    "先天道体": ["问道台", "万法玄坛", "道源石室", "天机旧阁"],
+    "混沌": ["混沌海眼", "太虚裂隙", "鸿蒙遗炉", "无极玄渊"],
+}
+
+ARTIFACT_STORY_OMENS = [
+    "一场断续七日的灵雨",
+    "夜半忽明忽灭的星痕",
+    "秘境裂口传来的低鸣",
+    "旧战场上未散的器魂回声",
+    "无名碑文泛起的微光",
+]
+
+ARTIFACT_STORY_KEEPERS = ["守炉弟子", "游方炼器师", "失名散修", "宗门客卿", "秘境遗民"]
+
+ARTIFACT_STORY_ENDINGS = [
+    "玉册旁只留八字：先问本心，再出锋芒。",
+    "传承至今，器纹仍会在夜里微亮。",
+    "灵根不合者持之，只听得一声轻叹。",
+    "旧主誓言未散，藏在最深一道纹里。",
+]
+
+ARTIFACT_SHAPE_DEEDS = {
+    "剑": "剑脊映出一线星河，曾替旧主斩开失控炉火",
+    "戈": "戈刃敲地便有战鼓回声，能镇住乱窜的庚金煞气",
+    "刀": "刀光贴着炉壁游走，像一尾不肯熄灭的白焰",
+    "环": "环影绕腕三匝，能把散乱灵机重新扣成一线",
+    "杖": "杖端生出新芽，枯木旁的灵田因此复青",
+    "弓": "弓弦无箭自鸣，曾把夜雾中的妖影逼退三里",
+    "尺": "尺面浮起细密年轮，能量出草木生息的轻重",
+    "铃": "铃声清而不躁，能唤回被瘴气迷住的心神",
+    "珠": "珠中潮声不绝，曾在旱谷里凝出一汪救命清泉",
+    "瓶": "瓶口吞吐月华，可把躁动灵息慢慢沉入丹田",
+    "扇": "扇骨开合如潮，能把飞来的火星化作湿润雾气",
+    "印": "印面落下时水纹四散，像替天地盖上一枚清凉法记",
+    "旗": "旗角卷起赤霞，曾为一座将熄的丹炉续住真火",
+    "炉": "炉腹有细小火潮，常在无人时自守三分余温",
+    "戟": "戟尖挑起红芒，能把袭来的阴寒气息劈成碎烟",
+    "钟": "钟声沉入骨髓，可让走火入魔者听见自己的呼吸",
+    "盾": "盾面浮出山纹，曾挡住塌落矿道里的第一块巨石",
+    "玺": "玺底压着玄黄印痕，能让浮躁法力重新归位",
+    "鼎": "鼎足入地三寸，周围灵砂都会安静伏下",
+    "甲": "甲片互扣如鳞，替旧主在乱石雨中留下一线生机",
+    "锤": "锤头滚过雷光，敲一下便震散一团阴云",
+    "鼓": "鼓皮藏着远雷，曾在秘境深处替众人辨出归路",
+    "枪": "枪缨带电，刺出时会留下短促的青白残影",
+    "钺": "钺刃沉重无声，却能劈开缠身的劫气锁链",
+    "镜": "镜面映雪无尘，能照见心湖里最细的裂纹",
+    "轮": "轮缘旋起寒芒，曾把毒雾冻成坠地冰沙",
+    "针": "针芒细若飞霜，能在一息间封住暴走经脉",
+    "链": "链节轻响如雪落，可把狂乱妖魂慢慢拖回沉寂",
+    "羽": "羽纹轻颤便有长风绕臂，曾托旧主掠过塌陷云栈",
+    "翼": "翼骨张开时风声成阵，可把追兵隔在三重云外",
+    "刃": "刃口不映灯火，却能割开潜伏在影中的恶念",
+    "灯": "灯芯一点不灭，照出迷魂夜路里真正的门径",
+    "幡": "幡面无风自展，曾把满室阴影收作一缕暗纹",
+    "匣": "匣盖开合无声，可封住不愿散去的旧日器魂",
+    "冠": "冠纹浮起清辉，曾替旧主挡下一次心魔反噬",
+    "箓": "箓文自行游走，能把散落道韵重新编成章句",
+    "盘": "盘面星点轮转，曾为迷失者指出一线归真之路",
+    "简": "简上字迹时隐时现，读到最后只余一声道钟",
+    "胚": "胚胎般的器纹缓缓舒展，仿佛天地初分前的一次呼吸",
+}
+
+
+def artifact_story_pick(options: list[str], key: str, salt: str) -> str:
+    if not options:
+        return ""
+    digest = hashlib.sha256(f"{key}:{salt}".encode("utf-8")).hexdigest()
+    return options[int(digest[:8], 16) % len(options)]
+
+
+def artifact_realm_story(name: str, realm_label: str, tier: str, grade: str, attribute: str, shape: str) -> str:
+    key = f"{name}|{realm_label}|{tier}|{grade}|{attribute}|{shape}"
+    place = artifact_story_pick(ARTIFACT_STORY_PLACES.get(attribute, ["无名器阁"]), key, "place")
+    omen = artifact_story_pick(ARTIFACT_STORY_OMENS, key, "omen")
+    keeper = artifact_story_pick(ARTIFACT_STORY_KEEPERS, key, "keeper")
+    ending = artifact_story_pick(ARTIFACT_STORY_ENDINGS, key, "ending")
+    deed = ARTIFACT_SHAPE_DEEDS.get(shape, "器纹初醒时照亮整座石室")
+    attribute_label = root_attribute_label(attribute)
+    return (
+        f"{name}出自{place}。相传{realm_label}{keeper}在{omen}里拾得{attribute_label}系灵胚，"
+        f"以{tier}{grade}火候温养九夜。器成时{deed}，只待{attribute_label}灵根者以心血唤醒。{ending}"
+    )
+
+
+def artifact_shape_from_name(name: str) -> str:
+    text = str(name or "")
+    for shape in sorted(ARTIFACT_SHAPE_DEEDS, key=len, reverse=True):
+        if shape in text:
+            return str(shape)
+    return "器"
+
+
+def crafted_artifact_story(name: str, recipe: dict[str, Any]) -> str:
+    tier = str(recipe.get("tier") or "凡品")
+    grade = str(recipe.get("grade") or "下品")
+    materials = [str(item) for item in recipe.get("materials", []) if str(item).strip()]
+    material_text = (
+        (materials[0] + "等材料") if len(materials) > 1 else (materials[0] if materials else "几件失名旧料")
+    )
+    try:
+        realm_label = REALMS[max(0, min(len(REALMS) - 1, int(recipe.get("required_realm", 0))))]
+    except (TypeError, ValueError):
+        realm_label = "无名境界"
+    key = f"crafted:{name}|{tier}|{grade}|{material_text}|{realm_label}"
+    omen = artifact_story_pick(ARTIFACT_STORY_OMENS, key, "crafted-omen")
+    keeper = artifact_story_pick(ARTIFACT_STORY_KEEPERS, key, "crafted-keeper")
+    ending = artifact_story_pick(ARTIFACT_STORY_ENDINGS, key, "crafted-ending")
+    deed = ARTIFACT_SHAPE_DEEDS.get(artifact_shape_from_name(name), "器纹初醒时照亮整座石室")
+    return (
+        f"{name}由{material_text}炼成。{realm_label}{keeper}在{omen}之夜重开炉火，"
+        f"以{tier}{grade}法度校正器纹。成形时{deed}，自此认心不认主。{ending}"
+    )
+
+
+def artifact_realm_tiers_for_index(realm_index: int) -> list[str]:
+    tiers = list(ARTIFACT_STANDARD_TIERS)
+    if int(realm_index) >= ARTIFACT_FAKE_IMMORTAL_INDEX:
+        tiers.append(ARTIFACT_IMMORTAL_TIER)
+    return tiers
+
+
+def _artifact_realm_stem(realm_index: int) -> str:
+    if 0 <= realm_index < len(ARTIFACT_REALM_STEMS):
+        return ARTIFACT_REALM_STEMS[realm_index]
+    text = REALMS[max(0, min(len(REALMS) - 1, realm_index))]
+    return text[:-1] if text.endswith(("期", "境")) else text
+
+
+def build_realm_artifact_catalog() -> list[dict[str, Any]]:
+    catalog: list[dict[str, Any]] = []
+    for realm_index, realm_name in enumerate(REALMS):
+        realm_stem = _artifact_realm_stem(realm_index)
+        realm_label = realm_name[:-1] if realm_name.endswith(("期", "境")) else realm_name
+        for tier in artifact_realm_tiers_for_index(realm_index):
+            for grade in GRADE_ORDER:
+                grade_index = GRADE_ORDER.index(grade)
+                for attribute in ARTIFACT_ATTRIBUTES:
+                    shape_pool = ARTIFACT_SHAPES_BY_ATTRIBUTE.get(attribute, ["器"])
+                    shape = shape_pool[(realm_index + TIER_ORDER.index(tier) + grade_index) % len(shape_pool)]
+                    name = f"{realm_stem}{ARTIFACT_TIER_STEMS[tier]}{ARTIFACT_ATTRIBUTE_STEMS[attribute]}{ARTIFACT_GRADE_STEMS[grade]}{shape}"
+                    story = artifact_realm_story(name, realm_label, tier, grade, attribute, shape)
+                    catalog.append(
+                        {
+                            "name": name,
+                            "realm_index": realm_index,
+                            "realm": realm_name,
+                            "realm_label": realm_label,
+                            "tier": tier,
+                            "grade": grade,
+                            "attribute": attribute,
+                            "category": "灵器",
+                            "description": story,
+                            "source": "垂钓、每日商店、秘境对应境界掉落、后台配置投放",
+                            "artifact_family": "realm_bound",
+                        }
+                    )
+    return catalog
+
+
+ARTIFACT_REALM_CATALOG = build_realm_artifact_catalog()
+ARTIFACT_REALM_INFOS_BY_NAME = {str(item["name"]): item for item in ARTIFACT_REALM_CATALOG}
+ARTIFACT_REALM_NAMES_BY_TIER: dict[str, list[str]] = {}
+for _artifact_info in ARTIFACT_REALM_CATALOG:
+    ARTIFACT_REALM_NAMES_BY_TIER.setdefault(str(_artifact_info["tier"]), []).append(str(_artifact_info["name"]))
+
+
+def artifact_catalog_entries(
+    realm_index: int,
+    tier: Optional[str] = None,
+    grade: Optional[str] = None,
+    attribute: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    realm = max(0, min(len(REALMS) - 1, int(realm_index)))
+    return [
+        item
+        for item in ARTIFACT_REALM_CATALOG
+        if int(item.get("realm_index", -1)) == realm
+        and (tier is None or str(item.get("tier")) == str(tier))
+        and (grade is None or str(item.get("grade")) == str(grade))
+        and (attribute is None or str(item.get("attribute")) == str(attribute))
+    ]
+
+
+
+def artifact_realm_catalog_summary_text() -> str:
+    lines = ["【境界灵器目录】", "每个境界都有独立灵器池：凡品、黄阶、玄阶、地阶、天阶；假仙境界后额外包含下品至极品仙器。"]
+    for realm_index, realm_name in enumerate(REALMS):
+        tiers = artifact_tiers_for_realm(realm_index)
+        pieces: list[str] = []
+        for tier in tiers:
+            names = [item["name"] for item in artifact_catalog_entries(realm_index, tier, "极品")[:3]]
+            label = "仙器" if tier == "仙阶" else f"{tier}灵器"
+            pieces.append(f"{label}例：" + "、".join(str(name) for name in names))
+        lines.append(f"{realm_name}：" + "；".join(pieces))
+    lines.append("后台可配置每个境界开放的阶级、普通灵器境界战力基数、阶级倍率、品质倍率和仙器出现率。")
+    return "\n".join(lines)
+def artifact_info_to_reward(info: dict[str, Any]) -> dict[str, Any]:
+    realm_index = int(info.get("realm_index", 0))
+    return {
+        "tier": str(info.get("tier", "凡品")),
+        "grade": str(info.get("grade", "下品")),
+        "category": ARTIFACT_CATEGORY,
+        "name": str(info.get("name", "无名灵器")),
+        "description": str(info.get("description", "")),
+        "source": str(info.get("source", "")),
+        "realm_index": realm_index,
+        "min_realm_index": realm_index,
+        "required_attribute": str(info.get("attribute", "")),
+        "artifact_family": str(info.get("artifact_family", "realm_bound")),
+    }
 EXTRA_METHOD_NAMES_BY_TIER_ATTR = {
     "天阶": {
         "金": ["不灭金身经", "斩道剑胎篇", "庚金开天录"],
-        "木": ["青莲造化经", "万灵长生篇", "建木通天录"],
+        "木": ["青华造化经", "万灵长生篇", "巨木通天录"],
         "水": ["沧溟归墟经", "天河炼神篇", "玄水不灭诀"],
-        "火": ["太阳真火录", "朱雀焚天经", "离火炼界篇"],
+        "火": ["赤阳真火录", "赤羽焚天经", "离火炼界篇"],
         "土": ["玄黄不动经", "息壤造山诀", "后土载道书"],
-        "雷": ["九劫雷身经", "紫霄御劫篇", "万雷洗神诀"],
-        "冰": ["太阴封神录", "玄冰寂灭经", "寒狱炼魂篇"],
+        "雷": ["九劫雷身经", "玄雷御劫篇", "万雷洗神诀"],
+        "冰": ["玄阴封神录", "玄冰寂灭经", "寒狱炼魂篇"],
     },
     "地阶": {
-        "金": ["白虎庚金诀", "金阙炼剑章", "裂空剑元录"],
+        "金": ["白锋庚金诀", "金阙炼剑章", "裂空剑元录"],
         "木": ["青木回元经", "万藤化龙诀", "灵植蕴神篇"],
         "水": ["碧海潮汐经", "水月炼心诀", "沧浪化形篇"],
         "火": ["赤阳焚脉诀", "地火炼丹篇", "火鸦吞霞功"],
@@ -426,8 +742,8 @@ def _equipment_names_for_tier(
 
 
 FISHING_REWARD_NAMES["灵器"] = {
-    tier: _equipment_names_for_tier(ARTIFACT_NAMES_BY_TIER_ATTR, EXTRA_ARTIFACT_NAMES_BY_TIER_ATTR, tier)
-    for tier in ARTIFACT_NAMES_BY_TIER_ATTR
+    tier: list(ARTIFACT_REALM_NAMES_BY_TIER.get(tier, []))[:28]
+    for tier in REWARD_TIERS
 }
 FISHING_REWARD_NAMES["功法"] = {
     tier: _equipment_names_for_tier(METHOD_NAMES_BY_TIER_ATTR, EXTRA_METHOD_NAMES_BY_TIER_ATTR, tier)
@@ -441,14 +757,14 @@ FISHING_REWARD_NAMES["丹药"] = {
     "凡品": ["筑基丹", "小还丹", "辟谷小丸", "苦口补气散", "粗炼补元丸", "草还丹", "土炉凝气丸", "散修护脉丸", "粗炼醒神散", "凡火淬体散"],
 }
 FISHING_REWARD_NAMES["奇物"] = {
-    '天阶': ['化凡意境', '破虚灵引', '合道残章', '大乘道果', '大罗天契', '混元道果', '鸿蒙紫气', '混元真印', '无极道种', '天道权柄', '大道本源', '永恒真名', '太乙道胎', '大罗道种', '混元真液', '无极真符', '合道天心', '万道源流', '开天道印', '彼岸真符', '不朽唯一印'],
-    '地阶': ['化凡意境', '破虚灵引', '渡劫令', '仙门符诏', '金性道果', '斩尸灵宝', '道祖法旨', '超脱契机', '命河断契', '虚空灵髓', '法身合契符', '圆融道胎', '避劫雷木', '真仙接引符', '金仙法契', '清光道箓', '诸天印契', '万道归元符', '准圣道契', '天道圣契', '无量道章', '道源玄胎', '天命玉册', '大道真箓', '祖庭符诏', '彼岸舟影', '命河钥印', '因果斩线', '万劫真铭'],
+    '天阶': ['化凡意境', '破虚灵引', '合道残章', '大乘道果', '大罗天契', '混元道果', '元初紫气', '混元真印', '无极道种', '天道权柄', '万道本源', '永恒真名', '太乙道胎', '大罗道种', '混元真液', '无极真符', '合道天心', '万道源流', '开天道印', '彼岸真符', '不朽唯一印'],
+    '地阶': ['化凡意境', '破虚灵引', '渡劫令', '仙门符诏', '金性道果', '斩尸灵宝', '道源符诏', '超脱契机', '命河断契', '虚空灵髓', '法身合契符', '圆融道胎', '避劫雷木', '真仙接引符', '金仙法契', '清光道箓', '诸天印契', '万道归元符', '准圣道契', '天道圣契', '无量道章', '道源玄胎', '天命玉册', '万道真箓', '祖庭符诏', '彼岸舟影', '命河钥印', '因果斩线', '万劫真铭'],
     '玄阶': ['化凡意境', '合道残章', '太乙玄光', '星砂沙漏', '低语玉佩', '仙元道砂', '执念斩魂刃', '功德金莲'],
     '黄阶': ['化凡意境', '不熄小灯', '自热茶盏', '破境石', '醒神玉'],
     '凡品': ['化凡意境', '只响一次的铃铛', '没字的竹简', '旧木令', '无名石片'],
 }
 FISHING_REWARD_NAMES["灵材"] = {
-    "天阶": ["混沌星砂", "太白仙金", "天髓玉露", "九转玄参", "悟道茶心", "太阳真火液", "太阴寒髓", "玄黄母气", "大道莲子", "劫雷神木"],
+    "天阶": ["浑元星砂", "白曜仙金", "天髓玉露", "九转玄参", "悟道茶心", "赤阳真火液", "玄阴寒髓", "坤元母气", "万道莲实", "劫雷神木"],
     "地阶": ["星陨玄铁", "玄冰玉髓", "紫府灵芝", "月华凝露", "地脉火芝", "龙血朱果", "天青灵藤", "地肺火液", "金髓玉砂", "养魂莲心"],
     "玄阶": ["赤霞铜精", "青藤灵骨", "金纹灵芝", "冰魄花蕊", "雷击灵木", "黑曜灵砂", "百年寒髓", "赤鳞妖血", "碧玉参须", "云母灵液"],
     "黄阶": ["百炼寒铁", "紫纹灵木", "凝露草", "火枣核", "土精砂", "血线草", "青灵花", "黄芽芝", "月露珠", "火鸦羽灰"],
@@ -458,9 +774,9 @@ FISHING_REWARD_NAMES["灵材"] = {
 
 
 for _tier, _names in {
-    "天阶": ["准圣妖丹", "仙殿青铜锈", "道源矿髓", "虚神魂晶", "太古兽骨"],
-    "地阶": ["金丹妖丹", "元婴妖丹", "蛟龙脊骨", "太古源石", "青铜仙纹"],
-    "玄阶": ["筑基妖丹", "妖兽精血", "残破兽骨", "虚神魂砂", "古矿石胆"],
+    "天阶": ["古妖王丹", "云殿铜锈", "道源矿髓", "魂界灵晶", "远古兽骨"],
+    "地阶": ["金丹妖丹", "元婴妖丹", "蛟龙脊骨", "荒脉源石", "古铜云纹"],
+    "玄阶": ["筑基妖丹", "妖兽精血", "残破兽骨", "魂界灵砂", "古矿石胆"],
     "黄阶": ["练气妖丹", "妖兽利爪", "矿脉源砂", "旧宗木简", "兽巢骨粉"],
     "凡品": ["残碎妖丹", "幼兽乳牙", "灰矿砂", "断裂兽爪", "残破碑屑"],
 }.items():
@@ -469,110 +785,111 @@ for _tier, _names in {
         if _name not in _pool:
             _pool.append(_name)
 
-FISHING_REWARD_NAMES["特殊能力"] = {
-    "天阶": ["九秘残页", "神禁烙印", "他化自在影", "因果断线真箓", "牧天九歌玉简", "天问一式法旨", "元婴天兆星痕", "九禁感悟"],
-    "地阶": ["九秘残页", "九禁感悟", "神禁烙印", "至尊骨符文", "以身为种道痕", "十洞天神环碎光", "杀戮本源血符", "梦道轮回沙"],
-    "玄阶": ["八禁感悟", "九禁感悟", "九秘残页", "道经轮海残章", "斗战圣法残卷", "鲲鹏极速羽痕", "古神一指骨纹", "神藏开阖残图"],
-    "黄阶": ["八禁感悟", "掌天瓶影拓片", "青帝莲相旧纹", "柳神法相枝影", "青元剑芒手札", "岁月意境残砂", "九秘残页", "问道旧简"],
-    "凡品": ["八禁感悟", "凡骨战意札", "问道旧简", "小神藏残图", "青元剑芒残页", "掌天瓶影碎片", "九秘残页", "九禁感悟"]
+FISHING_REWARD_NAMES["神通"] = {
+    "天阶": ["星律残页", "归极印纹", "万象战影", "命络断线真箓", "云章九歌玉简", "叩穹一式符令", "元婴天兆星痕", "重阈战札"],
+    "地阶": ["星律残页", "重阈战札", "归极印纹", "灵骨天纹", "身界蕴种道痕", "环域灵轮碎光", "血战真源血符", "梦潮回环沙"],
+    "玄阶": ["初阈战札", "重阈战札", "星律残页", "沧元道章残页", "战演真法残卷", "风掣疾行风痕", "沉岳指印骨纹", "内府开阖残图"],
+    "黄阶": ["初阈战札", "翠盏灵影拓片", "青华法相旧纹", "青枝护相枝影", "澄元剑芒手札", "流年意境残砂", "星律残页", "问玄旧简"],
+    "凡品": ["初阈战札", "初阈战意札", "问玄旧简", "小内府残图", "澄元剑芒残页", "翠盏灵影碎片", "星律残页", "重阈战札"]
 }
 
-IMMORTAL_SEED_CATEGORY = '仙种'
+IMMORTAL_SEED_CATEGORY = '仙源'
+LEGACY_IMMORTAL_SEED_CATEGORY = '仙种'
 HIGH_RISK_MYSTIC_REALM_TYPES = (
-    '荒古禁地',
-    '不死山',
-    '太初古矿',
-    '神墟',
-    '仙陵',
-    '轮回海',
+    '远荒限界',
+    '沉寂黑山',
+    '星初矿渊',
+    '神陨废墟',
+    '仙眠幽谷',
+    '轮回潮眼',
     '葬天岛',
-    '虚天殿',
+    '穹衡古殿',
     '五行之地',
     '域外战场',
-    '黄泉魔宗',
-    '大墟',
-    '天运星',
-    '帝关古战场',
-    '北斗星空古路',
-    '青铜仙殿深层',
+    '幽泉魔宗',
+    '荒尘墟',
+    '星运孤界',
+    '天关古战场',
+    '七宿星空古路',
+    '古铜云阙深层',
     '雷池古域',
     '玄界石门',
-    '圣墟残土',
-    '永生之门残影',
+    '星陨残原',
+    '青玄门影',
 )
 NO_TIANJI_MYSTIC_TYPES = set(HIGH_RISK_MYSTIC_REALM_TYPES)
 EMPEROR_ARTIFACT_INFOS = {
-    '青莲帝兵': {
-        "creator": '青帝',
-        "material": '不死药本体青莲躯体',
-        "skill": '青莲镇世',
-        "story": '青帝以本体青莲躯体炼成帝兵，帝威中仍藏生灭道意。',
+    '青华生灭印': {
+        "creator": '青衡',
+        "material": '青华生机残晶',
+        "skill": '青华镇世',
+        "story": '青衡以本体青华躯体炼成仙帝兵，帝威中仍藏生灭道意。',
     },
-    '虚空镜': {
-        "creator": '虚空大帝',
-        "material": '虚空仙金',
+    '空衡明镜': {
+        "creator": '空衡道主',
+        "material": '空痕仙金',
         "skill": '镜照虚空',
-        "story": '虚空大帝一生征战禁区，镜光所至空间如纸。',
+        "story": '空衡道主一生征战险域，镜光所至空间如纸。',
     },
-    '恒宇炉': {
-        "creator": '恒宇大帝',
-        "material": '凰血赤金',
-        "skill": '恒宇神火',
-        "story": '凰血赤金铸炉，炉火中藏帝者的炽烈气魄。',
+    '恒焰天炉': {
+        "creator": '恒焰炉主',
+        "material": '赤羽曜金',
+        "skill": '恒焰炉火',
+        "story": '赤羽曜金铸炉，炉火中藏帝者的炽烈气魄。',
     },
-    '万物母气鼎': {
-        "creator": '叶天帝',
-        "material": '万物母气源根',
+    '坤元源鼎': {
+        "creator": '玄源天尊',
+        "material": '坤源根',
         "skill": '万物归鼎',
-        "story": '万物母气源根铸鼎，随叶天帝征战诸天。',
+        "story": '坤源根铸鼎，随玄源天尊征战诸天。',
     },
-    '青铜面具': {
-        "creator": '狠人大帝',
+    '尘镜隐面': {
+        "creator": '断尘仙主',
         "material": '仙金精粹',
-        "skill": '一念花开',
-        "story": '青铜面具承载狠人大帝孤绝执念，遮尘缘而照万古。',
+        "skill": '尘镜无声',
+        "story": '尘镜隐面承载断尘仙主孤绝执念，遮尘缘而照万古。',
     },
-    '吞天魔罐': {
-        "creator": '狠人大帝',
-        "material": '第一世帝躯',
-        "skill": '吞天噬道',
-        "story": '吞天魔罐以第一世帝躯炼成，罐开则天地失色。',
+    '晦星封藏瓮': {
+        "creator": '断尘仙主',
+        "material": '晦曜古陶',
+        "skill": '晦星归藏',
+        "story": '晦星封藏瓮以晦曜古陶炼成，罐开则天地失色。',
     },
-    '龙纹黑金鼎': {
-        "creator": '摇光圣地历代先贤',
-        "material": '龙纹黑金',
-        "skill": '龙纹帝威',
-        "story": '龙纹黑金本为无上奇珍，鼎身龙纹如沉睡真龙。',
+    '玄龙纹金鼎': {
+        "creator": '玄龙铸宗历代先贤',
+        "material": '玄龙纹金',
+        "skill": '玄龙镇岳',
+        "story": '玄龙纹金本为无上奇珍，鼎身龙纹如沉睡真龙。',
     },
-    '青铜仙殿': {
-        "creator": '狠人大帝相关传承',
-        "material": '青铜仙金与仙殿残纹',
-        "skill": '仙殿镇狱',
-        "story": '青铜仙殿门后有仙机也有死局，帝者气息经年不散。',
+    '古铜云阙': {
+        "creator": '断尘仙主相关传承',
+        "material": '古铜仙金与云殿残纹',
+        "skill": '云阙镇狱',
+        "story": '古铜云阙门后有仙机也有死局，帝者气息经年不散。',
     },
-    '狠人仙剑': {
-        "creator": '狠人大帝',
+    '断尘仙剑': {
+        "creator": '断尘仙主',
         "material": '仙金剑胎',
         "skill": '斩尽凡尘',
-        "story": '一口仙剑随狠人大帝破尽诸敌，剑光冷而纯粹。',
+        "story": '一口仙剑随断尘仙主破尽诸敌，剑光冷而纯粹。',
     },
 }
 EMPEROR_ARTIFACT_NAMES = tuple(EMPEROR_ARTIFACT_INFOS.keys())
-UNIQUE_REWARD_NAMES = set(EMPEROR_ARTIFACT_NAMES) | {'乾蓝冰焰', '虚天鼎', '人皇印', '五行灵根', '以身为种仙种'}
+UNIQUE_REWARD_NAMES = set(EMPEROR_ARTIFACT_NAMES) | {'玄蓝冰焰', '穹衡古鼎', '人道镇印', '五行灵根', '内景星源仙源'}
 UNIQUE_REWARD_INFOS = {
-    '乾蓝冰焰': {
+    '玄蓝冰焰': {
         "category": '奇物',
-        "story": '虚天殿深处流传的寒焰，冷而不灭，可护神魂，也可作为高阶炼丹与炼器火种。',
-        "source": '高危险地、虚天殿、上古大能洞府等秘境极低概率产出；唯一真火被取走后后续只会出现残焰或仿品。',
+        "story": '穹衡古殿深处流传的寒焰，冷而不灭，可护神魂，也可作为高阶炼丹与炼器火种。',
+        "source": '高危险地、穹衡古殿、上古大能洞府等秘境极低概率产出；唯一真火被取走后后续只会出现残焰或仿品。',
         "materials": '无固定制作素材，可作为炼丹/炼器高阶火种。',
     },
-    '虚天鼎': {
+    '穹衡古鼎': {
         "category": '奇物',
-        "story": '虚天殿镇殿古鼎，鼎影一现便牵动空间道韵，常被修士视作大机缘与大杀局并存之物。',
-        "source": '虚天殿、高危险地秘境极低概率产出；本体全局唯一。',
+        "story": '穹衡古殿镇殿古鼎，鼎影一现便牵动空间道韵，常被修士视作大机缘与大杀局并存之物。',
+        "source": '穹衡古殿、高危险地秘境极低概率产出；本体全局唯一。',
         "materials": '不可常规制作，只能通过秘境机缘获得。',
     },
-    '人皇印': {
+    '人道镇印': {
         "category": '奇物',
         "story": '人道气运凝成的古印，能镇压邪气与乱法，持有者更易在高危秘境中稳住心神。',
         "source": '高危险地、域外战场、人族古地秘境极低概率产出；本体全局唯一。',
@@ -600,62 +917,69 @@ CATALOG_EXTRA_ITEM_INFOS = {
     },
     '万象归元经': {
         "category": '功法',
-        "story": '青铜仙殿壁画中显化的古经，讲万象归一、法力返本，适合高阶修士参悟。',
-        "source": '青铜仙殿、上古宗门遗址、秘境功法事件；也可能通过万宝楼流通。',
+        "story": '古铜云阙壁画中显化的古经，讲万象归一、法力返本，适合高阶修士参悟。',
+        "source": '古铜云阙、上古宗门遗址、秘境功法事件；也可能通过万宝楼流通。',
         "materials": '功法不可制作，可通过秘境传承获得。',
     },
-    '太虚观想篇': {
+    '星墟观想篇': {
         "category": '功法',
-        "story": '虚神界残域石碑中拓出的观想法，偏神魂修炼，可辅助秘境感知与斗法先觉。',
-        "source": '虚神界残域、神魂类秘境事件；也可能通过万宝楼流通。',
+        "story": '魂界残域石碑中拓出的观想法，偏神魂修炼，可辅助秘境感知与斗法先觉。',
+        "source": '魂界残域、神魂类秘境事件；也可能通过万宝楼流通。',
         "materials": '功法不可制作，可通过秘境传承获得。',
     },
-    '昆仑镜碎光': {
+    '镜湖碎光': {
         "category": '奇物',
         "story": '断裂仙池中映出的镜光碎片，带有照见虚妄的气息，可作为高阶奇物收藏或秘境线索。',
-        "source": '青铜仙殿、仙池残液、镜湖类秘境事件。',
+        "source": '古铜云阙、仙池残液、镜湖类秘境事件。',
         "materials": '不可常规制作，只能通过秘境机缘获得。',
     },
 }
+IMMORTAL_SEED_NAME_ALIASES = {
+    '身界蕴种仙种': '内景星源仙源',
+    '青枝回春仙种': '翠脉回春仙源',
+    '风掣疾行仙种': '迅岚流影仙源',
+    '环域仙种': '守环玄域仙源',
+    '梦潮回环仙种': '澄梦回澜仙源',
+}
 IMMORTAL_SEED_INFOS = {
-    '以身为种仙种': {"limit": '真仙境', "effect": '以己身为天地种子，提升全系神通与仙元力转化效率。'},
-    '柳神涅槃仙种': {"limit": '真仙境', "effect": '增强恢复、木系神通和秘境抗性。'},
-    '鲲鹏极速仙种': {"limit": '真仙境', "effect": '提升速度、先手和追击能力。'},
-    '十洞天仙种': {"limit": '真仙境', "effect": '提升防御与多段神通爆发。'},
-    '轮回梦道仙种': {"limit": '真仙境', "effect": '强化神魂感知，秘境中更易看出危险。'},
+    '内景星源仙源': {"limit": '真仙境', "effect": '在灵台内凝成一枚星脉源点，提升仙元转化与多系神通调息。'},
+    '翠脉回春仙源': {"limit": '真仙境', "effect": '以青碧生机滋养经络，增强恢复、木系术法与秘境续航。'},
+    '迅岚流影仙源': {"limit": '真仙境', "effect": '把风息压成流影脉冲，提升先手、身法与追击稳定性。'},
+    '守环玄域仙源': {"limit": '真仙境', "effect": '展开护身环域，提升防御并强化连续神通的承接。'},
+    '澄梦回澜仙源': {"limit": '真仙境', "effect": '以澄梦水光洗炼神魂，增强感知、破幻与危机预兆。'},
 }
 IMMORTAL_SEED_NAMES = tuple(IMMORTAL_SEED_INFOS.keys())
 ARTIFACT_REFINING_RECIPES = {
-    '青竹蜂云剑': {"tier": '玄阶', "grade": '上品', "materials": ['碧玉灵竹', '雷击灵木', '百炼寒铁'], "cost": 260, "required_realm": 2},
-    '庚金青竹蜂云剑': {"tier": '地阶', "grade": '极品', "materials": ['青竹蜂云剑', '庚金', '雷击灵木'], "cost": 900, "required_realm": 3},
-    '大庚剑阵': {"tier": '天阶', "grade": '极品', "materials": ['庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑', '庚金青竹蜂云剑'], "cost": 7200, "required_realm": 5, "category": '阵盘'},
-    '虚空镜仿制品': {"tier": '仙阶', "grade": '中品', "materials": ['虚空仙金', '混沌星砂', '太虚锁界盘'], "cost": 18000, "required_realm": 10},
-    '万物母气鼎仿制品': {"tier": '仙阶', "grade": '上品', "materials": ['万物母气', '玄黄母气', '厚土载天鼎'], "cost": 26000, "required_realm": 11},
+    '翠雷云竹剑': {"tier": '玄阶', "grade": '上品', "materials": ['碧玉灵竹', '雷击灵木', '百炼寒铁'], "cost": 260, "required_realm": 2},
+    '玄金雷枝剑': {"tier": '地阶', "grade": '极品', "materials": ['翠雷云竹剑', '庚金', '雷击灵木'], "cost": 900, "required_realm": 3},
+    '玄金列星剑阵': {"tier": '天阶', "grade": '极品', "materials": ['玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑', '玄金雷枝剑'], "cost": 7200, "required_realm": 5, "category": '阵盘'},
+    '空衡明镜仿制品': {"tier": '仙阶', "grade": '中品', "materials": ['空痕仙金', '浑元星砂', '星墟锁界盘'], "cost": 18000, "required_realm": 10},
+    '坤元源鼎仿制品': {"tier": '仙阶', "grade": '上品', "materials": ['坤元母气', '坤元母气', '厚土载天鼎'], "cost": 26000, "required_realm": 11},
 }
 EXTRA_ARTIFACT_REFINING_RECIPES = {
     '矿渣淬火锭': {"tier": '凡品', "grade": '中品', "materials": ['发亮矿渣', '灰矿砂', '凡火炉灰'], "cost": 24, "required_realm": 0},
     '青藤骨盾': {"tier": '玄阶', "grade": '下品', "materials": ['青藤灵骨', '残破兽骨', '百炼寒铁'], "cost": 180, "required_realm": 1},
     '火砂护心镜': {"tier": '黄阶', "grade": '极品', "materials": ['土精砂', '火鸦羽灰', '百炼寒铁'], "cost": 96, "required_realm": 0},
     '赤霞铜炉': {"tier": '玄阶', "grade": '上品', "materials": ['赤霞铜精', '凡火炉灰', '地肺火液'], "cost": 360, "required_realm": 2},
-    '虚神照魂镜': {"tier": '地阶', "grade": '下品', "materials": ['虚神魂砂', '虚神魂晶', '古矿石胆'], "cost": 760, "required_realm": 3},
-    '兽骨战傀': {"tier": '地阶', "grade": '中品', "materials": ['太古兽骨', '妖兽利爪', '断裂兽爪'], "cost": 820, "required_realm": 3, "category": '傀儡'},
+    '魂界照魂镜': {"tier": '地阶', "grade": '下品', "materials": ['魂界灵砂', '魂界灵晶', '古矿石胆'], "cost": 760, "required_realm": 3},
+    '兽骨战傀': {"tier": '地阶', "grade": '中品', "materials": ['远古兽骨', '妖兽利爪', '断裂兽爪'], "cost": 820, "required_realm": 3, "category": '傀儡'},
     '蛟脊破军枪': {"tier": '地阶', "grade": '极品', "materials": ['蛟龙脊骨', '金丹妖丹', '星陨玄铁'], "cost": 1180, "required_realm": 4},
-    '辟邪雷竹剑': {"tier": '地阶', "grade": '极品', "materials": ['金雷竹', '辟邪神雷竹叶', '金雷竹枝'], "cost": 1280, "required_realm": 4},
-    '青竹蜂云剑': {"tier": '玄阶', "grade": '上品', "materials": ['青竹蜂云剑剑胚', '青竹蜂云剑图谱', '金雷竹枝'], "cost": 420, "required_realm": 2},
-    '小庚剑阵盘': {"tier": '玄阶', "grade": '极品', "materials": ['剑阵残图', '大衍神沙', '金雷竹枝'], "cost": 560, "required_realm": 3, "category": '阵盘'},
-    '太白仙金剑胎': {"tier": '天阶', "grade": '极品', "materials": ['太白仙金', '大衍神沙', '庚金'], "cost": 3600, "required_realm": 6},
-    '青铜仙纹盘': {"tier": '天阶', "grade": '上品', "materials": ['青铜仙纹', '仙殿青铜锈', '道源矿髓'], "cost": 4200, "required_realm": 6, "category": '阵盘'},
-    '凰血赤金炉仿品': {"tier": '仙阶', "grade": '下品', "materials": ['凰血赤金', '太阳真火液', '地肺火液'], "cost": 12800, "required_realm": 10},
-    '龙纹黑金鼎仿品': {"tier": '仙阶', "grade": '中品', "materials": ['龙纹黑金', '青铜仙纹', '太古源石'], "cost": 16800, "required_realm": 11},
-    '狠人面具仿品': {"tier": '仙阶', "grade": '中品', "materials": ['仙金精粹', '仙殿青铜锈', '虚神魂晶'], "cost": 18800, "required_realm": 11},
-    '万物母气鼎仿制品': {"tier": '仙阶', "grade": '上品', "materials": ['万物母气源根', '万物母气', '玄黄母气'], "cost": 30000, "required_realm": 12},
+    '辟邪雷竹剑': {"tier": '地阶', "grade": '极品', "materials": ['金纹雷枝', '破邪雷叶', '金纹雷枝'], "cost": 1280, "required_realm": 4},
+    '翠雷云竹剑': {"tier": '玄阶', "grade": '上品', "materials": ['翠雷云竹剑剑胚', '翠雷云竹剑图谱', '金纹雷枝'], "cost": 420, "required_realm": 2},
+    '小玄金剑阵盘': {"tier": '玄阶', "grade": '极品', "materials": ['剑阵残图', '星衍灵沙', '金纹雷枝'], "cost": 560, "required_realm": 3, "category": '阵盘'},
+    '白曜星金剑胎': {"tier": '天阶', "grade": '极品', "materials": ['白曜仙金', '星衍灵沙', '庚金'], "cost": 3600, "required_realm": 6},
+    '古铜云纹盘': {"tier": '天阶', "grade": '上品', "materials": ['古铜云纹', '云殿铜锈', '道源矿髓'], "cost": 4200, "required_realm": 6, "category": '阵盘'},
+    '赤羽曜金炉仿品': {"tier": '仙阶', "grade": '下品', "materials": ['赤羽曜金', '赤阳真火液', '地肺火液'], "cost": 12800, "required_realm": 10},
+    '玄龙纹金鼎仿品': {"tier": '仙阶', "grade": '中品', "materials": ['玄龙纹金', '古铜云纹', '荒脉源石'], "cost": 16800, "required_realm": 11},
+    '尘镜隐面仿品': {"tier": '仙阶', "grade": '中品', "materials": ['仙金精粹', '云殿铜锈', '魂界灵晶'], "cost": 18800, "required_realm": 11},
+    '坤元源鼎仿制品': {"tier": '仙阶', "grade": '上品', "materials": ['坤源根', '坤元母气', '坤元母气'], "cost": 30000, "required_realm": 12},
 }
 ARTIFACT_REFINING_RECIPES.update(EXTRA_ARTIFACT_REFINING_RECIPES)
 
 EXTRA_REFINING_MATERIALS = {
-    '天阶': ['庚金', '虚空仙金', '凰血赤金', '龙纹黑金', '仙金精粹', '万物母气', '万物母气源根', '不死药青莲残躯'],
-    '地阶': ['青竹蜂云剑剑胚', '金雷竹', '辟邪神雷竹叶', '大衍神沙'],
-    '玄阶': ['青竹蜂云剑图谱', '金雷竹枝', '剑阵残图'],
+    '天阶': ['庚金', '空痕仙金', '赤羽曜金', '玄龙纹金', '仙金精粹', '坤元母气', '坤源根', '青华生机残晶'],
+    '地阶': ['翠雷云竹剑剑胚', '金纹雷枝', '破邪雷叶', '星衍灵沙'],
+    '玄阶': ['翠雷云竹剑图谱', '金纹雷枝', '剑阵残图'],
 }
 for _tier, _names in EXTRA_REFINING_MATERIALS.items():
     _pool = FISHING_REWARD_NAMES['灵材'].setdefault(_tier, [])
@@ -696,12 +1020,12 @@ BREAKTHROUGH_REQUIREMENTS = {
     12: {"items": ['大罗天契', '大罗道种', '诸天印契'], "target": '大罗境', "kind": 'insight'},
     13: {"items": ['混元道果', '混元真液', '万道归元符'], "target": '混元金仙境', "kind": 'insight'},
     14: {"items": ['斩尸灵宝', '执念斩魂刃', '准圣道契'], "target": '准圣境', "kind": 'insight'},
-    15: {"items": ['鸿蒙紫气', '天道圣契', '功德金莲'], "target": '圣人境', "kind": 'insight'},
+    15: {"items": ['元初紫气', '天道圣契', '功德金莲'], "target": '圣人境', "kind": 'insight'},
     16: {"items": ['混元真印', '混元圣胎', '无量道章'], "target": '混元大罗金仙境', "kind": 'insight'},
     17: {"items": ['无极道种', '无极真符', '道源玄胎'], "target": '混元无极大罗金仙境', "kind": 'insight'},
     18: {"items": ['天道权柄', '合道天心', '天命玉册'], "target": '天道境', "kind": 'insight'},
-    19: {"items": ['大道本源', '万道源流', '大道真箓'], "target": '大道境', "kind": 'insight'},
-    20: {"items": ['道祖法旨', '开天道印', '祖庭符诏'], "target": '道祖境', "kind": 'insight'},
+    19: {"items": ['万道本源', '万道源流', '万道真箓'], "target": '大道境', "kind": 'insight'},
+    20: {"items": ['道源符诏', '开天道印', '祖庭符诏'], "target": '道祖境', "kind": 'insight'},
     21: {"items": ['超脱契机', '彼岸舟影', '命河钥印'], "target": '半步超脱', "kind": 'insight'},
     22: {"items": ['命河断契', '因果斩线', '彼岸真符'], "target": '超脱境', "kind": 'insight'},
     23: {"items": ['永恒真名', '不朽唯一印', '万劫真铭'], "target": '永恒境', "kind": 'insight'},
@@ -725,11 +1049,11 @@ BREAKTHROUGH_TALISMAN_TOKENS = (
     "\u4ee4",
 )
 
-INSTANT_EXP_BASE = {"凡品": 26, "黄阶": 52, "玄阶": 96, "地阶": 168, "天阶": 280, "仙阶": 520, "帝兵": 1200}
-CONSUMABLE_EXP_BASE = {"凡品": 18, "黄阶": 36, "玄阶": 72, "地阶": 128, "天阶": 220, "仙阶": 420, "帝兵": 960}
+INSTANT_EXP_BASE = {"凡品": 26, "黄阶": 52, "玄阶": 96, "地阶": 168, "天阶": 280, "仙阶": 520, "仙帝兵": 1200}
+CONSUMABLE_EXP_BASE = {"凡品": 18, "黄阶": 36, "玄阶": 72, "地阶": 128, "天阶": 220, "仙阶": 420, "仙帝兵": 960}
 GRADE_EXP_RATIO = {"下品": 1.0, "中品": 1.18, "上品": 1.38, "极品": 1.72}
-METHOD_SIGN_RATE = {"凡品": 0.08, "黄阶": 0.12, "玄阶": 0.18, "地阶": 0.26, "天阶": 0.38, "仙阶": 0.56, "帝兵": 0.88}
-METHOD_CHAT_BASE = {"凡品": 0.35, "黄阶": 0.55, "玄阶": 0.85, "地阶": 1.25, "天阶": 1.8, "仙阶": 2.8, "帝兵": 5.2}
+METHOD_SIGN_RATE = {"凡品": 0.08, "黄阶": 0.12, "玄阶": 0.18, "地阶": 0.26, "天阶": 0.38, "仙阶": 0.56, "仙帝兵": 0.88}
+METHOD_CHAT_BASE = {"凡品": 0.35, "黄阶": 0.55, "玄阶": 0.85, "地阶": 1.25, "天阶": 1.8, "仙阶": 2.8, "仙帝兵": 5.2}
 METHOD_KIND_NAMES = ("修炼类", "锻体类", "神魂类", "战技类")
 COMBAT_RACES = (
     ("人族-东荒", 18),
@@ -737,185 +1061,185 @@ COMBAT_RACES = (
     ("人族-西域", 12),
     ("人族-北域", 12),
     ("人族-中州", 14),
-    ("妖族-金翅大鹏", 4),
-    ("妖族-青莲", 4),
+    ("妖族-金羽雷鹏", 4),
+    ("妖族-青华灵裔", 4),
     ("妖族-九尾天狐", 4),
-    ("妖族-太古魔猿", 3),
+    ("妖族-远荒魔猿", 3),
     ("神族", 4),
     ("仙族", 3),
 )
 COMBAT_PHYSIQUES = (
     ("凡体", 30),
-    ("石猴废脉", 12),
-    ("荒古圣体", 7),
-    ("先天道胎", 7),
-    ("太阴之体", 6),
-    ("太阳神体", 6),
-    ("青莲道体", 6),
-    ("金翅神脉", 5),
-    ("以身为种", 4),
-    ("混沌神魔体", 3),
+    ("石心废脉", 12),
+    ("远荒战体", 7),
+    ("先天道胚", 7),
+    ("玄阴灵体", 6),
+    ("赤阳灵体", 6),
+    ("青华道体", 6),
+    ("金羽神脉", 5),
+    ("身界蕴种", 4),
+    ("浑元战魔体", 3),
 )
 SPECIAL_ABILITY_POOL = (
-    "八禁",
-    "九禁",
-    "神禁领域",
-    "九秘-临字秘",
-    "九秘-兵字秘",
-    "九秘-斗字秘",
-    "九秘-者字秘",
-    "九秘-皆字秘",
-    "九秘-数字秘",
-    "九秘-组字秘",
-    "九秘-前字秘",
-    "九秘-行字秘",
-    "掌天瓶影",
-    "青元剑芒",
+    "初阈",
+    "重阈",
+    "归极域",
+    "星律-定魂篇",
+    "星律-御器篇",
+    "星律-斗衡篇",
+    "星律-回生篇",
+    "星律-贯元篇",
+    "星律-观势篇",
+    "星律-布阵篇",
+    "星律-先觉篇",
+    "星律-流影篇",
+    "翠盏灵影",
+    "澄元剑芒",
     "元婴天兆",
-    "道经轮海",
-    "斗战圣法",
-    "荒古圣血",
-    "青帝莲相",
-    "至尊骨符文",
-    "以身为种",
-    "他化自在影",
-    "十洞天神环",
-    "鲲鹏极速",
-    "柳神法相",
-    "古神一指",
-    "岁月意境",
-    "杀戮本源",
-    "梦道轮回",
-    "因果断线",
-    "牧天九歌",
-    "天问一式",
-    "神藏开阖",
+    "沧元道章",
+    "战演真法",
+    "玄金血脉",
+    "青华法相",
+    "灵骨天纹",
+    "身界蕴种",
+    "万象战影",
+    "环域灵轮",
+    "风掣疾行",
+    "青枝护相",
+    "沉岳指印",
+    "流年意境",
+    "血战真源",
+    "梦潮回环",
+    "命络断线",
+    "云章九歌",
+    "叩穹一式",
+    "内府开阖",
 )
 
-NINE_SECRET_ABILITIES = tuple(ability for ability in SPECIAL_ABILITY_POOL if ability.startswith("九秘"))
-FORBIDDEN_REALM_ABILITIES = ("八禁", "九禁", "神禁领域")
+NINE_SECRET_ABILITIES = tuple(ability for ability in SPECIAL_ABILITY_POOL if ability.startswith("星律"))
+FORBIDDEN_REALM_ABILITIES = ("初阈", "重阈", "归极域")
 SPECIAL_ABILITY_RARITIES = {
-    "八禁": ("玄阶", "极品"),
-    "九禁": ("地阶", "中品"),
-    "神禁领域": ("天阶", "下品"),
-    "掌天瓶影": ("地阶", "上品"),
-    "青元剑芒": ("玄阶", "极品"),
+    "初阈": ("玄阶", "极品"),
+    "重阈": ("地阶", "中品"),
+    "归极域": ("天阶", "下品"),
+    "翠盏灵影": ("地阶", "上品"),
+    "澄元剑芒": ("玄阶", "极品"),
     "元婴天兆": ("地阶", "极品"),
-    "道经轮海": ("地阶", "中品"),
-    "斗战圣法": ("天阶", "下品"),
-    "荒古圣血": ("天阶", "中品"),
-    "青帝莲相": ("天阶", "下品"),
-    "至尊骨符文": ("天阶", "上品"),
-    "以身为种": ("天阶", "极品"),
-    "他化自在影": ("天阶", "极品"),
-    "十洞天神环": ("天阶", "中品"),
-    "鲲鹏极速": ("天阶", "上品"),
-    "柳神法相": ("天阶", "中品"),
-    "古神一指": ("地阶", "极品"),
-    "岁月意境": ("地阶", "上品"),
-    "杀戮本源": ("地阶", "极品"),
-    "梦道轮回": ("天阶", "下品"),
-    "因果断线": ("天阶", "中品"),
-    "牧天九歌": ("地阶", "极品"),
-    "天问一式": ("天阶", "下品"),
-    "神藏开阖": ("玄阶", "极品"),
+    "沧元道章": ("地阶", "中品"),
+    "战演真法": ("天阶", "下品"),
+    "玄金血脉": ("天阶", "中品"),
+    "青华法相": ("天阶", "下品"),
+    "灵骨天纹": ("天阶", "上品"),
+    "身界蕴种": ("天阶", "极品"),
+    "万象战影": ("天阶", "极品"),
+    "环域灵轮": ("天阶", "中品"),
+    "风掣疾行": ("天阶", "上品"),
+    "青枝护相": ("天阶", "中品"),
+    "沉岳指印": ("地阶", "极品"),
+    "流年意境": ("地阶", "上品"),
+    "血战真源": ("地阶", "极品"),
+    "梦潮回环": ("天阶", "下品"),
+    "命络断线": ("天阶", "中品"),
+    "云章九歌": ("地阶", "极品"),
+    "叩穹一式": ("天阶", "下品"),
+    "内府开阖": ("玄阶", "极品"),
     **{ability: ("天阶", "极品") for ability in NINE_SECRET_ABILITIES},
 }
 SPECIAL_ABILITY_MATERIAL_DIFFICULTY = {
-    "八禁感悟": 0.75,
-    "九禁感悟": 0.36,
-    "神禁烙印": 0.16,
-    "九秘残页": 0.18,
+    "初阈战札": 0.75,
+    "重阈战札": 0.36,
+    "归极印纹": 0.16,
+    "星律残页": 0.18,
 }
 
 SPECIAL_ABILITY_INFOS = {
-    "八禁": {"material": "八禁感悟", "source": "战境极限", "effect": "以战意踏入八禁，斗法时伤害和防御同步提升。", "aliases": ["八禁", "开启八禁"], "combat": (0.12, 0.04, 0)},
-    "九禁": {"material": "九禁感悟", "source": "八禁进阶", "effect": "在八禁之上再破一线，攻防与速度获得更稳定的提升。", "aliases": ["九禁", "开启九禁"], "combat": (0.15, 0.06, 4)},
-    "神禁领域": {"material": "神禁烙印", "source": "九禁升华", "effect": "九禁之后触及神禁领域，短时间踏入极限状态。", "aliases": ["神禁", "神禁领域", "开启神禁"], "combat": (0.18, 0.08, 8)},
-    "九秘-临字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "稳定神魂与气机，拉高攻守下限。", "aliases": ["临字秘", "九秘"], "combat": (0.08, 0.08, 2)},
-    "九秘-兵字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "牵引灵器与法宝共鸣，提升攻伐威势。", "aliases": ["兵字秘", "九秘"], "combat": (0.10, 0.05, 0)},
-    "九秘-斗字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "演化斗战法则，以战养战。", "aliases": ["斗字秘", "九秘"], "combat": (0.13, 0.03, 0)},
-    "九秘-者字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "激发生机与恢复底蕴，以守为攻。", "aliases": ["者字秘", "九秘"], "combat": (0.00, 0.12, 0)},
-    "九秘-皆字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "短暂放大自身战力，追求瞬间爆发。", "aliases": ["皆字秘", "九秘"], "combat": (0.16, 0.00, 0)},
-    "九秘-数字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "推演战局缝隙，提升闪转和护身。", "aliases": ["数字秘", "九秘"], "combat": (0.04, 0.05, 6)},
-    "九秘-组字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "结成战阵法纹，增强防御和控场。", "aliases": ["组字秘", "九秘"], "combat": (0.03, 0.09, 3)},
-    "九秘-前字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "增强神识先觉，先一步看破攻势。", "aliases": ["前字秘", "九秘"], "combat": (0.06, 0.04, 8)},
-    "九秘-行字秘": {"material": "九秘残页", "source": "九秘传承", "effect": "身法如流光，追求极速和脱身。", "aliases": ["行字秘", "九秘"], "combat": (0.00, 0.04, 12)},
-    "掌天瓶影": {"material": "掌天瓶影拓片", "source": "岁月灵液之道", "effect": "凝聚一缕绿光灵机，斗法时补足后劲。", "aliases": ["掌天", "小瓶", "瓶影"], "combat": (0.08, 0.07, 0)},
-    "青元剑芒": {"material": "青元剑芒手札", "source": "剑修凝元之道", "effect": "剑芒凝而不散，提升剑类攻伐爆发。", "aliases": ["青元", "剑芒"], "combat": (0.12, 0.02, 0)},
+    "初阈": {"material": "初阈战札", "source": "战境极限", "effect": "以战意踏入初阈，斗法时伤害和防御同步提升。", "aliases": ["初阈", "开启初阈"], "combat": (0.12, 0.04, 0)},
+    "重阈": {"material": "重阈战札", "source": "初阈进阶", "effect": "在初阈之上再破一线，攻防与速度获得更稳定的提升。", "aliases": ["重阈", "开启重阈"], "combat": (0.15, 0.06, 4)},
+    "归极域": {"material": "归极印纹", "source": "重阈升华", "effect": "重阈之后触及归极域，短时间踏入极限状态。", "aliases": ["归极", "归极域", "开启归极"], "combat": (0.18, 0.08, 8)},
+    "星律-定魂篇": {"material": "星律残页", "source": "星律传承", "effect": "稳定神魂与气机，拉高攻守下限。", "aliases": ["定魂星律", "星律定魂"], "combat": (0.08, 0.08, 2)},
+    "星律-御器篇": {"material": "星律残页", "source": "星律传承", "effect": "牵引灵器灵纹共鸣，提升攻伐威势。", "aliases": ["御器星律", "星律御器"], "combat": (0.10, 0.05, 0)},
+    "星律-斗衡篇": {"material": "星律残页", "source": "星律传承", "effect": "演化斗战法则，以战养战。", "aliases": ["斗衡星律", "星律斗衡"], "combat": (0.13, 0.03, 0)},
+    "星律-回生篇": {"material": "星律残页", "source": "星律传承", "effect": "激发生机与恢复底蕴，以守为攻。", "aliases": ["回生星律", "星律回生"], "combat": (0.00, 0.12, 0)},
+    "星律-贯元篇": {"material": "星律残页", "source": "星律传承", "effect": "短暂放大自身战力，追求瞬间爆发。", "aliases": ["贯元星律", "星律贯元"], "combat": (0.16, 0.00, 0)},
+    "星律-观势篇": {"material": "星律残页", "source": "星律传承", "effect": "推演战局缝隙，提升闪转和护身。", "aliases": ["观势星律", "星律观势"], "combat": (0.04, 0.05, 6)},
+    "星律-布阵篇": {"material": "星律残页", "source": "星律传承", "effect": "结成战阵法纹，增强防御和控场。", "aliases": ["布阵星律", "星律布阵"], "combat": (0.03, 0.09, 3)},
+    "星律-先觉篇": {"material": "星律残页", "source": "星律传承", "effect": "增强神识先觉，先一步看破攻势。", "aliases": ["先觉星律", "星律先觉"], "combat": (0.06, 0.04, 8)},
+    "星律-流影篇": {"material": "星律残页", "source": "星律传承", "effect": "身法如流光，追求极速和脱身。", "aliases": ["流影星律", "星律流影"], "combat": (0.00, 0.04, 12)},
+    "翠盏灵影": {"material": "翠盏灵影拓片", "source": "岁月灵液之道", "effect": "凝聚一缕绿光灵机，斗法时补足后劲。", "aliases": ["翠盏灵影", "瓶影"], "combat": (0.08, 0.07, 0)},
+    "澄元剑芒": {"material": "澄元剑芒手札", "source": "剑修凝元之道", "effect": "剑芒凝而不散，提升剑类攻伐爆发。", "aliases": ["澄元剑芒", "剑芒"], "combat": (0.12, 0.02, 0)},
     "元婴天兆": {"material": "元婴天兆星痕", "source": "破婴天象感悟", "effect": "引来天兆压场，提升法力和护体。", "aliases": ["元婴天兆", "天兆"], "combat": (0.09, 0.07, 2)},
-    "道经轮海": {"material": "道经轮海残章", "source": "轮海秘境观想", "effect": "气血如海，攻守节奏更稳。", "aliases": ["道经", "轮海"], "combat": (0.07, 0.08, 1)},
-    "斗战圣法": {"material": "斗战圣法残卷", "source": "斗战演法", "effect": "临阵演化攻伐，让战技更具压迫。", "aliases": ["斗战", "斗战圣法"], "combat": (0.15, 0.02, 0)},
-    "荒古圣血": {"material": "荒古圣血金纹", "source": "圣体肉身之道", "effect": "气血若金海，增强近身压制与抗性。", "aliases": ["圣血", "圣体", "金血"], "combat": (0.10, 0.09, 0)},
-    "青帝莲相": {"material": "青帝莲相旧纹", "source": "青莲生灭之道", "effect": "青莲法相开合，兼具生机与杀伐。", "aliases": ["青帝", "青莲", "莲相"], "combat": (0.09, 0.08, 0)},
-    "至尊骨符文": {"material": "至尊骨符文", "source": "骨文天赋", "effect": "骨文发光，爆发强力神通。", "aliases": ["至尊骨", "骨符"], "combat": (0.14, 0.04, 0)},
-    "以身为种": {"material": "以身为种道痕", "source": "身种大道", "effect": "以自身为天地，强化全面战力。", "aliases": ["以身为种", "身种"], "combat": (0.11, 0.08, 2)},
-    "他化自在影": {"material": "他化自在影", "source": "自在化身之道", "effect": "化出一道战影，形成瞬间合击。", "aliases": ["他化自在", "自在影"], "combat": (0.18, 0.03, 4)},
-    "十洞天神环": {"material": "十洞天神环碎光", "source": "洞天开辟之道", "effect": "洞天光环连成一体，攻守同时拔高。", "aliases": ["十洞天", "洞天", "神环"], "combat": (0.10, 0.10, 1)},
-    "鲲鹏极速": {"material": "鲲鹏极速羽痕", "source": "鲲鹏身法", "effect": "极速破空，让先手和追击更稳。", "aliases": ["鲲鹏", "极速"], "combat": (0.06, 0.02, 16)},
-    "柳神法相": {"material": "柳神法相枝影", "source": "生灭法相", "effect": "柳枝化成护身法相，可守可攻。", "aliases": ["柳神", "柳枝", "法相"], "combat": (0.08, 0.11, 0)},
-    "古神一指": {"material": "古神一指骨纹", "source": "古神肉身之道", "effect": "一指点出，以气血和法力同时压制。", "aliases": ["古神", "一指"], "combat": (0.13, 0.05, 0)},
-    "岁月意境": {"material": "岁月意境残砂", "source": "时光意境", "effect": "让对手攻势似被时光拖慢，增加防御与先觉。", "aliases": ["岁月", "时光"], "combat": (0.06, 0.09, 5)},
-    "杀戮本源": {"material": "杀戮本源血符", "source": "本源感悟", "effect": "攻势带上杀戮气机，伤害爆发更高。", "aliases": ["杀戮", "本源"], "combat": (0.16, 0.00, 0)},
-    "梦道轮回": {"material": "梦道轮回沙", "source": "梦与轮回之道", "effect": "以梦境干扰战局，偏向控场和护身。", "aliases": ["梦道", "轮回"], "combat": (0.05, 0.10, 4)},
-    "因果断线": {"material": "因果断线真箓", "source": "因果法则", "effect": "斩断一线攻势因果，以守为主并伺机反击。", "aliases": ["因果", "断线"], "combat": (0.07, 0.12, 3)},
-    "牧天九歌": {"material": "牧天九歌玉简", "source": "神通唱诵之道", "effect": "歌声引动法则，让术式更易连成气势。", "aliases": ["牧天", "九歌"], "combat": (0.11, 0.06, 2)},
-    "天问一式": {"material": "天问一式法旨", "source": "问道叩天之法", "effect": "一问落下，攻势中带神魂压迫。", "aliases": ["天问", "一式"], "combat": (0.12, 0.04, 1)},
-    "神藏开阖": {"material": "神藏开阖残图", "source": "肉身神藏", "effect": "打开身中神藏，提升灵力转化和护体。", "aliases": ["神藏", "开阖"], "combat": (0.08, 0.08, 2)},
+    "沧元道章": {"material": "沧元道章残页", "source": "元海观想", "effect": "气血如海，攻守节奏更稳。", "aliases": ["沧元道章", "元海"], "combat": (0.07, 0.08, 1)},
+    "战演真法": {"material": "战演真法残卷", "source": "战演推法", "effect": "临阵演化攻伐，让战技更具压迫。", "aliases": ["战演", "战演真法"], "combat": (0.15, 0.02, 0)},
+    "玄金血脉": {"material": "玄金血纹", "source": "金血战体之道", "effect": "气血若金海，增强近身压制与抗性。", "aliases": ["金血战体", "金血"], "combat": (0.10, 0.09, 0)},
+    "青华法相": {"material": "青华法相旧纹", "source": "青华生灭之道", "effect": "青华法相开合，兼具生机与杀伐。", "aliases": ["青华法相", "莲相"], "combat": (0.09, 0.08, 0)},
+    "灵骨天纹": {"material": "灵骨天纹", "source": "骨文天赋", "effect": "骨文发光，爆发强力神通。", "aliases": ["天骨", "骨符"], "combat": (0.14, 0.04, 0)},
+    "身界蕴种": {"material": "身界蕴种道痕", "source": "身界蕴生之道", "effect": "以自身为天地，强化全面战力。", "aliases": ["身界蕴种", "身界"], "combat": (0.11, 0.08, 2)},
+    "万象战影": {"material": "万象战影", "source": "战影分化之道", "effect": "化出一道战影，形成瞬间合击。", "aliases": ["万象战影", "分影"], "combat": (0.18, 0.03, 4)},
+    "环域灵轮": {"material": "环域灵轮碎光", "source": "洞天开辟之道", "effect": "洞天光环连成一体，攻守同时拔高。", "aliases": ["环域", "灵轮", "环轮"], "combat": (0.10, 0.10, 1)},
+    "风掣疾行": {"material": "风掣疾行风痕", "source": "风掣身法", "effect": "极速破空，让先手和追击更稳。", "aliases": ["风掣", "疾行"], "combat": (0.06, 0.02, 16)},
+    "青枝护相": {"material": "青枝护相枝影", "source": "生灭法相", "effect": "柳枝化成护身法相，可守可攻。", "aliases": ["青枝", "护相", "法相"], "combat": (0.08, 0.11, 0)},
+    "沉岳指印": {"material": "沉岳指印骨纹", "source": "沉岳肉身之道", "effect": "一指点出，以气血和法力同时压制。", "aliases": ["沉岳", "一指"], "combat": (0.13, 0.05, 0)},
+    "流年意境": {"material": "流年意境残砂", "source": "时光意境", "effect": "让对手攻势似被时光拖慢，增加防御与先觉。", "aliases": ["岁月", "时光"], "combat": (0.06, 0.09, 5)},
+    "血战真源": {"material": "血战真源血符", "source": "本源感悟", "effect": "攻势带上杀戮气机，伤害爆发更高。", "aliases": ["杀戮", "本源"], "combat": (0.16, 0.00, 0)},
+    "梦潮回环": {"material": "梦潮回环沙", "source": "梦与轮回之道", "effect": "以梦境干扰战局，偏向控场和护身。", "aliases": ["梦道", "轮回"], "combat": (0.05, 0.10, 4)},
+    "命络断线": {"material": "命络断线真箓", "source": "因果法则", "effect": "斩断一线攻势因果，以守为主并伺机反击。", "aliases": ["因果", "断线"], "combat": (0.07, 0.12, 3)},
+    "云章九歌": {"material": "云章九歌玉简", "source": "神通唱诵之道", "effect": "歌声引动法则，让术式更易连成气势。", "aliases": ["牧天", "九歌"], "combat": (0.11, 0.06, 2)},
+    "叩穹一式": {"material": "叩穹一式符令", "source": "问道叩天之法", "effect": "一问落下，攻势中带神魂压迫。", "aliases": ["天问", "一式"], "combat": (0.12, 0.04, 1)},
+    "内府开阖": {"material": "内府开阖残图", "source": "肉身神藏", "effect": "打开身中神藏，提升灵力转化和护体。", "aliases": ["神藏", "开阖"], "combat": (0.08, 0.08, 2)},
 }
 
 SPECIAL_ABILITY_MATERIAL_TO_ABILITY = {
-    "八禁感悟": "八禁",
-    "九禁感悟": "九禁",
-    "神禁烙印": "神禁领域",
-    "掌天瓶影拓片": "掌天瓶影",
-    "掌天瓶影碎片": "掌天瓶影",
-    "青元剑芒手札": "青元剑芒",
-    "青元剑芒残页": "青元剑芒",
+    "初阈战札": "初阈",
+    "重阈战札": "重阈",
+    "归极印纹": "归极域",
+    "翠盏灵影拓片": "翠盏灵影",
+    "翠盏灵影碎片": "翠盏灵影",
+    "澄元剑芒手札": "澄元剑芒",
+    "澄元剑芒残页": "澄元剑芒",
     "元婴天兆星痕": "元婴天兆",
-    "道经轮海残章": "道经轮海",
-    "斗战圣法残卷": "斗战圣法",
-    "荒古圣血金纹": "荒古圣血",
-    "凡骨战意札": "八禁",
-    "青帝莲相旧纹": "青帝莲相",
-    "至尊骨符文": "至尊骨符文",
-    "以身为种道痕": "以身为种",
-    "他化自在影": "他化自在影",
-    "十洞天神环碎光": "十洞天神环",
-    "鲲鹏极速羽痕": "鲲鹏极速",
-    "柳神法相枝影": "柳神法相",
-    "古神一指骨纹": "古神一指",
-    "岁月意境残砂": "岁月意境",
-    "杀戮本源血符": "杀戮本源",
-    "梦道轮回沙": "梦道轮回",
-    "因果断线真箓": "因果断线",
-    "牧天九歌玉简": "牧天九歌",
-    "天问一式法旨": "天问一式",
-    "问道旧简": "天问一式",
-    "神藏开阖残图": "神藏开阖",
-    "小神藏残图": "神藏开阖",
+    "沧元道章残页": "沧元道章",
+    "战演真法残卷": "战演真法",
+    "玄金血纹": "玄金血脉",
+    "初阈战意札": "初阈",
+    "青华法相旧纹": "青华法相",
+    "灵骨天纹": "灵骨天纹",
+    "身界蕴种道痕": "身界蕴种",
+    "万象战影": "万象战影",
+    "环域灵轮碎光": "环域灵轮",
+    "风掣疾行风痕": "风掣疾行",
+    "青枝护相枝影": "青枝护相",
+    "沉岳指印骨纹": "沉岳指印",
+    "流年意境残砂": "流年意境",
+    "血战真源血符": "血战真源",
+    "梦潮回环沙": "梦潮回环",
+    "命络断线真箓": "命络断线",
+    "云章九歌玉简": "云章九歌",
+    "叩穹一式符令": "叩穹一式",
+    "问玄旧简": "叩穹一式",
+    "内府开阖残图": "内府开阖",
+    "小内府残图": "内府开阖",
 }
 
 ATTRIBUTE_TECHNIQUE_NAMES = {
     "金": ["太白斩星", "庚金裂空", "剑气雷音", "白虹贯日", "金阙镇魔"],
-    "木": ["青莲化生", "万藤缚龙", "建木撑天", "草木皆兵", "长生回春"],
+    "木": ["青华化生", "万藤缚龙", "巨木撑天", "草木皆兵", "长生回春"],
     "水": ["沧海归墟", "天河倒卷", "水月镜花", "玄浪分潮", "寒潮镇魂"],
-    "火": ["太阳真火", "朱雀焚天", "离火炼界", "赤莲破妄", "炎龙吞海"],
+    "火": ["赤阳真火", "赤羽焚天", "离火炼界", "赤莲破妄", "炎龙吞海"],
     "土": ["玄黄不动", "息壤镇岳", "搬山覆海", "厚土载道", "山河印落"],
-    "雷": ["紫霄万劫", "五雷正法", "雷海洗身", "劫光破阵", "天罚一指"],
-    "冰": ["太阴玄封", "寒狱葬天", "冰魄凝魂", "霜华照影", "玄冥锁界"],
+    "雷": ["玄雷万劫", "五雷正法", "雷海洗身", "劫光破阵", "天罚一指"],
+    "冰": ["玄阴玄封", "寒狱葬天", "冰魄凝魂", "霜华照影", "寒冥锁界"],
 }
-GENERAL_TECHNIQUE_NAMES = ["大威天龙", "大罗法咒", "问心一剑", "袖里乾坤", "灵台镇念"]
+GENERAL_TECHNIQUE_NAMES = ["盘龙镇邪", "大罗法咒", "问心一剑", "袖里乾坤", "灵台镇念"]
 SOUL_INSIGHT_LAYER = 3
 PHYSIQUE_TRAIT_NAMES = {
-    "\u8352\u53e4\u5723\u4f53": "\u5723\u4f53\u91d1\u8840",
-    "\u4ee5\u8eab\u4e3a\u79cd": "\u8eab\u79cd\u9053\u82bd",
-    "\u6df7\u6c8c\u795e\u9b54\u4f53": "\u6df7\u6c8c\u795e\u9b54\u76f8",
-    "\u5148\u5929\u9053\u80ce": "\u9053\u80ce\u5171\u9e23",
-    "\u592a\u9634\u4e4b\u4f53": "\u592a\u9634\u5bd2\u9b44",
-    "\u592a\u9633\u795e\u4f53": "\u592a\u9633\u795e\u7130",
-    "\u9752\u83b2\u9053\u4f53": "\u9752\u83b2\u9053\u97f5",
-    "\u91d1\u7fc5\u795e\u8109": "\u91d1\u7fc5\u6781\u901f",
+    "远荒战体": "远荒血脉",
+    "身界蕴种": "\u8eab\u79cd\u9053\u82bd",
+    "浑元战魔体": "浑元战魔相",
+    "先天道胚": "\u9053\u80ce\u5171\u9e23",
+    "玄阴灵体": "玄阴寒魄",
+    "赤阳灵体": "赤阳灵焰",
+    "青华灵体": "青华生息",
+    "金羽神脉": "金羽疾行",
 }
 EQUIPMENT_CATEGORIES = {"灵器", "功法", "阵盘"}
 ARTIFACT_CATEGORY = "灵器"
@@ -929,7 +1253,8 @@ SPIRIT_STONE_CATEGORY = "灵石"
 MISC_CATEGORY = "杂物"
 CURIO_CATEGORY = "奇物"
 FOOD_CATEGORY = "灵食"
-SPECIAL_ABILITY_CATEGORY = "特殊能力"
+SPECIAL_ABILITY_CATEGORY = "神通"
+LEGACY_SPECIAL_ABILITY_CATEGORY = "".join(chr(code) for code in (29305, 27530, 33021, 21147))
 ACQUIRED_ROOT_DAN = "\u4e39\u7075\u6839"
 ACQUIRED_ROOT_ARTIFACT = "\u5668\u7075\u6839"
 ACQUIRED_ROOT_KINDS = (ACQUIRED_ROOT_DAN, ACQUIRED_ROOT_ARTIFACT)
@@ -942,16 +1267,75 @@ DEMON_CORE_REALM_PURITY = {
     "\u91d1\u4e39": 76,
     "\u5143\u5a74": 84,
     "\u5316\u795e": 91,
+    "\u70bc\u865a": 91,
+    "\u5408\u4f53": 91,
+    "\u5927\u4e58": 91,
+    "\u6e21\u52ab": 91,
+    "\u5047\u4ed9": 91,
+    "\u771f\u4ed9": 91,
+    "\u91d1\u4ed9": 91,
+    "\u592a\u4e59": 91,
+    "\u5927\u7f57": 91,
+    "\u6df7\u5143\u91d1\u4ed9": 91,
+    "\u51c6\u5723": 91,
+    "\u5723\u4eba": 91,
 }
-DEMON_CORE_TIER_BASE_PURITY = {"\u51e1\u54c1": 36, "\u9ec4\u9636": 48, "\u7384\u9636": 62, "\u5730\u9636": 78, "\u5929\u9636": 88}
-ARTIFACT_ROOT_TIER_BASE_PURITY = {"\u51e1\u54c1": 30, "\u9ec4\u9636": 42, "\u7384\u9636": 56, "\u5730\u9636": 68, "\u5929\u9636": 76}
+DEMON_CORE_TIER_BASE_PURITY = {"\u51e1\u54c1": 36, "\u9ec4\u9636": 48, "\u7384\u9636": 62, "\u5730\u9636": 78, "\u5929\u9636": 88, "\u4ed9\u9636": 91, "\u4ed9\u5e1d\u5175": 91}
+DEMON_CORE_EXP_BASE_BY_REALM = {
+    "\u6b8b\u788e": 10,
+    "\u70bc\u4f53": 14,
+    "\u7ec3\u6c14": 28,
+    "\u7b51\u57fa": 58,
+    "\u91d1\u4e39": 118,
+    "\u5143\u5a74": 240,
+    "\u5316\u795e": 460,
+    "\u70bc\u865a": 760,
+    "\u5408\u4f53": 1180,
+    "\u5927\u4e58": 1760,
+    "\u6e21\u52ab": 2500,
+    "\u5047\u4ed9": 3600,
+    "\u771f\u4ed9": 5200,
+    "\u91d1\u4ed9": 7600,
+    "\u592a\u4e59": 10800,
+    "\u5927\u7f57": 15200,
+    "\u6df7\u5143\u91d1\u4ed9": 21000,
+    "\u51c6\u5723": 28000,
+    "\u5723\u4eba": 36000,
+}
+DEMON_CORE_TIER_EXP_RATIO = {"\u51e1\u54c1": 0.7, "\u9ec4\u9636": 1.0, "\u7384\u9636": 1.45, "\u5730\u9636": 2.05, "\u5929\u9636": 2.9, "\u4ed9\u9636": 4.2, "\u4ed9\u5e1d\u5175": 6.0}
+DEMON_CORE_DEFAULT_REALM_BY_TIER = {"\u51e1\u54c1": "\u6b8b\u788e", "\u9ec4\u9636": "\u7ec3\u6c14", "\u7384\u9636": "\u7b51\u57fa", "\u5730\u9636": "\u91d1\u4e39", "\u5929\u9636": "\u5316\u795e", "\u4ed9\u9636": "\u771f\u4ed9", "\u4ed9\u5e1d\u5175": "\u5723\u4eba"}
+DEMON_CORE_REALM_ALIASES = {
+    "\u6b8b\u788e": "\u6b8b\u788e",
+    "\u6b8b\u4e39": "\u6b8b\u788e",
+    "\u70bc\u4f53": "\u70bc\u4f53",
+    "\u7ec3\u4f53": "\u70bc\u4f53",
+    "\u7ec3\u6c14": "\u7ec3\u6c14",
+    "\u70bc\u6c14": "\u7ec3\u6c14",
+    "\u7b51\u57fa": "\u7b51\u57fa",
+    "\u91d1\u4e39": "\u91d1\u4e39",
+    "\u5143\u5a74": "\u5143\u5a74",
+    "\u5316\u795e": "\u5316\u795e",
+    "\u70bc\u865a": "\u70bc\u865a",
+    "\u7ec3\u865a": "\u70bc\u865a",
+    "\u5408\u4f53": "\u5408\u4f53",
+    "\u5927\u4e58": "\u5927\u4e58",
+    "\u6e21\u52ab": "\u6e21\u52ab",
+    "\u5047\u4ed9": "\u5047\u4ed9",
+    "\u771f\u4ed9": "\u771f\u4ed9",
+    "\u91d1\u4ed9": "\u91d1\u4ed9",
+    "\u592a\u4e59": "\u592a\u4e59",
+    "\u5927\u7f57": "\u5927\u7f57",
+    "\u6df7\u5143\u91d1\u4ed9": "\u6df7\u5143\u91d1\u4ed9",
+    "\u51c6\u5723": "\u51c6\u5723",
+    "\u5723\u4eba": "\u5723\u4eba",
+}
+ARTIFACT_ROOT_TIER_BASE_PURITY = {"\u51e1\u54c1": 30, "\u9ec4\u9636": 42, "\u7384\u9636": 56, "\u5730\u9636": 68, "\u5929\u9636": 76, "\u4ed9\u9636": 78, "\u4ed9\u5e1d\u5175": 78}
 DAN_ROOT_MAX_PURITY = 91
 ARTIFACT_ROOT_MAX_PURITY = 78
 ARTIFACT_ROOT_SUCCESS_RATE = 0.35
 ARTIFACT_SLOTS = ("主手", "副手", "护甲")
 ARTIFACT_SLOT_ALIASES = {
     "主手": "主手",
-    "武器": "主手",
     "副手": "副手",
     "护手": "副手",
     "护甲": "护甲",
@@ -960,15 +1344,97 @@ ARTIFACT_SLOT_ALIASES = {
     "甲": "护甲",
 }
 ARTIFACT_SLOT_POWER_RATE = {"主手": 1.0, "副手": 0.65, "护甲": 0.85}
+ARTIFACT_ARMOR_NAME_TOKENS = ("盾", "铠", "衣", "裍", "袍", "护心", "护身", "护命", "守心")
+ARTIFACT_SWORD_NAME_TOKENS = ("剑", "飞剑", "剑谱")
+ARTIFACT_DUPLICATE_POWER_RATE = 0.2
+ARTIFACT_NAME_POWER_RATE = {
+    "星阙断岳剑": 1.0,
+    "青衡万木杖": 1.13,
+    "云海镇澜印": 1.16,
+    "焚天离火旗": 1.14,
+    "坤舆镇岳印": 1.16,
+    "玄雷破劫槌": 1.15,
+    "寒冥锁天镜": 1.14,
+}
+ARTIFACT_TIAN_TYPE_POWER_RATES = (
+    (("印", "玺", "碑", "鼎"), 1.16),
+    (("槌", "锤", "鼓"), 1.15),
+    (("旗", "炉", "钟"), 1.14),
+    (("镜", "轮", "瓶", "珠", "杖", "尺"), 1.13),
+    (("戈", "刃", "枪", "弓", "刀"), 1.12),
+)
 
-MYSTIC_REALM_TYPES = ("上古宗门遗址", "兽潮", "上古大能洞府", "太古矿区", "虚神界残域", "青铜仙殿")
+def _legacy_text(*codes: int) -> str:
+    return "".join(chr(code) for code in codes)
+
+
+LEGACY_ITEM_NAME_ALIASES = {
+    _legacy_text(23665, 27827, 31038, 31287, 21360): "坤舆镇岳印",
+    _legacy_text(22826, 21476, 20861, 39592): "远古兽骨",
+    _legacy_text(22826, 21476, 28304, 30707): "荒脉源石",
+    _legacy_text(22826, 34394, 26025, 26143, 21073): "星阙断岳剑",
+    _legacy_text(38738, 24093, 38271, 29983, 26454): "青衡万木杖",
+    _legacy_text(20061, 38660, 38215, 28023, 21360): "云海镇澜印",
+    _legacy_text(29572, 20901, 23553, 22825, 38236): "寒冥锁天镜",
+    _legacy_text(32043, 38660, 24481, 38647, 27084): "玄雷破劫槌",
+    _legacy_text(38738, 31481, 34562, 20113, 21073): "翠雷云竹剑",
+    _legacy_text(24218, 37329, 38738, 31481, 34562, 20113, 21073): "玄金雷枝剑",
+    _legacy_text(24218, 37329, 32441, 38647, 31481, 21073): "玄金雷枝剑",
+    _legacy_text(22823, 24218, 21073, 38453): "玄金列星剑阵",
+    _legacy_text(22823, 24218, 37329, 21073, 38453): "玄金列星剑阵",
+    _legacy_text(38738, 33714, 20185, 20185, 24093, 20853): "青华生灭印",
+    _legacy_text(38738, 33714, 20185, 24093, 20853): "青华生灭印",
+    _legacy_text(38271, 29983, 38738, 33714, 27531, 36527): "青华生机残晶",
+    _legacy_text(38738, 33714, 36947, 30456, 26087, 32441): "青华法相旧纹",
+    _legacy_text(38738, 33714, 36947, 30456): "青华法相",
+    _legacy_text(38738, 33714, 20185, 24341): "青华仙引",
+    _legacy_text(38738, 33714, 24320, 22825, 23610): "青华开岳尺",
+    _legacy_text(38738, 33714, 36896, 21270, 32463): "青华造化经",
+    _legacy_text(34494, 31354, 20185, 37329): "空痕仙金",
+    _legacy_text(20964, 34880, 36196, 37329): "赤羽曜金",
+    _legacy_text(40857, 32441, 29572, 37329): "玄龙纹金",
+    _legacy_text(29572, 40644, 28304, 26681): "坤源根",
+    _legacy_text(29572, 40644, 27597, 27668): "坤元母气",
+    _legacy_text(20185, 27583, 38738, 38108, 38152): "云殿铜锈",
+    _legacy_text(38738, 38108, 20185, 32441): "古铜云纹",
+    _legacy_text(38738, 38108, 20185, 32441, 30424): "古铜云纹盘",
+    _legacy_text(29572, 40644, 28304, 40718): "坤元源鼎",
+    _legacy_text(29572, 40644, 28304, 40718, 20223, 21046, 21697): "坤元源鼎仿制品",
+    _legacy_text(40857, 32441, 29572, 37329, 40718): "玄龙纹金鼎",
+    _legacy_text(40857, 32441, 29572, 37329, 40718, 20223, 21697): "玄龙纹金鼎仿品",
+    _legacy_text(20964, 34880, 36196, 37329, 28809, 20223, 21697): "赤羽曜金炉仿品",
+    _legacy_text(22826, 30333, 20185, 37329, 21073, 32974): "白曜星金剑胎",
+    _legacy_text(20061, 31192, 27531, 39029): "星律残页",
+    _legacy_text(20843, 31105, 24863, 24735): "初阈战札",
+    _legacy_text(20061, 31105, 24863, 24735): "重阈战札",
+    _legacy_text(31070, 31105, 28825, 21360): "归极印纹",
+    _legacy_text(20843, 31105): "初阈",
+    _legacy_text(20061, 31105): "重阈",
+    _legacy_text(31070, 31105, 39046, 22495): "归极域",
+}
+LEGACY_ITEM_NAME_ALIASES.update(IMMORTAL_SEED_NAME_ALIASES)
+
+
+def canonical_item_name(name: str) -> str:
+    text = str(name or "").strip()
+    if not text:
+        return text
+    replica_suffix = "仿制品"
+    has_replica_suffix = text.endswith(replica_suffix)
+    base = text[: -len(replica_suffix)] if has_replica_suffix else text
+    if base.startswith("婴元"):
+        base = f"元婴{base[2:]}"
+    canonical = LEGACY_ITEM_NAME_ALIASES.get(base, base)
+    return f"{canonical}{replica_suffix}" if has_replica_suffix else canonical
+
+MYSTIC_REALM_TYPES = ("上古宗门遗址", "兽潮", "上古大能洞府", "星古矿区", "魂界残域", "古铜云阙")
 MYSTIC_REALM_MAX_STEPS = 10
 MYSTIC_BOSS_DAILY_BASE_ATTEMPTS = 4
 MYSTIC_BOSS_WEEKLY_BONUS_THRESHOLDS = (3, 5, 7)
 BEAST_NAME_PREFIXES = [
     "赤焰", "玄霜", "碧鳞", "噬月", "裂山", "幽冥", "金瞳", "雷角", "青翼", "血纹",
-    "吞星", "搬山", "银翼", "黑渊", "紫电", "白骨", "青冥", "古荒", "血月", "玄甲",
-    "九首", "独角", "金翅", "寒狱", "离火", "沧溟", "黄泉", "风吼", "铁脊", "玉鳞",
+    "吞星", "搬山", "银翼", "黑渊", "紫电", "白骨", "青冥", "远荒", "血月", "玄甲",
+    "九首", "独角", "金羽", "寒狱", "离火", "沧溟", "黄泉", "风吼", "铁脊", "玉鳞",
 ]
 BEAST_NAME_SUFFIXES = [
     "妖虎", "蛟王", "灵猿", "玄龟", "魔狼", "狮鹫", "蛇君", "古象", "鹰王", "蜃兽",
@@ -976,11 +1442,20 @@ BEAST_NAME_SUFFIXES = [
     "石犀", "鬼面獒", "碧眼蟾", "吞月狐", "裂海鲸", "赤羽鸾", "铁甲蜈", "青鳞鲛", "风翼豹", "古蜥",
 ]
 
+BEAST_NAMES = [
+    f"{prefix}{suffix}"
+    for prefix, suffix in zip(BEAST_NAME_PREFIXES, BEAST_NAME_SUFFIXES)
+]
+
+
+def random_beast_name() -> str:
+    return random.choice(BEAST_NAMES)
+
 BOSS_ARCHETYPE_CONFIGS = {
     "dragon": {
         "tokens": ("蛟", "龙", "鲛", "麟"),
         "race": "妖族-真龙遗脉",
-        "physique": "青莲道体",
+        "physique": "青华道体",
         "method": "龙皇镇海经",
         "method_kind": "战技类",
         "artifact": "沧龙破海戟",
@@ -988,59 +1463,59 @@ BOSS_ARCHETYPE_CONFIGS = {
         "armor": "龙鳞玄甲",
         "talisman": "龙魂镇岳符",
         "array": "沧海锁龙阵",
-        "abilities": ("神禁领域", "古神一指"),
+        "abilities": ("归极域", "沉岳指印"),
         "techniques": ("沧龙裂海", "逆鳞碎岳", "真龙摆尾", "龙吟镇魂", "覆海玄光"),
         "intro": "龙血妖气如潮起伏，鳞甲间有古老龙纹明灭。",
     },
     "thunder": {
-        "tokens": ("雷", "鹏", "金翅", "紫电"),
-        "race": "妖族-金翅大鹏",
-        "physique": "金翅神脉",
-        "method": "鲲鹏雷遁篇",
+        "tokens": ("雷", "鹏", "金羽", "紫电"),
+        "race": "妖族-金羽雷鹏",
+        "physique": "金羽神脉",
+        "method": "风掣雷遁篇",
         "method_kind": "战技类",
-        "artifact": "紫霄雷羽刃",
+        "artifact": "玄雷羽刃",
         "offhand": "风雷双翼轮",
         "armor": "金鹏神羽甲",
         "talisman": "天雷破邪符",
-        "array": "九霄引雷阵",
-        "abilities": ("八禁", "鲲鹏极速"),
-        "techniques": ("鲲鹏极速", "紫霄万劫", "雷羽斩天", "扶摇裂空", "天鹏搏龙术"),
+        "array": "玄霄引雷阵",
+        "abilities": ("初阈", "风掣疾行"),
+        "techniques": ("风掣疾行", "玄雷万劫", "雷羽斩天", "风掣裂空", "天鹏搏龙术"),
         "intro": "鹏影压天，雷羽扫开云层，速度快到只余残光。",
     },
     "fire": {
         "tokens": ("火", "赤", "焰", "离火", "赤羽"),
-        "race": "妖族-太古火脉",
-        "physique": "太阳神体",
-        "method": "太阳焚天诀",
+        "race": "妖族-远荒火脉",
+        "physique": "赤阳灵体",
+        "method": "赤阳焚天诀",
         "method_kind": "战技类",
         "artifact": "离火焚天戟",
         "offhand": "赤霞火轮",
         "armor": "凰血炎甲",
-        "talisman": "朱雀焚身符",
-        "array": "太阳真火阵",
-        "abilities": ("九禁", "太阳真火"),
-        "techniques": ("太阳真火", "朱雀焚天", "离火炼界", "焚山煮海", "火麟踏天"),
+        "talisman": "赤羽焚身符",
+        "array": "赤阳真火阵",
+        "abilities": ("重阈", "赤阳真火"),
+        "techniques": ("赤阳真火", "赤羽焚天", "离火炼界", "焚山煮海", "火麟踏天"),
         "intro": "烈焰铺地，火脉首领每一次呼吸都像炉门洞开。",
     },
     "ice": {
         "tokens": ("冰", "霜", "寒", "玄霜", "寒狱"),
         "race": "妖族-玄冰血裔",
-        "physique": "太阴之体",
-        "method": "太阴玄冰经",
+        "physique": "玄阴灵体",
+        "method": "玄阴玄冰经",
         "method_kind": "神魂类",
         "artifact": "寒狱冰魄枪",
         "offhand": "玄冰照魂镜",
-        "armor": "太阴寒鳞甲",
+        "armor": "玄阴寒鳞甲",
         "talisman": "冰魄封魂符",
-        "array": "玄冥锁界阵",
-        "abilities": ("梦道轮回", "太阴寒髓"),
-        "techniques": ("太阴玄封", "寒狱葬天", "冰魄凝魂", "玄冥锁界", "霜华照影"),
+        "array": "寒冥锁界阵",
+        "abilities": ("梦潮回环", "玄阴寒髓"),
+        "techniques": ("玄阴玄封", "寒狱葬天", "冰魄凝魂", "寒冥锁界", "霜华照影"),
         "intro": "寒潮无声漫过脚踝，神魂像被冰镜照住。",
     },
     "earth": {
         "tokens": ("山", "象", "龟", "犀", "玄甲", "石"),
         "race": "妖族-搬山古兽",
-        "physique": "荒古圣体",
+        "physique": "远荒战体",
         "method": "玄黄搬山经",
         "method_kind": "锻体类",
         "artifact": "撼岳巨锤",
@@ -1048,14 +1523,14 @@ BOSS_ARCHETYPE_CONFIGS = {
         "armor": "厚土不动甲",
         "talisman": "玄甲护身符",
         "array": "山河镇岳阵",
-        "abilities": ("十洞天神环", "玄黄不动"),
+        "abilities": ("环域灵轮", "玄黄不动"),
         "techniques": ("玄黄不动", "搬山覆海", "厚土载道", "山河印落", "古象踏天"),
         "intro": "大地随它的脚步起伏，厚重妖力像一座山压来。",
     },
     "soul": {
         "tokens": ("蜃", "幽", "鬼", "冥", "血", "月", "魔"),
         "race": "妖族-幽冥异种",
-        "physique": "混沌神魔体",
+        "physique": "浑元战魔体",
         "method": "幽冥噬魂经",
         "method_kind": "神魂类",
         "artifact": "黄泉噬魂幡",
@@ -1063,14 +1538,14 @@ BOSS_ARCHETYPE_CONFIGS = {
         "armor": "幽冥血纹袍",
         "talisman": "噬魂镇魄符",
         "array": "黄泉万魂阵",
-        "abilities": ("杀戮本源", "梦道轮回"),
+        "abilities": ("血战真源", "梦潮回环"),
         "techniques": ("黄泉噬魂", "白骨镇魂", "血月幻杀", "幽冥入梦", "万魂噬心"),
         "intro": "阴风里有万魂低语，首领眼中倒映出你的心魔。",
     },
     "poison": {
         "tokens": ("蛇", "蛛", "蟾", "蜈"),
         "race": "妖族-万毒灵裔",
-        "physique": "太阴之体",
+        "physique": "玄阴灵体",
         "method": "万毒噬灵经",
         "method_kind": "战技类",
         "artifact": "碧毒穿心刺",
@@ -1078,13 +1553,13 @@ BOSS_ARCHETYPE_CONFIGS = {
         "armor": "毒雾隐鳞衣",
         "talisman": "瘴毒封脉符",
         "array": "万毒迷天阵",
-        "abilities": ("神藏开阖", "古神一指"),
+        "abilities": ("内府开阖", "沉岳指印"),
         "techniques": ("万毒噬灵", "碧眼封喉", "蛛网锁魂", "瘴海沉身", "毒牙裂魄"),
         "intro": "毒雾绕成古怪符纹，地面每一处阴影都在蠕动。",
     },
     "default": {
         "tokens": (),
-        "race": "妖族-荒古异兽",
+        "race": "妖族-远荒异兽",
         "physique": "凡体",
         "method": "万兽吞灵诀",
         "method_kind": "战技类",
@@ -1093,7 +1568,7 @@ BOSS_ARCHETYPE_CONFIGS = {
         "armor": "兽王玄骨甲",
         "talisman": "兽血狂战符",
         "array": "万兽奔雷阵",
-        "abilities": ("八禁",),
+        "abilities": ("初阈",),
         "techniques": ("裂山爪", "万兽奔腾", "妖云压顶", "兽王怒吼", "荒骨冲撞"),
         "intro": "兽王妖气铺开，周围群兽同时俯首。",
     },
@@ -1111,7 +1586,7 @@ MYSTIC_EVENT_THEMES = {
             ('丹药', '培元丹', '丹炉余热未散，灰烬里滚出一枚丹药。'),
             ('阵盘', '小五行聚灵盘', '阵眼暗格弹开，残阵核心被你取走。'),
             ('灵植', '凝露灵草', '药园残土裂开，一株灵植仍有生机。'),
-            (SPECIAL_ABILITY_CATEGORY, '青元剑芒手札', '祖师残念在你掌心留下剑芒手札。'),
+            (SPECIAL_ABILITY_CATEGORY, '澄元剑芒手札', '祖师残念在你掌心留下剑芒手札。'),
             ('灵材', '旧宗木简', '弟子名册最后一页化作可入器的木简。'),
             ('仙缘', '残碑悟道', '问心石认可了你的道心，一缕悟道灵机直入丹田。'),
         ],
@@ -1142,66 +1617,66 @@ MYSTIC_EVENT_THEMES = {
         'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
         'reward_lines': [
             ('奇物', '星砂沙漏', '棋盘胜负已定，一枚星砂沙漏从桌角滚落。'),
-            (SPECIAL_ABILITY_CATEGORY, '古神一指骨纹', '壁画古修抬手，一道指意骨纹落入识海。'),
+            (SPECIAL_ABILITY_CATEGORY, '沉岳指印骨纹', '壁画古修抬手，一道指意骨纹落入识海。'),
             ('灵器', '玄都镇魂铃', '青灯灭去后，灯座下露出一件灵器。'),
             ('丹药', '紫府养魂丹', '丹库禁制退开，一枚养魂丹仍有药香。'),
             ('阵盘', '水月镜花盘', '水镜破碎后，镜底一方阵盘显出真形。'),
-            ('灵材', '青铜仙纹', '古棺外壁剥落一片青铜仙纹。'),
+            ('灵材', '古铜云纹', '古棺外壁剥落一片古铜云纹。'),
             ('仙缘', '古洞机缘', '洞府残念认可你未贪的一念，赐下一线机缘。'),
         ],
         'bad': '洞府传承顷刻化作杀局，古灯映出的不是大道，而是借壳归来的邪影。',
         'intro': '洞府石门半启，禁制明灭不定，像是传承，也像是请君入瓮。',
     },
-    '太古矿区': {
-        'places': ['黑渊矿道', '源石矿壁', '地火裂缝', '古矿祭坛', '矿奴废营', '星陨石坑', '玄铁暗河', '断龙石门', '残灯矿廊', '混沌石胎'],
+    '星古矿区': {
+        'places': ['黑渊矿道', '源石矿壁', '地火裂缝', '古矿祭坛', '矿奴废营', '星陨石坑', '玄铁暗河', '断龙石门', '残灯矿廊', '浑元石胎'],
         'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
         'omens': ['矿壁中像有古老心脏跳动', '源石裂缝里流出紫金光', '地火化作莲花形', '矿廊深处传来铁链声', '一枚石胆在掌心滚烫', '矿灯照出不属你的影子', '星陨石坑中有金铁轻鸣', '黑渊下涌起浑浊道韵', '矿锄指向一处暗壁', '石门上龙纹渐渐复苏'],
         'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
         'reward_lines': [
-            ('灵材', '太古源石', '你剖开源石，一块太古源石在掌心发热。'),
+            ('灵材', '荒脉源石', '你剖开源石，一块荒脉源石在掌心微微发热。'),
             ('灵材', '古矿石胆', '矿壁中的石胆被你取出，仍有地火灵机。'),
             ('灵材', '星陨玄铁', '星陨石坑裂开，露出一段可炼器的玄铁。'),
             ('灵石', '上品灵石匣', '矿奴废营里藏着一只封存完好的灵石匣。'),
             ('奇物', '无名石片', '石胎外壳剥落一片无名石片。'),
             ('杂物', '破旧丹炉盖', '矿廊尽头有旧炉残件，似能抵挡地火。'),
-            ('仙缘', '玄黄命砂', '混沌石胎轻震，一缕玄黄命砂融入气海。'),
+            ('仙缘', '玄黄命砂', '浑元石胎轻震，一缕玄黄命砂融入气海。'),
         ],
         'bad': '黑渊矿道突然整片塌落，石胎中传出不似人声的低笑。',
-        'intro': '太古矿区石门半塌，地火与源气交织，深处似有石胎轻响。',
+        'intro': '星古矿区石门半塌，地火与源气交织，深处似有石胎轻响。',
     },
-    '虚神界残域': {
+    '魂界残域': {
         'places': ['魂海断桥', '虚神战台', '石碑通道', '梦道雾林', '万族试炼场', '断裂神宫', '风雷骨路', '魂砂海滩', '重瞳镜湖', '古老门户'],
         'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
-        'omens': ['虚空中有少年独战万族的残影', '石碑上名字一个个熄灭', '梦雾里传来远古钟声', '战台残血在脚下发光', '神宫上空有十洞天虚影', '魂砂像星河流动', '镜湖映出你未来一次败局', '风雷残音把符文刻入虚空', '古门后的世界忽然翻面', '你听见自己的神魂在鸣唱'],
+        'omens': ['虚空中有少年独战万族的残影', '石碑上名字一个个熄灭', '梦雾里传来远古钟声', '战台残血在脚下发光', '神宫上空有环域虚影', '魂砂像星河流动', '镜湖映出你未来一次败局', '风雷残音把符文刻入虚空', '古门后的世界忽然翻面', '你听见自己的神魂在鸣唱'],
         'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
         'reward_lines': [
-            (SPECIAL_ABILITY_CATEGORY, '十洞天神环碎光', '战台虚影被你击散，十洞天神环碎光融入掌心。'),
-            (SPECIAL_ABILITY_CATEGORY, '鲲鹏极速羽痕', '风雷残音沉入脚下，留下一道鲲鹏极速羽痕。'),
-            ('灵材', '虚神魂砂', '魂砂海滩上的光点被你收拢，化作虚神魂砂。'),
-            ('功法', '太虚观想篇', '石碑残名里藏着观想之法，被你拓入识海。'),
+            (SPECIAL_ABILITY_CATEGORY, '环域灵轮碎光', '战台虚影被你击散，环域灵轮碎光融入掌心。'),
+            (SPECIAL_ABILITY_CATEGORY, '风掣疾行风痕', '风雷残音沉入脚下，留下一道风掣疾行风痕。'),
+            ('灵材', '魂界灵砂', '魂砂海滩上的光点被你收拢，化作魂界灵砂。'),
+            ('功法', '星墟观想篇', '石碑残名里藏着观想之法，被你拓入识海。'),
             ('符箓', '御风疾影符', '风雷骨路尽头落下一张疾影符。'),
             ('奇物', '低语玉佩', '重瞳镜湖底沉着一枚低语玉佩。'),
-            ('仙缘', '灵台清光', '虚神界残域与你的神魂短暂共鸣，灵台清光洗过识海。'),
+            ('仙缘', '灵台清光', '魂界残域与你的神魂短暂共鸣，灵台清光洗过识海。'),
         ],
         'bad': '虚神战台突然反转，万族残影同时向你杀来。',
-        'intro': '虚神界残域忽明忽暗，这里像一片未散的神魂战场。',
+        'intro': '魂界残域忽明忽暗，这里像一片未散的神魂战场。',
     },
-    '青铜仙殿': {
-        'places': ['青铜长阶', '仙殿前庭', '荒古壁画', '九重铜门', '断裂仙池', '天罚雷痕', '空悬石棺', '经文铜柱', '归墟残桥', '无声帝座'],
+    '古铜云阙': {
+        'places': ['青铜长阶', '云上古殿前庭', '远荒壁画', '九重铜门', '断裂仙池', '天罚雷痕', '空悬石棺', '经文铜柱', '归墟残桥', '无声高座'],
         'actions': ['探查', '推开', '绕过', '拾起', '催动灵力照向', '凝视', '破开', '沿着气息进入', '踏入', '记下'],
-        'omens': ['青铜墙面上浮出一朵青莲', '帝座前的空气像被大手抚平', '铜门后传来诵经声', '天罚雷痕在脚下化作细线', '石棺轻震却未开启', '仙池残液映出一条古路', '壁画中有无名强者背对众生', '铜柱经文像活了过来', '残桥下是看不到底的黑暗', '仙殿似乎在判断你的重量'],
+        'omens': ['青铜墙面上浮出一朵青华', '高座前的空气像被大手抚平', '铜门后传来诵经声', '天罚雷痕在脚下化作细线', '石棺轻震却未开启', '仙池残液映出一条古路', '壁画中有无名强者背对众生', '铜柱经文像活了过来', '残桥下是看不到底的黑暗', '云上古殿似乎在判断你的重量'],
         'empty': ['气机忽然隐去，你暂时没有所得。', '前方禁制太重，你收回神识。', '一阵风吹过，线索被灵雾遮住。'],
         'reward_lines': [
-            (SPECIAL_ABILITY_CATEGORY, '九秘残页', '铜柱经文中飞出一页残篇，上有九秘气息。'),
-            ('灵材', '仙殿青铜锈', '你从壁画剥落处取下仙殿青铜锈。'),
-            ('奇物', '昆仑镜碎光', '断裂仙池中浮起一点昆仑镜碎光。'),
-            ('灵器', '太虚斩星剑', '青铜门后剑光一闪，一件灵器自行落入你手中。'),
-            ('功法', '万象归元经', '荒古壁画上的经文亮起，化成一部古经。'),
+            (SPECIAL_ABILITY_CATEGORY, '星律残页', '铜柱经文中飞出一页残篇，上有星律气息。'),
+            ('灵材', '云殿铜锈', '你从壁画剥落处取下云殿铜锈。'),
+            ('奇物', '镜湖碎光', '断裂仙池中浮起一点镜湖碎光。'),
+            ('灵器', '星阙断岳剑', '青铜门后剑光一闪，一件灵器自行落入你手中。'),
+            ('功法', '万象归元经', '远荒壁画上的经文亮起，化成一部古经。'),
             ('灵材', '天髓玉露', '仙池断口还有一滴天髓玉露，被你以玉瓶收起。'),
-            ('仙缘', '青莲仙引', '青莲虚影在仙殿中一闪，引来一缕仙缘清光。'),
+            ('仙缘', '青华仙引', '青华虚影在云上古殿中一闪，引来一缕仙缘清光。'),
         ],
-        'bad': '青铜仙殿深处忽然传来审判般的威压，九重铜门同时闭合。',
-        'intro': '青铜仙殿悬于虚空，铜锈与仙光交织，每一步都像走进古史。',
+        'bad': '古铜云阙深处忽然传来审判般的威压，九重铜门同时闭合。',
+        'intro': '古铜云阙悬于虚空，铜锈与仙光交织，每一步都像走进古史。',
     },
 }
 
@@ -1225,9 +1700,9 @@ MYSTIC_OPTION_POOLS = {
     for realm_type in MYSTIC_REALM_TYPES
 }
 
-SPIRIT_STONE_VALUES = {"凡品": 6, "黄阶": 14, "玄阶": 32, "地阶": 72, "天阶": 160, "仙阶": 420, "帝兵": 1800}
-PUPPET_POWER_RATE = {"凡品": 0.45, "黄阶": 0.6, "玄阶": 0.78, "地阶": 0.95, "天阶": 1.15, "仙阶": 1.35, "帝兵": 1.65}
-PLANT_SIGN_RATE = {"凡品": 0.06, "黄阶": 0.1, "玄阶": 0.16, "地阶": 0.24, "天阶": 0.34, "仙阶": 0.48, "帝兵": 0.72}
+SPIRIT_STONE_VALUES = {"凡品": 6, "黄阶": 14, "玄阶": 32, "地阶": 72, "天阶": 160, "仙阶": 420, "仙帝兵": 1800}
+PUPPET_POWER_RATE = {"凡品": 0.45, "黄阶": 0.6, "玄阶": 0.78, "地阶": 0.95, "天阶": 1.15, "仙阶": 1.35, "仙帝兵": 1.65}
+PLANT_SIGN_RATE = {"凡品": 0.06, "黄阶": 0.1, "玄阶": 0.16, "地阶": 0.24, "天阶": 0.34, "仙阶": 0.48, "仙帝兵": 0.72}
 CULTIVATION_ROUTES = ("剑修", "术修", "炼丹师", "阵法师", "炼器师")
 FACTION_IDENTITIES = (
     "天机阁弟子",
@@ -1253,29 +1728,39 @@ ITEM_PRICE_BASE = {
     "杂物": 28,
     "奇物": 190,
     "灵食": 46,
-    "特殊能力": 260,
-    "仙种": 520,
+    "神通": 260,
+    "仙源": 520,
 }
-TIER_PRICE_RATIO = {"凡品": 1, "黄阶": 3, "玄阶": 9, "地阶": 27, "天阶": 81, "仙阶": 243, "帝兵": 2187}
+TIER_PRICE_RATIO = {"凡品": 1, "黄阶": 3, "玄阶": 9, "地阶": 27, "天阶": 81, "仙阶": 243, "仙帝兵": 2187}
 GRADE_PRICE_RATIO = {"下品": 1.0, "中品": 1.22, "上品": 1.55, "极品": 2.1}
-TIER_REALM_REQUIREMENT = {"凡品": 0, "黄阶": 0, "玄阶": 3, "地阶": 4, "天阶": 5, "仙阶": 10, "帝兵": 13}
+TIER_REALM_REQUIREMENT = {"凡品": 0, "黄阶": 0, "玄阶": 3, "地阶": 4, "天阶": 5, "仙阶": 10, "仙帝兵": 13}
+ARTIFACT_TIER_DEFAULT_REALM = {"凡品": 0, "黄阶": 0, "玄阶": 0, "地阶": 0, "天阶": 0, "仙阶": 10, "仙帝兵": 13}
+ARTIFACT_REALM_TIER_UNLOCKS = {
+    index: list(artifact_realm_tiers_for_index(index))
+    for index in range(len(REALMS))
+}
+ARTIFACT_DROP_POOLS: dict[int, list[dict[str, Any]]] = {}
+MYSTIC_ENABLED_TYPES: set[str] = set(MYSTIC_REALM_TYPES)
+MYSTIC_ENABLED_HIGH_RISK_TYPES: set[str] = set(HIGH_RISK_MYSTIC_REALM_TYPES)
+MYSTIC_CATEGORY_WEIGHTS: dict[str, list[tuple[str, float]]] = {}
+MYSTIC_DROP_OVERRIDES: dict[str, list[dict[str, Any]]] = {}
 TALISMAN_DRAW_REALM_REQUIREMENT = {"\u51e1\u54c1": 0, "\u9ec4\u9636": 0, "\u7384\u9636": 3, "\u5730\u9636": 4, "\u5929\u9636": 5}
 ALCHEMY_RECIPES = {
     "筑基丹": {"tier": "黄阶", "grade": "中品", "materials": ["凝露草", "清心草叶", "百年朱果"], "cost": 80, "difficulty": 4},
     "地脉筑基液": {"tier": "地阶", "grade": "下品", "materials": ["地脉火芝", "月华凝露", "黄芽芝"], "cost": 320, "difficulty": 9},
-    "天道筑基露": {"tier": "天阶", "grade": "下品", "materials": ["天髓玉露", "大道莲子", "悟道茶心"], "cost": 1200, "difficulty": 15},
+    "天道筑基露": {"tier": "天阶", "grade": "下品", "materials": ["天髓玉露", "万道莲实", "悟道茶心"], "cost": 1200, "difficulty": 15},
     "小还丹": {"tier": "玄阶", "grade": "中品", "materials": ["金纹灵芝", "火枣核", "紫纹灵木"], "cost": 180, "difficulty": 7},
     "金液丹": {"tier": "玄阶", "grade": "上品", "materials": ["金纹灵芝", "黑曜灵砂", "云母灵液"], "cost": 260, "difficulty": 8},
     "大还丹": {"tier": "地阶", "grade": "上品", "materials": ["紫府灵芝", "月华凝露", "地脉火芝"], "cost": 480, "difficulty": 11},
     "凝魄金丹": {"tier": "地阶", "grade": "极品", "materials": ["紫府灵芝", "养魂莲心", "金髓玉砂"], "cost": 760, "difficulty": 13},
-    "造化金丹": {"tier": "天阶", "grade": "上品", "materials": ["九转玄参", "大道莲子", "玄黄母气"], "cost": 1800, "difficulty": 17},
+    "造化金丹": {"tier": "天阶", "grade": "上品", "materials": ["九转玄参", "万道莲实", "坤元母气"], "cost": 1800, "difficulty": 17},
     "元婴丹": {"tier": "地阶", "grade": "极品", "materials": ["玄冰玉髓", "紫府灵芝", "星陨玄铁"], "cost": 680, "difficulty": 12},
     "护婴丹": {"tier": "地阶", "grade": "上品", "materials": ["养魂莲心", "月华凝露", "天青灵藤"], "cost": 620, "difficulty": 11},
-    "九窍化婴丹": {"tier": "天阶", "grade": "上品", "materials": ["九转玄参", "太阴寒髓", "悟道茶心"], "cost": 1900, "difficulty": 17},
+    "九窍化婴丹": {"tier": "天阶", "grade": "上品", "materials": ["九转玄参", "玄阴寒髓", "悟道茶心"], "cost": 1900, "difficulty": 17},
     "九转凝神丹": {"tier": "天阶", "grade": "上品", "materials": ["九转玄参", "悟道茶心", "天髓玉露"], "cost": 1400, "difficulty": 15},
-    "斩尘化神丹": {"tier": "天阶", "grade": "上品", "materials": ["悟道茶心", "太阴寒髓", "太阳真火液"], "cost": 2100, "difficulty": 18},
-    "太清渡厄丹": {"tier": "天阶", "grade": "极品", "materials": ["天髓玉露", "混沌星砂", "悟道茶心"], "cost": 2200, "difficulty": 18},
-    "渡劫护命丹": {"tier": "天阶", "grade": "极品", "materials": ["劫雷神木", "天髓玉露", "混沌星砂"], "cost": 2600, "difficulty": 19},
+    "斩尘化神丹": {"tier": "天阶", "grade": "上品", "materials": ["悟道茶心", "玄阴寒髓", "赤阳真火液"], "cost": 2100, "difficulty": 18},
+    "太清渡厄丹": {"tier": "天阶", "grade": "极品", "materials": ["天髓玉露", "浑元星砂", "悟道茶心"], "cost": 2200, "difficulty": 18},
+    "渡劫护命丹": {"tier": "天阶", "grade": "极品", "materials": ["劫雷神木", "天髓玉露", "浑元星砂"], "cost": 2600, "difficulty": 19},
 }
 EXTRA_ALCHEMY_RECIPES = {
     "散修回气散": {"tier": "凡品", "grade": "中品", "materials": ["晨露草", "苦参须", "山参碎须"], "cost": 18, "difficulty": 2},
@@ -1287,12 +1772,12 @@ EXTRA_ALCHEMY_RECIPES = {
     "兽巢壮骨丹": {"tier": "黄阶", "grade": "上品", "materials": ["兽巢骨粉", "妖兽利爪", "矿脉源砂"], "cost": 76, "difficulty": 6},
     "冰魄洗髓丹": {"tier": "玄阶", "grade": "中品", "materials": ["冰魄花蕊", "百年寒髓", "碧玉参须"], "cost": 210, "difficulty": 8},
     "赤鳞沸血丹": {"tier": "玄阶", "grade": "上品", "materials": ["赤鳞妖血", "妖兽精血", "筑基妖丹"], "cost": 260, "difficulty": 9},
-    "古矿锻魂丹": {"tier": "玄阶", "grade": "极品", "materials": ["古矿石胆", "虚神魂砂", "赤霞铜精"], "cost": 330, "difficulty": 10},
+    "古矿锻魂丹": {"tier": "玄阶", "grade": "极品", "materials": ["古矿石胆", "魂界灵砂", "赤霞铜精"], "cost": 330, "difficulty": 10},
     "金丹妖魄丹": {"tier": "地阶", "grade": "中品", "materials": ["金丹妖丹", "蛟龙脊骨", "龙血朱果"], "cost": 620, "difficulty": 12},
-    "元婴妖魄丹": {"tier": "地阶", "grade": "极品", "materials": ["元婴妖丹", "太古源石", "地肺火液"], "cost": 940, "difficulty": 14},
-    "青铜悟道丹": {"tier": "天阶", "grade": "下品", "materials": ["青铜仙纹", "旧宗木简", "养魂莲心"], "cost": 1120, "difficulty": 15},
-    "虚神凝魄丹": {"tier": "天阶", "grade": "中品", "materials": ["虚神魂晶", "道源矿髓", "太古兽骨"], "cost": 1680, "difficulty": 17},
-    "准圣妖血丹": {"tier": "天阶", "grade": "极品", "materials": ["准圣妖丹", "不死药青莲残躯", "大道莲子"], "cost": 3200, "difficulty": 20},
+    "元婴妖魄丹": {"tier": "地阶", "grade": "极品", "materials": ["元婴妖丹", "荒脉源石", "地肺火液"], "cost": 940, "difficulty": 14},
+    "青铜悟道丹": {"tier": "天阶", "grade": "下品", "materials": ["古铜云纹", "旧宗木简", "养魂莲心"], "cost": 1120, "difficulty": 15},
+    "虚神凝魄丹": {"tier": "天阶", "grade": "中品", "materials": ["魂界灵晶", "道源矿髓", "远古兽骨"], "cost": 1680, "difficulty": 17},
+    "古妖王血丹": {"tier": "天阶", "grade": "极品", "materials": ["古妖王丹", "青华生机残晶", "万道莲实"], "cost": 3200, "difficulty": 20},
 }
 ALCHEMY_RECIPES.update(EXTRA_ALCHEMY_RECIPES)
 
@@ -1357,7 +1842,7 @@ def build_fishing_rewards() -> list[tuple[str, str, str, str, str, int]]:
 FISHING_REWARDS = build_fishing_rewards()
 
 ARTIFACT_POWER_BASE = {
-    "帝兵": 26000,
+    "仙帝兵": 26000,
     "仙阶": 7600,
     "天阶": 2800,
     "地阶": 1800,
@@ -1371,6 +1856,352 @@ ARTIFACT_GRADE_RATIO = {
     "中品": 1.12,
     "下品": 1.0,
 }
+ARTIFACT_TIER_POWER_RATIO = {
+    "凡品": 0.36,
+    "黄阶": 0.50,
+    "玄阶": 0.68,
+    "地阶": 0.88,
+    "天阶": 1.10,
+    "仙阶": 1.36,
+}
+ARTIFACT_IMMORTAL_UPGRADE_RATE = 0.18
+ARTIFACT_REALM_POWER_BASE = {
+    0: 120,
+    1: 180,
+    2: 300,
+    3: 520,
+    4: 820,
+    5: 1250,
+    6: 1850,
+    7: 2700,
+    8: 3900,
+    9: 5600,
+    10: 7900,
+    11: 11000,
+    12: 15000,
+    13: 20000,
+    14: 26500,
+    15: 34500,
+    16: 44500,
+    17: 56500,
+    18: 71000,
+    19: 88000,
+    20: 108000,
+    21: 131000,
+    22: 158000,
+    23: 189000,
+    24: 225000,
+    25: 266000,
+}
+
+def default_mystic_category_weights() -> dict[str, list[dict[str, Any]]]:
+    return {
+        "上古宗门遗址": [
+            {"category": "功法", "weight": 4}, {"category": SPECIAL_ABILITY_CATEGORY, "weight": 2},
+            {"category": "丹药", "weight": 2}, {"category": "阵盘", "weight": 2},
+            {"category": "灵材", "weight": 3}, {"category": "灵植", "weight": 2},
+            {"category": "仙缘", "weight": 1}, {"category": "杂物", "weight": 1},
+        ],
+        "兽潮": [
+            {"category": "灵材", "weight": 6}, {"category": "灵石", "weight": 3},
+            {"category": "符箓", "weight": 2}, {"category": "灵食", "weight": 2},
+            {"category": "灵植", "weight": 1}, {"category": SPECIAL_ABILITY_CATEGORY, "weight": 1},
+            {"category": "仙缘", "weight": 1},
+        ],
+        "星古矿区": [
+            {"category": "灵材", "weight": 6}, {"category": "灵石", "weight": 4},
+            {"category": "奇物", "weight": 2}, {"category": "杂物", "weight": 2},
+            {"category": "仙缘", "weight": 1},
+        ],
+        "魂界残域": [
+            {"category": SPECIAL_ABILITY_CATEGORY, "weight": 4}, {"category": "功法", "weight": 3},
+            {"category": "灵材", "weight": 2}, {"category": "符箓", "weight": 2},
+            {"category": "奇物", "weight": 2}, {"category": "仙缘", "weight": 1},
+        ],
+        "古铜云阙": [
+            {"category": SPECIAL_ABILITY_CATEGORY, "weight": 4}, {"category": "灵材", "weight": 3},
+            {"category": "奇物", "weight": 3}, {"category": "灵器", "weight": 2},
+            {"category": "功法", "weight": 2}, {"category": "仙缘", "weight": 1},
+        ],
+        "default": [
+            {"category": "奇物", "weight": 3}, {"category": SPECIAL_ABILITY_CATEGORY, "weight": 3},
+            {"category": "灵器", "weight": 2}, {"category": "丹药", "weight": 2},
+            {"category": "阵盘", "weight": 2}, {"category": "灵材", "weight": 2},
+            {"category": "灵植", "weight": 2}, {"category": "仙缘", "weight": 1},
+            {"category": "杂物", "weight": 2},
+        ],
+    }
+
+
+
+def default_artifact_drop_pools() -> dict[str, list[dict[str, Any]]]:
+    pools: dict[str, list[dict[str, Any]]] = {}
+    for realm_index in range(len(REALMS)):
+        tiers = artifact_realm_tiers_for_index(realm_index)
+        pools[str(realm_index)] = [
+            {
+                "tier_min": tiers[0],
+                "tier_max": tiers[-1],
+                "grade": "",
+                "attribute": "",
+                "name": "",
+                "weight": 1,
+            }
+        ]
+    return pools
+
+
+def _tier_range(tier_min: str = "", tier_max: str = "") -> list[str]:
+    order = list(ARTIFACT_REALM_BOUND_TIERS)
+    start = order.index(tier_min) if tier_min in order else 0
+    end = order.index(tier_max) if tier_max in order else len(order) - 1
+    if start > end:
+        start, end = end, start
+    return order[start : end + 1]
+
+
+def _artifact_pool_candidates(entry: dict[str, Any], tier: str = "", grade: str = "") -> list[dict[str, Any]]:
+    try:
+        realm_index = max(0, min(len(REALMS) - 1, int(entry.get("realm_index", 0))))
+    except (TypeError, ValueError):
+        realm_index = 0
+    tiers = [str(item) for item in entry.get("tiers", []) if str(item) in ARTIFACT_REALM_BOUND_TIERS]
+    if not tiers:
+        exact_tier = str(entry.get("tier") or "")
+        tiers = [exact_tier] if exact_tier in ARTIFACT_REALM_BOUND_TIERS else _tier_range(str(entry.get("tier_min") or ""), str(entry.get("tier_max") or ""))
+    if tier and tier in ARTIFACT_REALM_BOUND_TIERS:
+        tiers = [item for item in tiers if item == tier]
+    grade_filter = str(grade or entry.get("grade") or "")
+    grades = [grade_filter] if grade_filter in GRADE_RANKS else list(GRADE_ORDER)
+    attribute = str(entry.get("attribute") or "")
+    name = str(entry.get("name") or "")
+    candidates = []
+    for info in ARTIFACT_REALM_CATALOG:
+        if int(info.get("realm_index", -1)) != realm_index:
+            continue
+        if str(info.get("tier")) not in tiers:
+            continue
+        if str(info.get("grade")) not in grades:
+            continue
+        if attribute and str(info.get("attribute")) != attribute:
+            continue
+        if name and str(info.get("name")) != name:
+            continue
+        candidates.append(info)
+    return candidates
+
+
+def configured_artifact_drop_entries() -> list[dict[str, Any]]:
+    pools = ARTIFACT_DROP_POOLS or {int(key): value for key, value in default_artifact_drop_pools().items()}
+    entries: list[dict[str, Any]] = []
+    for realm_index, rows in pools.items():
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            entry = dict(row)
+            entry["realm_index"] = int(realm_index)
+            entries.append(entry)
+    return entries
+
+
+def draw_configured_artifact_reward(
+    tier: str = "",
+    grade: str = "",
+    rng: Optional[random.Random] = None,
+) -> dict[str, Any]:
+    entries = configured_artifact_drop_entries()
+
+    def weighted_entries(use_tier: str, use_grade: str) -> list[tuple[tuple[dict[str, Any], list[dict[str, Any]]], float]]:
+        result: list[tuple[tuple[dict[str, Any], list[dict[str, Any]]], float]] = []
+        for entry in entries:
+            candidates = _artifact_pool_candidates(entry, use_tier, use_grade)
+            if not candidates:
+                continue
+            try:
+                weight = float(entry.get("weight", 1))
+            except (TypeError, ValueError):
+                weight = 1.0
+            if weight > 0:
+                result.append(((entry, candidates), weight))
+        return result
+
+    weighted = weighted_entries(str(tier or ""), str(grade or ""))
+    if not weighted:
+        weighted = weighted_entries("", "")
+    if weighted:
+        _entry, candidates = weighted_choice_rng(weighted, rng) if rng is not None else weighted_choice(weighted)
+        pick = rng.choice(candidates) if rng is not None else random.choice(candidates)
+        return artifact_info_to_reward(dict(pick))
+    fallback_realm = rng.randrange(len(REALMS)) if rng is not None else random.randrange(len(REALMS))
+    fallback_tiers = artifact_realm_tiers_for_index(fallback_realm)
+    fallback_tier = str(tier or (rng.choice(fallback_tiers) if rng is not None else random.choice(fallback_tiers)))
+    fallback_grade = str(grade or (rng.choice(GRADE_ORDER) if rng is not None else random.choice(GRADE_ORDER)))
+    return make_realm_artifact_reward(fallback_realm, fallback_tier, fallback_grade, rng)
+
+
+def _category_weight_pairs(value: Any) -> list[tuple[str, float]]:
+    entries: list[tuple[str, float]] = []
+    if isinstance(value, dict):
+        raw_entries = value.items()
+    elif isinstance(value, list):
+        raw_entries = []
+        for item in value:
+            if isinstance(item, dict):
+                raw_entries.append((item.get("category"), item.get("weight", 1)))
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                raw_entries.append((item[0], item[1]))
+    else:
+        raw_entries = []
+    for category, weight in raw_entries:
+        category_text = reward_category({"category": str(category or "")})
+        try:
+            weight_value = float(weight)
+        except (TypeError, ValueError):
+            continue
+        if category_text and weight_value > 0:
+            entries.append((category_text, weight_value))
+    return entries
+
+
+def apply_admin_config(config: dict[str, Any]) -> None:
+    equipment_rules = config.get("equipment_rules", {}) if isinstance(config, dict) else {}
+    if isinstance(equipment_rules, dict):
+        tier_default = equipment_rules.get("tier_default_realm", {})
+        if isinstance(tier_default, dict):
+            for tier, realm_index in tier_default.items():
+                if str(tier) in TIER_RANKS:
+                    try:
+                        ARTIFACT_TIER_DEFAULT_REALM[str(tier)] = max(0, min(len(REALMS) - 1, int(realm_index)))
+                    except (TypeError, ValueError):
+                        continue
+        unlocks = equipment_rules.get("realm_tier_unlocks", {})
+        if isinstance(unlocks, dict):
+            for realm_key, tiers in unlocks.items():
+                try:
+                    realm_index = max(0, min(len(REALMS) - 1, int(realm_key)))
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(tiers, list):
+                    allowed = [str(tier) for tier in tiers if str(tier) in TIER_RANKS and str(tier) != "仙帝兵"]
+                    if allowed:
+                        ARTIFACT_REALM_TIER_UNLOCKS[realm_index] = allowed
+        power_base = equipment_rules.get("artifact_power_base", {})
+        if isinstance(power_base, dict):
+            for tier, value in power_base.items():
+                if str(tier) in ARTIFACT_POWER_BASE:
+                    try:
+                        ARTIFACT_POWER_BASE[str(tier)] = max(1, int(value))
+                    except (TypeError, ValueError):
+                        continue
+        realm_power_base = equipment_rules.get("artifact_realm_power_base", {})
+        if isinstance(realm_power_base, dict):
+            for realm_key, value in realm_power_base.items():
+                try:
+                    realm_index = max(0, min(len(REALMS) - 1, int(realm_key)))
+                    ARTIFACT_REALM_POWER_BASE[realm_index] = max(1, int(value))
+                except (TypeError, ValueError):
+                    continue
+        tier_ratio = equipment_rules.get("artifact_tier_power_ratio", {})
+        if isinstance(tier_ratio, dict):
+            for tier, value in tier_ratio.items():
+                if str(tier) in ARTIFACT_TIER_POWER_RATIO:
+                    try:
+                        ARTIFACT_TIER_POWER_RATIO[str(tier)] = max(0.01, float(value))
+                    except (TypeError, ValueError):
+                        continue
+        grade_ratio = equipment_rules.get("artifact_grade_ratio", {})
+        if isinstance(grade_ratio, dict):
+            for grade, value in grade_ratio.items():
+                if str(grade) in ARTIFACT_GRADE_RATIO:
+                    try:
+                        ARTIFACT_GRADE_RATIO[str(grade)] = max(0.1, float(value))
+                    except (TypeError, ValueError):
+                        continue
+        upgrade_rate = equipment_rules.get("artifact_immortal_upgrade_rate")
+        if upgrade_rate is not None:
+            try:
+                globals()["ARTIFACT_IMMORTAL_UPGRADE_RATE"] = max(0.0, min(1.0, float(upgrade_rate)))
+            except (TypeError, ValueError):
+                pass
+        drop_pools = equipment_rules.get("artifact_drop_pools", {})
+        ARTIFACT_DROP_POOLS.clear()
+        if isinstance(drop_pools, dict):
+            for realm_key, rows in drop_pools.items():
+                try:
+                    realm_index = max(0, min(len(REALMS) - 1, int(realm_key)))
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(rows, list):
+                    continue
+                cleaned_rows: list[dict[str, Any]] = []
+                for item in rows:
+                    if not isinstance(item, dict):
+                        continue
+                    tier_min = str(item.get("tier_min") or item.get("tier") or "")
+                    tier_max = str(item.get("tier_max") or item.get("tier") or "")
+                    if tier_min not in ARTIFACT_REALM_BOUND_TIERS:
+                        tier_min = ""
+                    if tier_max not in ARTIFACT_REALM_BOUND_TIERS:
+                        tier_max = ""
+                    grade = str(item.get("grade") or "")
+                    if grade not in GRADE_RANKS:
+                        grade = ""
+                    attribute = normalize_root_attribute(str(item.get("attribute") or ""))
+                    if attribute not in ARTIFACT_ATTRIBUTES:
+                        attribute = ""
+                    name = str(item.get("name") or "").strip()
+                    if name and name not in ARTIFACT_REALM_INFOS_BY_NAME:
+                        name = ""
+                    tiers = [str(tier) for tier in item.get("tiers", []) if str(tier) in ARTIFACT_REALM_BOUND_TIERS] if isinstance(item.get("tiers"), list) else []
+                    try:
+                        weight = max(0.01, float(item.get("weight", 1)))
+                    except (TypeError, ValueError):
+                        weight = 1.0
+                    cleaned = {
+                        "tier_min": tier_min,
+                        "tier_max": tier_max,
+                        "grade": grade,
+                        "attribute": attribute,
+                        "name": name,
+                        "weight": weight,
+                    }
+                    if tiers:
+                        cleaned["tiers"] = tiers
+                    cleaned_rows.append(cleaned)
+                if cleaned_rows:
+                    ARTIFACT_DROP_POOLS[realm_index] = cleaned_rows
+    mystic_config = config.get("mystic", {}) if isinstance(config, dict) else {}
+    MYSTIC_CATEGORY_WEIGHTS.clear()
+    MYSTIC_DROP_OVERRIDES.clear()
+    MYSTIC_ENABLED_TYPES.clear()
+    MYSTIC_ENABLED_HIGH_RISK_TYPES.clear()
+    if isinstance(mystic_config, dict):
+        enabled_types = mystic_config.get("enabled_types", list(MYSTIC_REALM_TYPES))
+        if isinstance(enabled_types, list):
+            MYSTIC_ENABLED_TYPES.update(str(item) for item in enabled_types if str(item) in MYSTIC_REALM_TYPES)
+        else:
+            MYSTIC_ENABLED_TYPES.update(MYSTIC_REALM_TYPES)
+        enabled_high_risk = mystic_config.get("enabled_high_risk_types", list(HIGH_RISK_MYSTIC_REALM_TYPES))
+        if isinstance(enabled_high_risk, list):
+            MYSTIC_ENABLED_HIGH_RISK_TYPES.update(str(item) for item in enabled_high_risk if str(item) in HIGH_RISK_MYSTIC_REALM_TYPES)
+        else:
+            MYSTIC_ENABLED_HIGH_RISK_TYPES.update(HIGH_RISK_MYSTIC_REALM_TYPES)
+        category_weights = mystic_config.get("category_weights", {})
+        if isinstance(category_weights, dict):
+            for realm_type, value in category_weights.items():
+                pairs = _category_weight_pairs(value)
+                if pairs:
+                    MYSTIC_CATEGORY_WEIGHTS[str(realm_type)] = pairs
+        drop_overrides = mystic_config.get("drop_overrides", {})
+        if isinstance(drop_overrides, dict):
+            for realm_type, rewards in drop_overrides.items():
+                if isinstance(rewards, list):
+                    MYSTIC_DROP_OVERRIDES[str(realm_type)] = [dict(item) for item in rewards if isinstance(item, dict)]
+    else:
+        MYSTIC_ENABLED_TYPES.update(MYSTIC_REALM_TYPES)
+        MYSTIC_ENABLED_HIGH_RISK_TYPES.update(HIGH_RISK_MYSTIC_REALM_TYPES)
 DUEL_ACTIONS = {
     "金": "剑气横生，锋芒逼人",
     "木": "青藤绕阵，生机绵长",
@@ -1432,7 +2263,7 @@ class Root:
 
     @property
     def display_name(self) -> str:
-        attr_name = ATTRIBUTE_NAMES.get(self.attribute, self.attribute + "\u7075\u6839")
+        attr_name = root_attribute_name(self.attribute)
         if self.tier == "\u53d8\u5f02\u7075\u6839":
             return f"\u53d8\u5f02\u7075\u6839{self.grade}{attr_name}"
         return f"{self.tier}{self.grade}{attr_name}"
@@ -1522,7 +2353,7 @@ class Root:
         tier = str(data["tier"])
         if tier == "\u8def\u4eba\u7532":
             tier = "\u51e1\u54c1"
-        attribute = str(data.get("attribute", "\u91d1"))
+        attribute = normalize_root_attribute(str(data.get("attribute", "\u91d1")))
         is_mutated = bool(data.get("mutated", False)) or attribute not in BASE_FIVE_ELEMENTS or tier == "\u53d8\u5f02\u7075\u6839"
         if is_mutated:
             tier = "\u53d8\u5f02\u7075\u6839"
@@ -1631,6 +2462,7 @@ class UserRecord:
     equipped_puppet: Optional[dict[str, Any]] = None
     planted_spirit_plant: Optional[dict[str, Any]] = None
     array_proficiency: Optional[dict[str, int]] = None
+    array_layers: Optional[dict[str, int]] = None
     spirit_stones: int = 0
     foundation_type: Optional[str] = None
     realm_marks: Optional[dict[str, str]] = None
@@ -1766,6 +2598,7 @@ class UserRecord:
             "equipped_puppet": self.equipped_puppet or None,
             "planted_spirit_plant": self.planted_spirit_plant or None,
             "array_proficiency": self.array_proficiency or {},
+            "array_layers": self.array_layers or {},
             "spirit_stones": self.spirit_stones,
             "foundation_type": self.foundation_type,
             "realm_marks": self.realm_marks or {},
@@ -1893,6 +2726,10 @@ class UserRecord:
                 str(key): int(value)
                 for key, value in dict(data.get("array_proficiency", {})).items()
             },
+            array_layers={
+                str(key): int(value)
+                for key, value in dict(data.get("array_layers", {})).items()
+            },
             foundation_type=(
                 str(data["foundation_type"])
                 if data.get("foundation_type")
@@ -1957,6 +2794,7 @@ def weighted_choice(items: Sequence[tuple[T, float]]) -> T:
 
 
 def root_default_sources(attribute: str) -> list[str]:
+    attribute = normalize_root_attribute(attribute)
     if attribute == "\u5148\u5929\u9053\u4f53":
         return list(BASE_FIVE_ELEMENTS)
     if attribute in BASE_FIVE_ELEMENTS:
@@ -2029,6 +2867,7 @@ def make_root(
     mutated: Optional[bool] = None,
     source_purities: Optional[dict[str, int]] = None,
 ) -> Root:
+    attribute = normalize_root_attribute(attribute)
     source_list = list(sources) if sources is not None else root_default_sources(attribute)
     is_mutated = bool(mutated if mutated is not None else tier == "\u53d8\u5f02\u7075\u6839" or attribute not in BASE_FIVE_ELEMENTS)
     if is_mutated:
@@ -2066,10 +2905,11 @@ def draw_mutation_root() -> Root:
             ("\u7a7a", 1.2),
             ("\u65f6", 1.0),
             ("\u5148\u5929\u9053\u4f53", 0.6),
+            ("混沌", 0.8),
         ]
     )
     sources = root_default_sources(attribute)
-    purity = random.randint(95, 100) if attribute in {"\u7a7a", "\u65f6", "\u5148\u5929\u9053\u4f53"} else random.randint(92, 100)
+    purity = random.randint(95, 100) if attribute in {"\u7a7a", "\u65f6", "\u5148\u5929\u9053\u4f53", "混沌"} else random.randint(92, 100)
     source_purities = {source: random.randint(max(90, purity - 3), 100) for source in sources}
     grade = root_grade_from_score(purity)
     return make_root("\u53d8\u5f02\u7075\u6839", grade, attribute, purity=purity, sources=sources, mutated=True, source_purities=source_purities)
@@ -2169,6 +3009,7 @@ def ensure_legacy_extra_roots(record: UserRecord) -> bool:
 
 
 def max_root_purity(record: UserRecord, attribute: Optional[str] = None) -> int:
+    attribute = normalize_root_attribute(attribute) if attribute is not None else None
     if not record.root:
         return 0
     acquired = normalize_acquired_roots(record)
@@ -2208,11 +3049,61 @@ def cumulative_realm_exp(root: Optional[Root], realm_index: int) -> int:
     return sum(realm_progress_required(root, index) for index in range(max(0, int(realm_index))))
 
 
-def current_breakthrough_requirement(record: UserRecord) -> Optional[dict[str, Any]]:
-    if record.realm_index >= len(REALMS) - 1:
-        return None
-    return BREAKTHROUGH_REQUIREMENTS.get(record.realm_index)
+def _realm_index(name: str, default: int) -> int:
+    try:
+        return REALMS.index(name)
+    except ValueError:
+        return default
 
+
+def breakthrough_requirement_key_for_realm_index(realm_index: int) -> Optional[int]:
+    index = int(realm_index)
+    if index >= len(REALMS) - 1:
+        return None
+    fake_index = _realm_index("假仙境", len(REALMS))
+    true_index = _realm_index("真仙境", len(REALMS))
+    if index == fake_index:
+        return None
+    if fake_index < true_index and index >= true_index:
+        return index - 1
+    return index
+
+
+def breakthrough_source_realm_index(requirement_index: int) -> int:
+    key = int(requirement_index)
+    fake_index = _realm_index("假仙境", len(REALMS))
+    true_index = _realm_index("真仙境", len(REALMS))
+    if fake_index < true_index and key >= true_index - 1:
+        key += 1
+    return max(0, min(len(REALMS) - 1, key))
+
+
+def breakthrough_target_realm_index(requirement_index: int) -> int:
+    source_index = breakthrough_source_realm_index(requirement_index)
+    return max(0, min(len(REALMS) - 1, source_index + 1))
+
+
+def breakthrough_target_realm(requirement_index: int, requirement: Optional[dict[str, Any]] = None) -> str:
+    target_index = breakthrough_target_realm_index(requirement_index)
+    if 0 <= target_index < len(REALMS):
+        return REALMS[target_index]
+    if requirement is not None:
+        return str(requirement.get("target") or "下一境")
+    return "下一境"
+
+
+def current_breakthrough_requirement(record: UserRecord) -> Optional[dict[str, Any]]:
+    key = breakthrough_requirement_key_for_realm_index(record.realm_index)
+    if key is None:
+        return None
+    return BREAKTHROUGH_REQUIREMENTS.get(key)
+
+
+def current_breakthrough_target_realm(record: UserRecord) -> str:
+    key = breakthrough_requirement_key_for_realm_index(record.realm_index)
+    if key is None:
+        return "下一境"
+    return breakthrough_target_realm(key, BREAKTHROUGH_REQUIREMENTS.get(key))
 
 def is_breakthrough_bottleneck(record: UserRecord) -> bool:
     return (
@@ -2336,13 +3227,16 @@ def progress_fake_immortal_conversion(record: UserRecord, today: date) -> tuple[
         record.last_immortal_conversion_date = today_text
         record.immortal_conversion_days = min(7, int(record.immortal_conversion_days or 0) + 1)
     if record.immortal_conversion_days >= 7:
+        fake_index = fake_immortal_realm_index()
+        mark = (record.realm_marks or {}).pop(str(fake_index), None)
         record.realm_index = true_immortal_realm_index()
+        if mark:
+            set_realm_mark(record, record.realm_index, mark)
         record.realm_exp = 0
         record.immortal_conversion_days = 0
         record.last_immortal_conversion_date = None
-        return True, "\u4e03\u65e5\u4ed9\u5143\u529b\u8f6c\u5316\u5df2\u6210\uff0c\u7075\u529b\u8bcd\u6761\u6539\u4e3a\u4ed9\u5143\u529b\uff0c\u6b63\u5f0f\u8e0f\u5165\u771f\u4ed9\u5883\u3002"
-    return True, f"\u4ed9\u5143\u529b\u8f6c\u5316\u4e2d {record.immortal_conversion_days}/7\uff0c\u6b64\u671f\u95f4\u7b7e\u5230\u4e0d\u589e\u52a0\u4fee\u4e3a\u3002"
-
+        return True, "七日仙元力转化已成，灵力词条改为仙元力，正式踏入真仙境。"
+    return True, f"仙元力转化中 {record.immortal_conversion_days}/7，此期间签到不增加修为。"
 
 def update_bottleneck_tracking(record: UserRecord, today: Optional[date] = None, overflow: int = 0) -> int:
     if not is_breakthrough_bottleneck(record):
@@ -2480,19 +3374,83 @@ def spirit_stone_text(amount: int) -> str:
     return " ".join(parts)
 
 
+
+def artifact_tiers_for_realm(realm_index: int) -> list[str]:
+    index = max(0, min(len(REALMS) - 1, int(realm_index)))
+    return list(ARTIFACT_REALM_TIER_UNLOCKS.get(index) or ARTIFACT_REALM_TIER_UNLOCKS.get(0) or ["凡品", "黄阶", "玄阶", "地阶", "天阶"])
+
+
+def artifact_realm_for_tier(tier: str, record: Optional[UserRecord] = None, preferred_realm_index: Optional[int] = None) -> int:
+    tier_text = str(tier or "凡品")
+    if preferred_realm_index is not None:
+        try:
+            preferred = max(0, min(len(REALMS) - 1, int(preferred_realm_index)))
+            if tier_text in artifact_tiers_for_realm(preferred):
+                return preferred
+        except (TypeError, ValueError):
+            pass
+    if record is not None and tier_text in artifact_tiers_for_realm(record.realm_index):
+        return max(0, min(len(REALMS) - 1, int(record.realm_index)))
+    return max(0, min(len(REALMS) - 1, int(ARTIFACT_TIER_DEFAULT_REALM.get(tier_text, TIER_REALM_REQUIREMENT.get(tier_text, 0)))))
+
+
+def apply_artifact_realm_metadata(reward: dict[str, Any], record: Optional[UserRecord] = None) -> None:
+    if reward_category(reward) != ARTIFACT_CATEGORY:
+        return
+    if str(reward.get("tier")) == "仙帝兵" or is_unique_reward_name(reward_name(reward)):
+        return
+    catalog_info = ARTIFACT_REALM_INFOS_BY_NAME.get(reward_name(reward))
+    if catalog_info:
+        realm_index = int(catalog_info.get("realm_index", 0))
+        reward["tier"] = str(catalog_info.get("tier", reward.get("tier", "凡品")))
+        reward["grade"] = str(catalog_info.get("grade", reward.get("grade", "下品")))
+        reward["category"] = ARTIFACT_CATEGORY
+        reward["realm_index"] = realm_index
+        reward["min_realm_index"] = realm_index
+        reward["required_attribute"] = str(catalog_info.get("attribute", reward.get("required_attribute", "")))
+        reward["artifact_family"] = str(catalog_info.get("artifact_family", "realm_bound"))
+        if catalog_info.get("description"):
+            reward["description"] = str(catalog_info.get("description"))
+        if catalog_info.get("source"):
+            reward["source"] = str(catalog_info.get("source"))
+        return
+    explicit = reward.get("realm_index")
+    if explicit is None:
+        explicit = reward.get("min_realm_index")
+    if explicit is None and record is None:
+        return
+    realm_index = artifact_realm_for_tier(str(reward.get("tier", "凡品")), record, explicit)
+    reward["realm_index"] = realm_index
+    reward["min_realm_index"] = realm_index
+    reward.setdefault("artifact_family", "realm_bound")
+
+
+def artifact_realm_label(reward: dict[str, Any]) -> str:
+    try:
+        index = int(reward.get("realm_index", reward.get("min_realm_index", -1)))
+    except (TypeError, ValueError):
+        return ""
+    if index < 0 or index >= len(REALMS):
+        return ""
+    return realm_short_name(REALMS[index])
 def item_required_realm_index(reward: dict[str, Any]) -> int:
     explicit = reward.get("min_realm_index")
+    if explicit is None and reward_category(reward) == ARTIFACT_CATEGORY:
+        explicit = reward.get("realm_index")
     if explicit is not None:
         try:
             return max(0, min(len(REALMS) - 1, int(explicit)))
         except (TypeError, ValueError):
             pass
-    return TIER_REALM_REQUIREMENT.get(str(reward.get("tier", "\u51e1\u54c1")), 0)
+    tier = str(reward.get("tier", "凡品"))
+    if reward_category(reward) == ARTIFACT_CATEGORY:
+        return max(0, min(len(REALMS) - 1, int(ARTIFACT_TIER_DEFAULT_REALM.get(tier, TIER_REALM_REQUIREMENT.get(tier, 0)))))
+    return TIER_REALM_REQUIREMENT.get(tier, 0)
 
 
 def can_buy_reward(record: UserRecord, reward: dict[str, Any]) -> tuple[bool, str]:
     required_index = item_required_realm_index(reward)
-    if required_index > record.realm_index + 2:
+    if reward_category(reward) != ARTIFACT_CATEGORY and required_index > record.realm_index + 2:
         return False, f"{reward_display_name(reward)} 至少约需{REALMS[required_index]}附近才能驾驭，已超过当前修为两大境界。"
     price = int(reward.get("price") or reward_price(reward))
     if record.spirit_stones < price:
@@ -2511,21 +3469,50 @@ def weighted_choice_rng(items: Sequence[tuple[T, float]], rng: random.Random) ->
     return items[-1][0]
 
 
-def shop_items_for_date(date_text: str) -> list[dict[str, Any]]:
-    digest = hashlib.sha256(date_text.encode("utf-8")).hexdigest()
+def make_realm_artifact_reward(
+    realm_index: int,
+    tier: str,
+    grade: str,
+    rng: Optional[random.Random] = None,
+    preferred_attribute: Optional[str] = None,
+) -> dict[str, Any]:
+    realm = max(0, min(len(REALMS) - 1, int(realm_index)))
+    tier_text = str(tier or "凡品")
+    allowed_tiers = artifact_tiers_for_realm(realm)
+    if tier_text not in allowed_tiers:
+        tier_text = "仙阶" if tier_text == "仙阶" and "仙阶" in allowed_tiers else allowed_tiers[-1]
+    grade_text = str(grade or "下品") if str(grade or "") in GRADE_RANKS else "下品"
+    candidates = artifact_catalog_entries(realm, tier_text, grade_text, preferred_attribute)
+    if not candidates:
+        candidates = artifact_catalog_entries(realm, tier_text, grade_text)
+    if not candidates:
+        candidates = artifact_catalog_entries(realm)
+    if not candidates:
+        return {"tier": tier_text, "grade": grade_text, "category": ARTIFACT_CATEGORY, "name": "无名灵器", "realm_index": realm, "min_realm_index": realm}
+    chooser = rng.choice if rng is not None else random.choice
+    return artifact_info_to_reward(dict(chooser(candidates)))
+
+
+def shop_items_for_date(date_text: str, record: Optional[UserRecord] = None) -> list[dict[str, Any]]:
+    seed = f"{date_text}:{getattr(record, 'user_id', '')}:{getattr(record, 'realm_index', '')}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     rng = random.Random(int(digest[:16], 16))
     pool = [(reward, float(reward[5])) for reward in FISHING_REWARDS if reward[2] != "仙缘"]
     items = []
+    realm_index = int(record.realm_index) if record is not None else 0
     for _ in range(8):
         tier, grade, category, name, description, _ = weighted_choice_rng(pool, rng)
-        item = normalize_reward({"tier": tier, "grade": grade, "category": category, "name": name, "description": description})
+        if category == ARTIFACT_CATEGORY:
+            item = draw_configured_artifact_reward(tier, grade, rng)
+        else:
+            item = {"tier": tier, "grade": grade, "category": category, "name": name, "description": description}
+        item = normalize_reward(item, record)
         item["price"] = reward_price(item)
         items.append(item)
     return items
 
-
 def buy_shop_item(record: UserRecord, item_index: int, date_text: str) -> tuple[bool, str]:
-    items = shop_items_for_date(date_text)
+    items = shop_items_for_date(date_text, record)
     if item_index < 1 or item_index > len(items):
         return False, f"请选择 1-{len(items)} 之间的商品编号。"
     item = normalize_reward(dict(items[item_index - 1]), record)
@@ -2556,11 +3543,16 @@ def sell_reward(record: UserRecord, category: str, item_index: int) -> tuple[boo
 
 
 def reward_category(reward: Optional[dict[str, Any]]) -> str:
-    return str((reward or {}).get("category", ""))
+    category = str((reward or {}).get("category", ""))
+    if category == LEGACY_SPECIAL_ABILITY_CATEGORY:
+        return SPECIAL_ABILITY_CATEGORY
+    if category == LEGACY_IMMORTAL_SEED_CATEGORY:
+        return IMMORTAL_SEED_CATEGORY
+    return category
 
 
 def reward_name(reward: Optional[dict[str, Any]]) -> str:
-    return str((reward or {}).get("name", ""))
+    return canonical_item_name(str((reward or {}).get("name", "")))
 
 
 
@@ -2580,14 +3572,14 @@ def apply_reward_metadata(reward: dict[str, Any]) -> dict[str, Any]:
     name = reward_name(reward)
     if name in EMPEROR_ARTIFACT_INFOS:
         reward["category"] = ARTIFACT_CATEGORY
-        reward["tier"] = "\u5e1d\u5175"
+        reward["tier"] = "仙帝兵"
         reward.setdefault("grade", "\u6781\u54c1")
         reward["unique"] = not bool(reward.get("replica"))
-        reward["min_realm_index"] = max(int(reward.get("min_realm_index", 0) or 0), 13)
+        reward["min_realm_index"] = max(int(reward.get("min_realm_index", 0) or 0), ARTIFACT_TIER_DEFAULT_REALM.get("仙帝兵", 13))
         info = EMPEROR_ARTIFACT_INFOS[name]
         reward.setdefault(
             "description",
-            f"{info.get('creator')}\u9057\u7559\u7684\u6781\u9053\u5e1d\u5175\uff0c\u6750\u8d28\uff1a{info.get('material')}\u3002\u4e13\u5c5e\u6280\uff1a{info.get('skill')}\u3002",
+            f"{info.get('creator')}留下的仙帝兵，材质：{info.get('material')}。专属技：{info.get('skill')}。",
         )
     elif name in IMMORTAL_SEED_INFOS:
         reward["category"] = IMMORTAL_SEED_CATEGORY
@@ -2595,23 +3587,23 @@ def apply_reward_metadata(reward: dict[str, Any]) -> dict[str, Any]:
         reward.setdefault("grade", "\u4e0a\u54c1")
         reward["unique"] = name in UNIQUE_REWARD_NAMES and not bool(reward.get("replica"))
         reward["min_realm_index"] = max(int(reward.get("min_realm_index", 0) or 0), REALMS.index("\u771f\u4ed9\u5883"))
-        reward.setdefault("description", IMMORTAL_SEED_INFOS[name].get("effect", "\u4ed9\u79cd\u8574\u542b\u5927\u9053\u6c14\u606f\u3002"))
+        reward.setdefault("description", IMMORTAL_SEED_INFOS[name].get("effect", "仙源凝着清澈灵机。"))
     elif is_unique_reward_name(name):
         reward["unique"] = not bool(reward.get("replica"))
         reward.setdefault("tier", "\u4ed9\u9636")
         reward.setdefault("grade", "\u6781\u54c1")
         reward["min_realm_index"] = max(int(reward.get("min_realm_index", 0) or 0), 8)
-    if name in {"\u9752\u7af9\u8702\u4e91\u5251", "\u5e9a\u91d1\u9752\u7af9\u8702\u4e91\u5251"}:
+    if name in {"翠雷云竹剑", "玄金雷枝剑"}:
         reward["category"] = ARTIFACT_CATEGORY
         reward.setdefault("required_attribute", "\u96f7")
-        reward.setdefault("min_realm_index", 2 if name == "\u9752\u7af9\u8702\u4e91\u5251" else 3)
-    if name == "\u5927\u5e9a\u5251\u9635":
+        reward.setdefault("min_realm_index", 2 if name == "翠雷云竹剑" else 3)
+    if name == "玄金列星剑阵":
         reward["category"] = ARRAY_CATEGORY
         reward.setdefault("required_attribute", "\u91d1")
         reward.setdefault("min_realm_index", 5)
     if reward.get("replica"):
         reward["unique"] = False
-        if str(reward.get("tier")) == "\u5e1d\u5175":
+        if str(reward.get("tier")) == "仙帝兵":
             reward["tier"] = "\u4ed9\u9636"
     return reward
 
@@ -2621,20 +3613,23 @@ def make_unique_replica(reward: dict[str, Any]) -> dict[str, Any]:
     replica["replica"] = True
     replica["unique"] = False
     name = reward_name(replica)
-    if name and not name.endswith("\u4eff\u5236\u54c1"):
-        replica["name"] = f"{name}\u4eff\u5236\u54c1"
-    if str(replica.get("tier")) == "\u5e1d\u5175":
+    if name and not name.endswith("仿制品"):
+        replica["name"] = f"{name}仿制品"
+    if str(replica.get("tier")) == "仙帝兵":
         replica["tier"] = "\u4ed9\u9636"
         replica.setdefault("grade", "\u4e2d\u54c1")
-    replica["description"] = f"{reward_display_name(reward)}\u7684\u4eff\u5236\u54c1\uff0c\u5f97\u4e00\u7f15\u771f\u5f62\u9053\u97f5\uff0c\u4f46\u4e0d\u5177\u5907\u5168\u7403\u552f\u4e00\u6027\u3002"
+    replica["description"] = f"{reward_display_name(reward)}的仿制品，得一缕真形道韵，但不具备全局唯一性。"
     return apply_reward_metadata(replica)
 
 def reward_required_attribute(reward: dict[str, Any]) -> Optional[str]:
     required = reward.get("required_attribute")
     if required:
-        return str(required)
+        normalized = normalize_root_attribute(str(required))
+        reward["required_attribute"] = normalized
+        return normalized
     required = ITEM_ATTRIBUTE_BY_NAME.get(reward_name(reward))
     if required:
+        required = normalize_root_attribute(required)
         reward["required_attribute"] = required
     return required
 
@@ -2646,12 +3641,18 @@ def normalize_reward(reward: dict[str, Any], record: Optional[UserRecord] = None
     reward["tier"] = tier
     reward.setdefault("grade", "中品")
     reward.setdefault("category", "杂物")
+    reward["category"] = reward_category(reward)
     reward.setdefault("name", "无名灵物")
+    reward["name"] = canonical_item_name(reward_name(reward))
     reward.setdefault(
         "description",
         REWARD_DESCRIPTIONS.get(reward_category(reward), "{name}气息不明。").format(name=reward_name(reward)),
     )
     apply_reward_metadata(reward)
+    apply_demon_core_metadata(reward)
+    if reward_category(reward) == METHOD_CATEGORY:
+        scrub_method_layer_metadata(reward)
+    apply_artifact_realm_metadata(reward, record)
     reward["price"] = int(reward.get("price") or reward_price(reward))
     if reward_category(reward) in EQUIPMENT_CATEGORIES:
         required = reward_required_attribute(reward)
@@ -2670,11 +3671,261 @@ def make_reward(tier: str, grade: str, category: str, name: str) -> dict[str, An
         }
     )
 
+def scrub_method_layer_metadata(reward: dict[str, Any]) -> None:
+    for key in ("layer", "layers", "max_layer", "initial_layer", "method_layer", "method_layers"):
+        reward.pop(key, None)
+    description = str(reward.get("description") or "")
+    if description:
+        description = re.sub(r"第\s*[一二三四五六七八九十百千万\d]+\s*层", "", description)
+        description = re.sub(r"[一二三四五六七八九十百千万\d]+\s*层", "", description)
+        description = re.sub(r"[；;，,。]?\s*层数[:：]?\s*[一二三四五六七八九十百千万\d]+", "", description)
+        reward["description"] = re.sub(r"\s+", " ", description).strip() or REWARD_DESCRIPTIONS.get(METHOD_CATEGORY, "{name}气息不明。").format(name=reward_name(reward))
+
+
+def growth_has_unlimited_deduction(item: Optional[dict[str, Any]]) -> bool:
+    return bool(item and str(item.get("tier")) == "仙阶" and str(item.get("grade")) == "极品")
+
+
+def next_growth_quality(tier: str, grade: str, tiers: Sequence[str]) -> Optional[tuple[str, str]]:
+    tier_text = str(tier or "凡品")
+    grade_text = str(grade or "下品")
+    if tier_text not in tiers:
+        tier_text = "凡品"
+    if grade_text not in GRADE_ORDER:
+        grade_text = "下品"
+    if tier_text == "仙阶" and grade_text == "极品":
+        return None
+    grade_index = GRADE_ORDER.index(grade_text)
+    if grade_index < len(GRADE_ORDER) - 1:
+        return tier_text, GRADE_ORDER[grade_index + 1]
+    tier_index = list(tiers).index(tier_text)
+    if tier_index < len(tiers) - 1:
+        return list(tiers)[tier_index + 1], GRADE_ORDER[0]
+    return None
+
+
+def method_layer_cap(method: Optional[dict[str, Any]]) -> int:
+    if not method:
+        return 0
+    return METHOD_UNLIMITED_LAYER_MAX if growth_has_unlimited_deduction(method) else METHOD_LAYER_STEP
+
+
+def method_layer_cap_text(method: Optional[dict[str, Any]]) -> str:
+    return "无限" if growth_has_unlimited_deduction(method) else str(METHOD_LAYER_STEP)
+
+
+def array_layer_cap(array: Optional[dict[str, Any]]) -> int:
+    if not array:
+        return 0
+    return ARRAY_UNLIMITED_LAYER_MAX if growth_has_unlimited_deduction(array) else ARRAY_LAYER_STEP
+
+
+def array_layer_cap_text(array: Optional[dict[str, Any]]) -> str:
+    return "无限" if growth_has_unlimited_deduction(array) else str(ARRAY_LAYER_STEP)
+
+
+def same_named_growth_item(left: Optional[dict[str, Any]], right: Optional[dict[str, Any]], category: str) -> bool:
+    return bool(left and right and reward_category(left) == category and reward_category(right) == category and reward_name(left) == reward_name(right))
+
+
+def sync_equipped_growth_item(record: UserRecord, category: str, old_key: str, item: dict[str, Any]) -> None:
+    if category == METHOD_CATEGORY and record.equipped_method:
+        if reward_signature(record.equipped_method) == old_key or same_named_growth_item(record.equipped_method, item, category):
+            record.equipped_method = dict(item)
+    if category == ARRAY_CATEGORY and record.equipped_array:
+        if reward_signature(record.equipped_array) == old_key or same_named_growth_item(record.equipped_array, item, category):
+            record.equipped_array = dict(item)
+
+
+def ensure_method_tracking(record: UserRecord, method: dict[str, Any]) -> None:
+    if record.method_layers is None:
+        record.method_layers = {}
+    if record.method_proficiency is None:
+        record.method_proficiency = {}
+    key = reward_signature(method)
+    record.method_layers.setdefault(key, 1)
+    record.method_layers[key] = max(1, min(method_layer_cap(method), int(record.method_layers.get(key, 1) or 1)))
+    record.method_proficiency.setdefault(key, 0)
+
+
+def ensure_array_tracking(record: UserRecord, array: dict[str, Any]) -> None:
+    if record.array_proficiency is None:
+        record.array_proficiency = {}
+    if record.array_layers is None:
+        record.array_layers = {}
+    key = reward_signature(array)
+    record.array_layers.setdefault(key, 1)
+    record.array_layers[key] = max(1, min(array_layer_cap(array), int(record.array_layers.get(key, 1) or 1)))
+    if key not in record.array_proficiency:
+        legacy = 0
+        if record.equipped_method:
+            legacy_key = reward_signature(record.equipped_method)
+            legacy = int(record.array_proficiency.get(legacy_key, 0) or 0)
+        record.array_proficiency[key] = max(0, legacy)
+
+
+def migrate_tracking_key(mapping: Optional[dict[str, int]], old_key: str, new_key: str, value: Optional[int] = None, keep_max: bool = True) -> int:
+    if mapping is None:
+        return int(value or 0)
+    old_value = int(mapping.pop(old_key, 0) or 0)
+    next_value = int(value if value is not None else old_value)
+    if keep_max:
+        next_value = max(int(mapping.get(new_key, 0) or 0), next_value, old_value)
+    mapping[new_key] = next_value
+    return next_value
+
+
+def set_growth_reward_note(reward: dict[str, Any], item: dict[str, Any], old_display: str, layer: int, quality_up: bool, category: str) -> None:
+    reward["tier"] = str(item.get("tier", reward.get("tier", "凡品")))
+    reward["grade"] = str(item.get("grade", reward.get("grade", "下品")))
+    reward["category"] = category
+    reward["name"] = reward_name(item)
+    reward["growth_deduction"] = True
+    reward["growth_quality_up"] = bool(quality_up)
+    reward["growth_layer"] = int(layer)
+    reward["growth_deduction_text"] = (
+        f"重复获得，已由{old_display}推演进阶为{reward_display_name(item)}第{layer}层"
+        if quality_up
+        else f"重复获得，已推演至第{layer}层"
+    )
+    if category == METHOD_CATEGORY:
+        reward["method_deduction"] = True
+    if category == ARRAY_CATEGORY:
+        reward["array_deduction"] = True
+
+
+def advance_method_by_duplicate(record: UserRecord, method: dict[str, Any], incoming: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    ensure_method_tracking(record, method)
+    old_key = reward_signature(method)
+    old_display = reward_display_name(method)
+    current_layer = method_layer(record, method) or 1
+    new_layer = current_layer + 1
+    quality_up = False
+    if not growth_has_unlimited_deduction(method) and current_layer >= METHOD_LAYER_STEP:
+        next_quality = next_growth_quality(str(method.get("tier", "凡品")), str(method.get("grade", "下品")), METHOD_GROWTH_TIERS)
+        if next_quality is not None:
+            method["tier"], method["grade"] = next_quality
+            method["price"] = reward_price(method)
+            new_layer = 1
+            quality_up = True
+    new_key = reward_signature(method)
+    if record.method_layers is None:
+        record.method_layers = {}
+    if record.method_proficiency is None:
+        record.method_proficiency = {}
+    migrate_tracking_key(record.method_layers, old_key, new_key, new_layer, keep_max=False)
+    migrate_tracking_key(record.method_proficiency, old_key, new_key, 0 if quality_up else None, keep_max=not quality_up)
+    sync_equipped_growth_item(record, METHOD_CATEGORY, old_key, method)
+    if incoming is not None:
+        set_growth_reward_note(incoming, method, old_display, new_layer, quality_up, METHOD_CATEGORY)
+    return method
+
+
+def array_layer(record: UserRecord, array: Optional[dict[str, Any]]) -> int:
+    if not array:
+        return 0
+    key = reward_signature(array)
+    current = int((record.array_layers or {}).get(key, 0) or 0)
+    return max(1, min(array_layer_cap(array), current or 1))
+
+
+def array_proficiency_cap(array: Optional[dict[str, Any]], layer: Optional[int] = None) -> int:
+    if not array:
+        return 0
+    tier = str(array.get("tier", "凡品"))
+    current_layer = max(1, int(layer or 1))
+    if tier == "仙阶":
+        cap_multiplier = max(20.0, current_layer * 20.0)
+    else:
+        cap_multiplier = ARRAY_MULTIPLIER_CAP_BY_TIER.get(tier, 5.0)
+    return max(0, int((cap_multiplier - 1.0) * 100))
+
+
+def array_proficiency_value(record: UserRecord, array: Optional[dict[str, Any]] = None) -> int:
+    item = array or record.equipped_array
+    if not item:
+        return 0
+    ensure_array_tracking(record, item)
+    key = reward_signature(item)
+    value = int((record.array_proficiency or {}).get(key, 0) or 0)
+    return max(0, min(array_proficiency_cap(item, array_layer(record, item)), value))
+
+
+def advance_array_by_duplicate(record: UserRecord, array: dict[str, Any], incoming: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    ensure_array_tracking(record, array)
+    old_key = reward_signature(array)
+    old_display = reward_display_name(array)
+    current_layer = array_layer(record, array) or 1
+    current_proficiency = array_proficiency_value(record, array)
+    new_layer = current_layer + 1
+    quality_up = False
+    if not growth_has_unlimited_deduction(array) and current_layer >= ARRAY_LAYER_STEP:
+        next_quality = next_growth_quality(str(array.get("tier", "凡品")), str(array.get("grade", "下品")), ARRAY_GROWTH_TIERS)
+        if next_quality is not None:
+            array["tier"], array["grade"] = next_quality
+            array["price"] = reward_price(array)
+            new_layer = 1
+            quality_up = True
+    new_key = reward_signature(array)
+    if record.array_layers is None:
+        record.array_layers = {}
+    if record.array_proficiency is None:
+        record.array_proficiency = {}
+    migrate_tracking_key(record.array_layers, old_key, new_key, new_layer, keep_max=False)
+    migrated = migrate_tracking_key(record.array_proficiency, old_key, new_key, current_proficiency, keep_max=True)
+    record.array_proficiency[new_key] = min(array_proficiency_cap(array, new_layer), migrated)
+    sync_equipped_growth_item(record, ARRAY_CATEGORY, old_key, array)
+    if incoming is not None:
+        set_growth_reward_note(incoming, array, old_display, new_layer, quality_up, ARRAY_CATEGORY)
+    return array
+
+
+def ensure_unique_growth_rewards(record: UserRecord, category: str) -> None:
+    if not record.rewards:
+        return
+    seen: dict[str, int] = {}
+    unique_rewards: list[dict[str, Any]] = []
+    for reward in record.rewards:
+        normalized = normalize_reward(reward, record)
+        if reward_category(normalized) != category:
+            unique_rewards.append(normalized)
+            continue
+        name = reward_name(normalized)
+        if name in seen:
+            if category == METHOD_CATEGORY:
+                advance_method_by_duplicate(record, unique_rewards[seen[name]], normalized)
+            elif category == ARRAY_CATEGORY:
+                advance_array_by_duplicate(record, unique_rewards[seen[name]], normalized)
+            continue
+        if category == METHOD_CATEGORY:
+            ensure_method_tracking(record, normalized)
+        elif category == ARRAY_CATEGORY:
+            ensure_array_tracking(record, normalized)
+        seen[name] = len(unique_rewards)
+        unique_rewards.append(normalized)
+    record.rewards = unique_rewards
+
+
 def append_reward(record: UserRecord, reward: dict[str, Any]) -> None:
     if record.rewards is None:
         record.rewards = []
-    record.rewards.append(normalize_reward(reward, record))
-
+    normalized = normalize_reward(reward, record)
+    category = reward_category(normalized)
+    if category in {METHOD_CATEGORY, ARRAY_CATEGORY}:
+        ensure_unique_growth_rewards(record, category)
+        for index, existing in enumerate(record.rewards):
+            existing = normalize_reward(existing, record)
+            if same_named_growth_item(existing, normalized, category):
+                if category == METHOD_CATEGORY:
+                    record.rewards[index] = advance_method_by_duplicate(record, existing, normalized)
+                else:
+                    record.rewards[index] = advance_array_by_duplicate(record, existing, normalized)
+                return
+        if category == METHOD_CATEGORY:
+            ensure_method_tracking(record, normalized)
+        else:
+            ensure_array_tracking(record, normalized)
+    record.rewards.append(normalized)
 
 def rewards_by_category(record: UserRecord, category: str) -> list[dict[str, Any]]:
     return [
@@ -2735,9 +3986,8 @@ def is_breakthrough_talisman_name(name: str) -> bool:
 def breakthrough_talisman_requirement(name: str) -> Optional[dict[str, Any]]:
     for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
         if name in set(requirement["items"]) and is_breakthrough_talisman_name(name):
-            return {"realm_index": realm_index, "target": requirement["target"]}
+            return {"realm_index": realm_index, "target": breakthrough_target_realm(realm_index, requirement)}
     return None
-
 
 PILL_BREAKTHROUGH_TOKENS = ("\u4e39", "\u4e38", "\u6563", "\u9732", "\u6db2", "\u5f15")
 
@@ -2859,23 +4109,317 @@ def breakthrough_item_quality_cap(name: str) -> int:
     return max(5, min(19, int(caps[max(0, min(position, len(caps) - 1))])))
 
 
+def realm_quality_title_index(realm_index: int) -> int:
+    index = int(realm_index)
+    fake_index = _realm_index("假仙境", len(REALMS))
+    true_index = _realm_index("真仙境", len(REALMS))
+    if fake_index < true_index and index >= true_index:
+        return index - 1
+    return index
+
+
+FOUNDATION_QUALITY_TITLES = ["普通筑基", "良好筑基", "优秀筑基", "无瑕道基", "天道筑基"]
+
+REALM_QUALITY_TITLES = {
+    3: ["一品金丹", "二品金丹", "三品金丹", "四品金丹", "五品金丹", "六品金丹", "七品金丹", "八品金丹", "九品金丹"],
+    4: ["天命元婴", "无瑕元婴", "紫府元婴", "灵台元婴", "凡胎元婴"],
+    5: ["星衡化神", "无垢化神", "神意化形", "凡念化神"],
+    6: ["洞虚道体", "玄虚法身", "清虚灵体", "凡虚之身"],
+    7: ["天人合一", "道体合真", "元神合契", "法身初合"],
+    8: ["无上大乘", "圆融大乘", "清净大乘", "小乘道果"],
+    9: ["九重雷劫", "七重雷劫", "五重雷劫", "三重雷劫"],
+    10: ["无垢真仙", "玄妙真仙", "清灵真仙", "凡蜕真仙"],
+    11: ["不朽金仙", "太玄金仙", "玉清金仙", "初证金仙"],
+    12: ["太乙道果", "太乙玄光", "太乙清光", "太乙初果"],
+    13: ["大罗无极", "大罗圆满", "大罗玄妙", "大罗初证"],
+    14: ["混元圆满", "混元无瑕", "混元玄妙", "混元初证"],
+    15: ["三尸尽斩", "二尸圆融", "一尸寄道", "半步准圣"],
+    16: ["天道圣位", "功德圣人", "气运圣人", "伪圣道果"],
+    17: ["自在混元", "无垢混元", "玄照混元", "初入混元"],
+    18: ["无极道主", "无极真圣", "无极玄光", "无极初证"],
+    19: ["执掌天道", "合道无缺", "天心圆融", "借天而行"],
+    20: ["大道归一", "大道无缺", "大道玄同", "大道初契"],
+    21: ["万道祖庭", "一道开天", "道祖法身", "初立道统"],
+    22: ["半步无上", "命河将断", "因果将尽", "彼岸初望"],
+    23: ["彼岸超脱", "命河不系", "因果不染", "初证超脱"],
+    24: ["永恒唯一", "万劫不磨", "无量不朽", "永恒初印"],
+}
+
+
+def _build_realm_quality_power() -> dict[str, int]:
+    table: dict[str, int] = {}
+    for index, title in enumerate(FOUNDATION_QUALITY_TITLES):
+        table[title] = 80 + index * 55
+    for realm_index, titles in REALM_QUALITY_TITLES.items():
+        base = 220 + realm_index * 85
+        count = len(titles)
+        for position, title in enumerate(titles):
+            table[title] = base + (count - position) * 45
+    return table
+
+
+REALM_QUALITY_POWER = _build_realm_quality_power()
+
+
+def item_quality_score(item: Optional[dict[str, Any]]) -> int:
+    if not item:
+        return 0
+    tier = str(item.get("tier") or "凡品")
+    grade = str(item.get("grade") or "下品")
+    return 1 + TIER_RANKS.get(tier, 0) * 4 + GRADE_RANKS.get(grade, 0)
+
+
+def _quality_title_index(score: int, title_count: int) -> int:
+    if title_count <= 1:
+        return 0
+    score = max(0, min(20, int(score)))
+    if title_count >= 9:
+        thresholds = [19, 17, 15, 13, 11, 9, 7, 5]
+    elif title_count == 5:
+        thresholds = [18, 14, 10, 5]
+    else:
+        thresholds = [18, 14, 10]
+    for index, threshold in enumerate(thresholds[: max(0, title_count - 1)]):
+        if score >= threshold:
+            return index
+    return title_count - 1
+
+
+def quality_from_titles(item: dict[str, Any], titles: Sequence[str]) -> str:
+    title_list = list(titles)
+    if not title_list:
+        return "道基未定"
+    override = item.get("quality_cap_override")
+    score = int(override) if override is not None else item_quality_score(item)
+    return title_list[_quality_title_index(score, len(title_list))]
+
+
+def foundation_quality(item: dict[str, Any]) -> str:
+    cap_value = item.get("quality_cap_override")
+    cap = int(cap_value) if cap_value is not None else breakthrough_item_quality_cap(reward_name(item))
+    score = min(item_quality_score(item), cap)
+    if score >= 18:
+        return "天道筑基"
+    if score >= 14:
+        return "无瑕道基"
+    if score >= 10:
+        return "优秀筑基"
+    if score >= 5:
+        return "良好筑基"
+    return "普通筑基"
+
+
+def breakthrough_quality_relation_text() -> str:
+    lines = [
+        "【品相图鉴】",
+        "突破道具名决定品相上限，品阶与品质只在该上限内提高实际结果。",
+    ]
+    for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
+        source_index = breakthrough_source_realm_index(realm_index)
+        target_index = breakthrough_target_realm_index(realm_index)
+        current = REALMS[source_index]
+        target = breakthrough_target_realm(realm_index, requirement)
+        items = " / ".join(
+            f"{item}（{breakthrough_item_quality_cap_text(str(item), target_index)}）"
+            for item in requirement.get("items", [])
+        )
+        lines.append(f"{current} -> {target}：{items}")
+    lines.append("假仙境为渡劫后的七日仙元力转化阶段，不单独消耗突破道具；完成后进入真仙境。")
+    return "\n".join(lines)
+
+
+def catalog_item_detail_text(name: str) -> str:
+    query = str(name or "").strip()
+    if not query:
+        return ""
+    matches = [reward for reward in FISHING_REWARDS if reward[3] == query]
+    requirements = [
+        (realm_index, requirement)
+        for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items()
+        if query in set(requirement.get("items", []))
+    ]
+    recipe = ALCHEMY_RECIPES.get(query) or ARTIFACT_REFINING_RECIPES.get(query)
+    if not matches and not requirements and recipe is None:
+        return ""
+    lines = [f"【{query}图鉴】"]
+    if matches:
+        categories = sorted({str(reward[2]) for reward in matches})
+        tiers = sorted({str(reward[0]) for reward in matches}, key=lambda tier: TIER_RANKS.get(tier, 0))
+        grades = sorted({str(reward[1]) for reward in matches}, key=lambda grade: GRADE_RANKS.get(grade, 0))
+        lines.append(f"类型：{'、'.join(categories)}；品阶：{'、'.join(tiers)}；品质：{'、'.join(grades)}")
+        descriptions = [str(reward[4]) for reward in matches if str(reward[4]).strip()]
+        if descriptions:
+            lines.append(f"说明：{descriptions[0]}")
+    elif requirements:
+        lines.append(f"类型：{breakthrough_item_category(query)}；品阶：突破机缘道具")
+    if requirements:
+        usages = breakthrough_item_usage_lines(query)
+        if usages:
+            lines.append(f"突破用途：{'；'.join(usages)}")
+        cap_lines = [
+            breakthrough_item_quality_cap_text(query, breakthrough_target_realm_index(realm_index))
+            for realm_index, _requirement in requirements
+        ]
+        if cap_lines:
+            lines.append(f"品相上限：{'；'.join(dict.fromkeys(cap_lines))}")
+        lines.append(f"故事：{breakthrough_item_story(query, breakthrough_item_category(query))}")
+    if recipe:
+        materials = "、".join(str(item) for item in recipe.get("materials", [])[:8])
+        if len(recipe.get("materials", [])) > 8:
+            materials += "等"
+        cost = int(recipe.get("cost", 0))
+        lines.append(f"炼制：需{materials or '特殊材料'}；消耗灵石{cost}")
+    if matches and not requirements:
+        lines.append("来源：垂钓奖池、秘境、商店或后台配置投放。")
+    elif requirements:
+        lines.append("来源：瓶颈期签到或垂钓概率大幅提升，也可能由秘境、商店或后台投放。")
+    return "\n".join(lines)
+
 def breakthrough_item_quality_cap_text(name: str, target_index: int) -> str:
     cap = breakthrough_item_quality_cap(name)
     if target_index == 2:
         if cap >= 18:
             return "最高可成天道筑基"
         if cap >= 14:
-            return "最高可成完美道基"
+            return "最高可成无瑕道基"
         if cap >= 10:
             return "最高可成优秀筑基"
         if cap >= 5:
             return "最高可成良好筑基"
         return "最高可成普通筑基"
-    titles = REALM_QUALITY_TITLES.get(target_index, [])
+    titles = REALM_QUALITY_TITLES.get(realm_quality_title_index(target_index), [])
     if not titles:
         return "影响突破品相"
     fake_item = {"tier": "凡品", "grade": "下品", "name": name, "quality_cap_override": cap}
     return f"最高可至{quality_from_titles(fake_item, titles)}"
+
+def admin_item_catalog() -> list[dict[str, Any]]:
+    catalog: dict[str, dict[str, Any]] = {}
+
+    def ensure(name: str, category: str = "") -> dict[str, Any]:
+        key = str(name or "").strip() or "无名灵物"
+        item = catalog.get(key)
+        if item is None:
+            item = {
+                "name": key,
+                "category": str(category or ""),
+                "_categories": set(),
+                "_tiers": set(),
+                "_grades": set(),
+                "_usage": [],
+                "_source": [],
+                "_story": [],
+                "_note": [],
+                "required_realm": "",
+                "required_attribute": "",
+            }
+            catalog[key] = item
+        if category:
+            item["_categories"].add(str(category))
+            if not item.get("category"):
+                item["category"] = str(category)
+        return item
+
+    def add_text(item: dict[str, Any], key: str, value: str) -> None:
+        text = str(value or "").strip()
+        if text and text not in item[key]:
+            item[key].append(text)
+
+    for tier, grade, category, name, description, _weight in FISHING_REWARDS:
+        item = ensure(str(name), str(category))
+        item["_tiers"].add(str(tier))
+        item["_grades"].add(str(grade))
+        add_text(item, "_usage", str(description))
+        add_text(item, "_source", "垂钓奖池、每日商店、秘境掉落或后台配置投放")
+        add_text(item, "_note", f"奖励参数：tier={tier}，grade={grade}，category={category}")
+        attr = ITEM_ATTRIBUTE_BY_NAME.get(str(name))
+        if attr and not item.get("required_attribute"):
+            item["required_attribute"] = attr
+
+    for info in ARTIFACT_REALM_CATALOG:
+        item = ensure(str(info.get("name")), ARTIFACT_CATEGORY)
+        item["_tiers"].add(str(info.get("tier", "")))
+        item["_grades"].add(str(info.get("grade", "")))
+        item["required_realm"] = str(info.get("realm", ""))
+        item["required_attribute"] = str(info.get("attribute", ""))
+        add_text(item, "_usage", "装备后提供战力；需达到灵器所属境界并满足灵根属性才可驾驭；也可祭炼为本命灵器")
+        add_text(item, "_source", str(info.get("source") or "后台灵器规则池、垂钓、商店、秘境"))
+        add_text(item, "_story", str(info.get("description") or ""))
+        add_text(item, "_note", f"灵器池参数：realm_index={info.get('realm_index')}，tier={info.get('tier')}，grade={info.get('grade')}，attribute={info.get('attribute')}")
+
+    for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
+        target_index = breakthrough_target_realm_index(realm_index)
+        for name in requirement.get("items", []):
+            item = ensure(str(name), breakthrough_item_category(str(name)))
+            usages = breakthrough_item_usage_lines(str(name))
+            if usages:
+                add_text(item, "_usage", "突破用途：" + "；".join(usages))
+            add_text(item, "_usage", breakthrough_item_quality_cap_text(str(name), target_index))
+            add_text(item, "_source", "瓶颈期签到、垂钓机缘、秘境掉落、商店或后台配置投放")
+            add_text(item, "_story", breakthrough_item_story(str(name), str(item.get("category") or "")))
+            add_text(item, "_note", f"突破配置：BREAKTHROUGH_REQUIREMENTS[{realm_index}]；品相上限={breakthrough_item_quality_cap(str(name))}")
+
+    for name, recipe in ALCHEMY_RECIPES.items():
+        item = ensure(str(name), PILL_CATEGORY)
+        if recipe.get("tier"):
+            item["_tiers"].add(str(recipe.get("tier")))
+        if recipe.get("grade"):
+            item["_grades"].add(str(recipe.get("grade")))
+        materials = "、".join(str(material) for material in recipe.get("materials", []))
+        add_text(item, "_source", "炼丹房炼制；也可能由秘境、商店或后台投放")
+        add_text(item, "_note", f"炼丹配方：材料={materials or '特殊材料'}；灵石={recipe.get('cost', 0)}；难度={recipe.get('difficulty', 0)}")
+
+    for name, recipe in ARTIFACT_REFINING_RECIPES.items():
+        category = str(recipe.get("category") or ARTIFACT_CATEGORY)
+        item = ensure(str(name), category)
+        if recipe.get("tier"):
+            item["_tiers"].add(str(recipe.get("tier")))
+        if recipe.get("grade"):
+            item["_grades"].add(str(recipe.get("grade")))
+        if recipe.get("required_realm") is not None:
+            try:
+                item["required_realm"] = REALMS[max(0, min(len(REALMS) - 1, int(recipe.get("required_realm"))))]
+            except (TypeError, ValueError):
+                pass
+        materials = "、".join(str(material) for material in recipe.get("materials", []))
+        if category == ARTIFACT_CATEGORY:
+            add_text(item, "_story", crafted_artifact_story(str(name), recipe))
+        add_text(item, "_source", "炼器房炼制；也可能由秘境、商店或后台投放")
+        add_text(item, "_note", f"炼器配方：材料={materials or '特殊材料'}；灵石={recipe.get('cost', 0)}")
+
+    category_order = {name: index for index, name in enumerate(REWARD_CATEGORIES + [IMMORTAL_SEED_CATEGORY])}
+
+    def tier_sort(values: set[str]) -> list[str]:
+        return sorted((value for value in values if value), key=lambda value: (TIER_ORDER.index(value) if value in TIER_ORDER else 999, value))
+
+    def grade_sort(values: set[str]) -> list[str]:
+        return sorted((value for value in values if value), key=lambda value: (GRADE_ORDER.index(value) if value in GRADE_ORDER else 999, value))
+
+    result: list[dict[str, Any]] = []
+    for item in catalog.values():
+        categories = sorted(item["_categories"], key=lambda value: (category_order.get(value, 999), value))
+        category = str(item.get("category") or (categories[0] if categories else ""))
+        tiers = tier_sort(item["_tiers"])
+        grades = grade_sort(item["_grades"])
+        required_realm = str(item.get("required_realm") or "")
+        if not required_realm and tiers:
+            required_realm = "随品阶或具体配置变化"
+        result.append(
+            {
+                "name": str(item["name"]),
+                "category": category,
+                "tiers": tiers,
+                "grades": grades,
+                "required_realm": required_realm,
+                "required_attribute": str(item.get("required_attribute") or ""),
+                "usage": "\n".join(item["_usage"]),
+                "source": "\n".join(item["_source"]),
+                "story": "\n".join(item["_story"]),
+                "parameter_note": "\n".join(item["_note"]),
+            }
+        )
+    result.sort(key=lambda item: (category_order.get(str(item.get("category")), 999), tier_sort(set(item.get("tiers") or []))[:1], str(item.get("name"))))
+    return result
 
 
 def breakthrough_effective_quality_score(item: dict[str, Any], target_index: int) -> int:
@@ -3028,7 +4572,7 @@ def talisman_catalog() -> list[dict[str, Any]]:
             reward["category"] = TALISMAN_CATEGORY
             reward["draw_kind"] = "\u7a81\u7834\u7b26\u4ee4"
             reward["breakthrough_realm_index"] = realm_index
-            reward["target_realm"] = requirement["target"]
+            reward["target_realm"] = breakthrough_target_realm(realm_index, requirement)
             reward["description"] = REWARD_DESCRIPTIONS[TALISMAN_CATEGORY].format(name=name)
             reward["price"] = reward_price(reward)
             catalog.append(normalize_reward(reward))
@@ -3138,7 +4682,7 @@ def maybe_grant_breakthrough_item(record: UserRecord, chance: float = 0.5, sourc
 def breakthrough_required_text(record: UserRecord) -> str:
     requirement = current_breakthrough_requirement(record)
     if not requirement:
-        return "无特殊突破道具"
+        return "当前无需突破道具"
     return " / ".join(str(item) for item in requirement["items"])
 
 
@@ -3146,9 +4690,9 @@ def breakthrough_item_usage_lines(name: str) -> list[str]:
     lines = []
     for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
         if name in set(requirement.get("items", [])):
-            lines.append(f"{REALMS[realm_index]}圆满 -> {requirement.get('target', '下一境')}")
+            source_index = breakthrough_source_realm_index(realm_index)
+            lines.append(f"{REALMS[source_index]}圆满 -> {breakthrough_target_realm(realm_index, requirement)}")
     return lines
-
 
 def breakthrough_item_story(name: str, category: str) -> str:
     if "破虚" in name or "虚空" in name:
@@ -3164,291 +4708,14 @@ def breakthrough_item_story(name: str, category: str) -> str:
     return f"{name} 是突破瓶颈时会被天地灵机呼应的关键道具，品阶越高，突破后的境界品相越容易上探。"
 
 
-def breakthrough_quality_relation_text() -> str:
-    lines = [
-        "【突破品相关系图鉴】",
-        "核心规则：道具名决定品相上限，品阶和品质只在该上限内提高最终结果。基础道具更容易从瓶颈签到/垂钓中获得，但不会因为抽到天阶或仙阶就直接解锁最高品相。",
-        "读取方式：每行从左到右通常代表更高上限；同名道具的凡品/黄阶/玄阶/地阶/天阶/仙阶版本，只是在自身上限内浮动。",
-        "",
-    ]
-    for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
-        current = REALMS[realm_index]
-        target = str(requirement.get("target", "下一境"))
-        lines.append(f"【{current} -> {target}】")
-        for name in requirement.get("items", []):
-            cap_text = breakthrough_item_quality_cap_text(str(name), realm_index + 1)
-            cap_score = breakthrough_item_quality_cap(str(name))
-            category = breakthrough_item_category(str(name))
-            lines.append(f"- {name}｜类型：{category}｜品相上限值：{cap_score}/19｜{cap_text}")
-        lines.append("")
-    lines.append("示例：天阶极品小还丹仍受“小还丹”上限约束，不能直接结成一品金丹；造化金丹达到足够品阶品质时，才可能冲击一品金丹。")
-    return "\n".join(lines).strip()
-
-
-def catalog_known_item_names() -> set[str]:
-    names = {str(reward[3]) for reward in FISHING_REWARDS}
-    for requirement in BREAKTHROUGH_REQUIREMENTS.values():
-        names.update(str(item) for item in requirement.get("items", []))
-    names.update(ALCHEMY_RECIPES.keys())
-    names.update(ARTIFACT_REFINING_RECIPES.keys())
-    for material_names in EXTRA_REFINING_MATERIALS.values():
-        names.update(str(item) for item in material_names)
-    names.update(EMPEROR_ARTIFACT_INFOS.keys())
-    names.update(UNIQUE_REWARD_INFOS.keys())
-    names.update(CATALOG_EXTRA_ITEM_INFOS.keys())
-    names.update(UNIQUE_REWARD_NAMES)
-    names.update(IMMORTAL_SEED_INFOS.keys())
-    names.update(SPECIAL_ABILITY_POOL)
-    names.update(SPECIAL_ABILITY_MATERIAL_TO_ABILITY.keys())
-    for info in SPECIAL_ABILITY_INFOS.values():
-        material = str(info.get("material", "")).strip()
-        if material:
-            names.add(material)
-    return {name for name in names if name}
-
-
-def recipes_using_item(name: str) -> list[str]:
-    item_name = str(name or "").strip()
-    if not item_name:
-        return []
-    usages: list[str] = []
-    for recipe_name, recipe in ALCHEMY_RECIPES.items():
-        if item_name in [str(material) for material in recipe.get("materials", [])]:
-            usages.append(f"炼丹：{recipe_name}")
-    for recipe_name, recipe in ARTIFACT_REFINING_RECIPES.items():
-        if item_name in [str(material) for material in recipe.get("materials", [])]:
-            category = str(recipe.get("category", ARTIFACT_CATEGORY))
-            usages.append(f"炼器：{recipe_name}（{category}）")
-    return usages
-
-
-def recipe_usage_text_for_item(name: str) -> str:
-    usages = recipes_using_item(name)
-    if not usages:
-        return "暂无固定炼丹/炼器配方用途。"
-    if len(usages) > 8:
-        return "、".join(usages[:8]) + f"等{len(usages)}条配方"
-    return "、".join(usages)
-
-
-def infer_catalog_category(name: str) -> str:
-    if name in EMPEROR_ARTIFACT_INFOS:
-        return ARTIFACT_CATEGORY
-    if name in IMMORTAL_SEED_INFOS:
-        return IMMORTAL_SEED_CATEGORY
-    if name in UNIQUE_REWARD_INFOS:
-        return str(UNIQUE_REWARD_INFOS[name].get("category", "奇物"))
-    if name in CATALOG_EXTRA_ITEM_INFOS:
-        return str(CATALOG_EXTRA_ITEM_INFOS[name].get("category", "道具"))
-    if name in SPECIAL_ABILITY_POOL or name in SPECIAL_ABILITY_MATERIAL_TO_ABILITY:
-        return SPECIAL_ABILITY_CATEGORY
-    if name in ARTIFACT_REFINING_RECIPES:
-        return str(ARTIFACT_REFINING_RECIPES[name].get("category", ARTIFACT_CATEGORY))
-    if name in ALCHEMY_RECIPES or is_pill_like_breakthrough_item(name):
-        return PILL_CATEGORY
-    matches = [reward for reward in FISHING_REWARDS if reward[3] == name]
-    if matches:
-        return str(matches[0][2])
-    for tier, names in EXTRA_REFINING_MATERIALS.items():
-        if name in names:
-            return "灵材"
-    return "道具"
-
-
-def breakthrough_item_source_text(name: str) -> list[str]:
-    sources = [
-        "对应境界圆满后签到：每次有 50% 概率额外触发瓶颈机缘",
-        "垂钓：瓶颈期会提高同名突破道具权重；基础道具更常见，高阶/高品只在该道具品相上限内生效",
-        "秘境：上古宗门遗址、大能洞府、高危险地与首领折算奖励均可能产出",
-        "商店/万宝楼：每日商店可能刷新，玩家也可在万宝楼寄售或购买",
-    ]
-    if name in ALCHEMY_RECIPES:
-        sources.append("炼丹师：可按丹方炼制，投入材料品质会影响成丹品质与成功率")
-    if is_breakthrough_talisman_name(name):
-        sources.append("制符：达到对应突破前境界巅峰后，可在符箓绘制中制作")
-    return sources
-
-
-def catalog_item_detail_text(query: str) -> str:
-    name = str(query or "").strip()
-    if not name:
-        return ""
-    matches = [reward for reward in FISHING_REWARDS if reward[3] == name]
-    usage = breakthrough_item_usage_lines(name)
-    recipe = ALCHEMY_RECIPES.get(name) or ARTIFACT_REFINING_RECIPES.get(name)
-    emperor = EMPEROR_ARTIFACT_INFOS.get(name)
-    seed = IMMORTAL_SEED_INFOS.get(name)
-    unique = UNIQUE_REWARD_INFOS.get(name)
-    extra_info = CATALOG_EXTRA_ITEM_INFOS.get(name)
-    ability = name if name in SPECIAL_ABILITY_POOL else SPECIAL_ABILITY_MATERIAL_TO_ABILITY.get(name)
-    known = name in catalog_known_item_names()
-    if not matches and not usage and not recipe and not emperor and not seed and not unique and not extra_info and not ability and not known:
-        return ""
-    category = breakthrough_item_category(name) if usage else infer_catalog_category(name)
-    tiers = []
-    for tier, grade, item_category, item_name, _description, _weight in matches:
-        if item_name == name:
-            tiers.append(f"{tier}{grade}{item_category}")
-    if usage and any(index >= 5 and name in set(req.get("items", [])) for index, req in BREAKTHROUGH_REQUIREMENTS.items()):
-        tiers.append("仙阶下品~极品突破道具（化神后瓶颈机缘追加，仍受道具名品相上限约束）")
-    for tier, material_names in EXTRA_REFINING_MATERIALS.items():
-        if name in material_names:
-            tiers.append(f"{tier}灵材")
-    if unique and not tiers:
-        tiers.append("仙阶极品唯一奇物")
-    lines = [f"【{name}图鉴】", f"类型：{category}"]
-    if tiers:
-        lines.append("收录品阶：" + "、".join(dict.fromkeys(tiers)))
-    if usage:
-        target_indexes = [realm_index for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items() if name in set(requirement.get("items", []))]
-        cap_text = "；".join(breakthrough_item_quality_cap_text(name, int(index) + 1) for index in target_indexes)
-        lines.append("突破用途：" + "；".join(usage))
-        if cap_text:
-            lines.append("品相上限：" + cap_text)
-        lines.append("品相关系：道具名决定上限，品阶/品质只在该上限内生效。可发送“品相图鉴”查看完整对应表。")
-        lines.append("故事：" + breakthrough_item_story(name, category))
-        lines.append("获取方式：")
-        for source in breakthrough_item_source_text(name):
-            lines.append(f"- {source}")
-    elif ability:
-        info = special_ability_info(str(ability))
-        tier, grade = special_ability_rarity(str(ability))
-        if name == ability:
-            lines.append(f"固定品阶：{tier}{grade}")
-            lines.append("简介：" + str(info.get("effect", "失落传承，参悟后可在斗法中生效。")))
-            lines.append("获取方式：垂钓神通传承池、秘境探索、秘境首领挑战、境界突破余韵。")
-            lines.append("对应材料：" + str(info.get("material", name)))
-        else:
-            lines.append(f"对应神通：{ability}（{tier}{grade}）")
-            lines.append("简介：参悟此材料后可领悟或推进对应神通。")
-            lines.append("获取方式：垂钓神通传承池、秘境探索、秘境首领挑战、境界突破余韵。")
-    elif unique or extra_info:
-        info_block = unique or extra_info or {}
-        lines.append("简介：" + str(info_block.get("story", f"{name} 是高危险秘境中流传的唯一奇物。")))
-        lines.append("获取方式：" + str(info_block.get("source", "高危险秘境极低概率产出。")))
-        lines.append("制作素材：" + str(info_block.get("materials", "不可常规制作。")))
-    elif matches:
-        description = str(matches[0][4])
-        lines.append("简介：" + description)
-        lines.append("获取方式：垂钓、秘境、每日商店、万宝楼交易。")
-    elif recipe:
-        lines.append("简介：可通过炼制体系制作或作为配方成品流通。")
-        lines.append("获取方式：炼丹/炼器、秘境、商店、万宝楼交易。")
-    else:
-        lines.append(f"简介：{name} 已收录在插件道具体系中，可通过秘境、垂钓、炼制、商店或玩家交易流通。")
-        lines.append("获取方式：具体来源随玩法事件变化，可优先查看对应分类图鉴或秘境奖励提示。")
-    usages = recipe_usage_text_for_item(name)
-    if usages != "暂无固定炼丹/炼器配方用途。":
-        lines.append("配方用途：" + usages)
-    if recipe:
-        materials = "、".join(str(item) for item in recipe.get("materials", []))
-        lines.append("制作素材：" + (materials or "无固定素材"))
-        if "cost" in recipe:
-            lines.append(f"制作消耗：{spirit_stone_text(int(recipe.get('cost', 0)))}")
-    elif usage:
-        if is_breakthrough_talisman_name(name):
-            lines.append("制作素材：朱砂、符纸、灵石与同阶法意；实际消耗以“绘制符箓”面板为准。")
-        else:
-            lines.append("制作素材：暂无固定丹方，可通过秘境机缘、商店刷新与万宝楼流通获得。")
-    if emperor:
-        lines.append(f"炼制者：{emperor.get('creator', '未知大帝')}")
-        lines.append(f"专属技能：{emperor.get('skill', '未显化')}")
-        lines.append(f"材质：{emperor.get('material', '无上奇珍')}")
-        lines.append("获取方式：高危险地、生命禁区、青铜仙殿深层等秘境极低概率获得本体；本体已有主时后续为仿制品。")
-    if seed:
-        lines.append("仙种效果：" + str(seed.get("effect", "")))
-        lines.append("获取方式：高危险秘境、完美世界系秘境事件；部分仙种全局唯一。")
-    lines.append(f"系统估值：{spirit_stone_text(reward_price(make_reward('天阶' if not tiers else '凡品', '中品', category, name)))} 起，实际随品阶品质浮动。")
-    return "\n".join(lines)
-
-
-def foundation_quality(item: dict[str, Any]) -> str:
-    score = breakthrough_effective_quality_score(item, 2)
-    if score >= 18:
-        return "天道筑基"
-    if score >= 14:
-        return "完美道基"
-    if score >= 10:
-        return "优秀筑基"
-    if score >= 5:
-        return "良好筑基"
-    return "普通筑基"
-
-
-REALM_QUALITY_TITLES = {
-    3: ['一品金丹', '二品金丹', '三品金丹', '四品金丹', '五品金丹', '六品金丹', '七品金丹', '八品金丹', '九品金丹'],
-    4: ['天命元婴', '无瑕元婴', '紫府元婴', '灵台元婴', '凡胎元婴'],
-    5: ['太虚化神', '无垢化神', '神意化形', '凡念化神'],
-    6: ['洞虚道体', '玄虚法身', '清虚灵体', '凡虚之身'],
-    7: ['天人合一', '道体合真', '元神合契', '法身初合'],
-    8: ['无上大乘', '圆融大乘', '清净大乘', '小乘道果'],
-    9: ['九重雷劫', '七重雷劫', '五重雷劫', '三重雷劫'],
-    10: ['无垢真仙', '玄妙真仙', '清灵真仙', '凡蜕真仙'],
-    11: ['不朽金仙', '太玄金仙', '玉清金仙', '初证金仙'],
-    12: ['太乙道果', '太乙玄光', '太乙清光', '太乙初果'],
-    13: ['大罗无极', '大罗圆满', '大罗玄妙', '大罗初证'],
-    14: ['混元圆满', '混元无瑕', '混元玄妙', '混元初证'],
-    15: ['三尸尽斩', '二尸圆融', '一尸寄道', '半步准圣'],
-    16: ['天道圣位', '功德圣人', '气运圣人', '伪圣道果'],
-    17: ['自在混元', '无垢混元', '玄照混元', '初入混元'],
-    18: ['无极道主', '无极真圣', '无极玄光', '无极初证'],
-    19: ['执掌天道', '合道无缺', '天心圆融', '借天而行'],
-    20: ['大道归一', '大道无缺', '大道玄同', '大道初契'],
-    21: ['万道祖庭', '一道开天', '道祖法身', '初立道统'],
-    22: ['半步无上', '命河将断', '因果将尽', '彼岸初望'],
-    23: ['彼岸超脱', '命河不系', '因果不染', '初证超脱'],
-    24: ['永恒唯一', '万劫不磨', '无量不朽', '永恒初印'],
-}
-
-
-REALM_QUALITY_POWER = {
-    "\u666e\u901a\u7b51\u57fa": 120,
-    "\u826f\u597d\u7b51\u57fa": 220,
-    "\u4f18\u79c0\u7b51\u57fa": 360,
-    "\u5b8c\u7f8e\u9053\u57fa": 560,
-    "\u5929\u9053\u7b51\u57fa": 820,
-    "\u4e00\u54c1\u91d1\u4e39": 900,
-    "\u4e8c\u54c1\u91d1\u4e39": 780,
-    "\u4e09\u54c1\u91d1\u4e39": 660,
-    "\u56db\u54c1\u91d1\u4e39": 540,
-    "\u4e94\u54c1\u91d1\u4e39": 430,
-    "\u516d\u54c1\u91d1\u4e39": 330,
-    "\u4e03\u54c1\u91d1\u4e39": 240,
-    "\u516b\u54c1\u91d1\u4e39": 170,
-    "\u4e5d\u54c1\u91d1\u4e39": 110,
-}
-
-
-for _realm_quality_index, _realm_quality_titles in REALM_QUALITY_TITLES.items():
-    _base_power = 900 + _realm_quality_index * 180
-    for _realm_quality_pos, _realm_quality_title in enumerate(_realm_quality_titles):
-        REALM_QUALITY_POWER.setdefault(
-            _realm_quality_title,
-            max(120, _base_power - _realm_quality_pos * 120),
-        )
-
-
-def item_quality_score(item: dict[str, Any]) -> int:
-    return TIER_RANKS.get(str(item.get("tier")), 0) * 4 + GRADE_RANKS.get(str(item.get("grade")), 0)
-
-
-def quality_from_titles(item: dict[str, Any], titles: list[str]) -> str:
-    if not titles:
-        return "\u9053\u57fa\u672a\u5b9a"
-    score = max(0, min(19, int(item.get("quality_cap_override", item_quality_score(item)))))
-    index = int((19 - score) / max(1, 20 / len(titles)))
-    return titles[max(0, min(len(titles) - 1, index))]
-
-
 def breakthrough_quality(item: dict[str, Any], target_index: int) -> str:
-    titles = REALM_QUALITY_TITLES.get(target_index, [])
+    titles = REALM_QUALITY_TITLES.get(realm_quality_title_index(target_index), [])
     if not titles:
-        return "\u9053\u57fa\u672a\u5b9a"
+        return "道基未定"
     score = breakthrough_effective_quality_score(item, target_index)
     fake_item = dict(item)
     fake_item["quality_cap_override"] = score
     return quality_from_titles(fake_item, titles)
-
 
 def set_realm_mark(record: UserRecord, realm_index: int, mark: str) -> None:
     if record.realm_marks is None:
@@ -3616,7 +4883,7 @@ def normalize_acquired_roots(record: UserRecord) -> list[dict[str, Any]]:
 def acquired_root_attribute_text(root: dict[str, Any]) -> str:
     root = normalize_acquired_root(root) or root
     attribute = str(root.get("attribute") or "")
-    return ATTRIBUTE_NAMES.get(attribute, attribute + "灵根")
+    return root_attribute_name(attribute)
 
 
 def acquired_root_display(root: dict[str, Any]) -> str:
@@ -3678,11 +4945,15 @@ def acquired_root_for_attribute(record: UserRecord, attribute: str) -> Optional[
 
 
 def demon_core_realm_name(reward: dict[str, Any]) -> Optional[str]:
+    explicit = str(reward.get("beast_realm") or reward.get("demon_realm") or reward.get("source_realm") or "").strip()
+    if explicit:
+        short = realm_short_name(explicit)
+        return DEMON_CORE_REALM_ALIASES.get(short, short if short in DEMON_CORE_EXP_BASE_BY_REALM else explicit)
     name = reward_name(reward)
-    for key in ("\u5316\u795e", "\u5143\u5a74", "\u91d1\u4e39", "\u7b51\u57fa", "\u7ec3\u6c14", "\u70bc\u6c14", "\u70bc\u4f53", "\u6b8b\u788e"):
-        if key in name:
-            return key
-    return None
+    for realm_name in sorted(DEMON_CORE_REALM_ALIASES, key=len, reverse=True):
+        if realm_name and realm_name in name:
+            return DEMON_CORE_REALM_ALIASES[realm_name]
+    return DEMON_CORE_DEFAULT_REALM_BY_TIER.get(str(reward.get("tier")), "\u6b8b\u788e")
 
 
 def is_demon_core_item(reward: dict[str, Any]) -> bool:
@@ -3690,13 +4961,44 @@ def is_demon_core_item(reward: dict[str, Any]) -> bool:
 
 
 def demon_core_attribute(reward: dict[str, Any]) -> str:
-    explicit = str(reward.get("element") or reward.get("attribute") or "")
+    explicit = str(reward.get("element") or reward.get("attribute") or reward.get("required_attribute") or "")
     if explicit in BASE_FIVE_ELEMENTS:
         return explicit
     hinted = reward_element_hint(reward)
     if hinted in BASE_FIVE_ELEMENTS:
         return hinted
     return stable_choice(BASE_FIVE_ELEMENTS, f"dan-root-attr:{reward_signature(reward)}")
+
+
+def demon_core_cultivation_exp(reward: dict[str, Any]) -> int:
+    explicit = reward.get("cultivation_exp") or reward.get("exp")
+    if explicit is not None:
+        try:
+            return max(1, int(explicit))
+        except (TypeError, ValueError):
+            pass
+    realm_name = demon_core_realm_name(reward) or "\u6b8b\u788e"
+    base = DEMON_CORE_EXP_BASE_BY_REALM.get(realm_name, DEMON_CORE_EXP_BASE_BY_REALM["\u6b8b\u788e"])
+    tier_ratio = DEMON_CORE_TIER_EXP_RATIO.get(str(reward.get("tier")), 1.0)
+    grade_ratio_value = grade_ratio(str(reward.get("grade")))
+    return max(1, int(base * tier_ratio * grade_ratio_value))
+
+
+def apply_demon_core_metadata(reward: dict[str, Any]) -> None:
+    if not is_demon_core_item(reward):
+        return
+    realm_name = demon_core_realm_name(reward) or DEMON_CORE_DEFAULT_REALM_BY_TIER.get(str(reward.get("tier")), "\u6b8b\u788e")
+    attribute = demon_core_attribute(reward)
+    reward["beast_realm"] = realm_name
+    reward["element"] = attribute
+    reward["required_attribute"] = attribute
+    reward["cultivation_exp"] = demon_core_cultivation_exp(reward)
+    reward.setdefault("usage", "\u70bc\u4e39\u6750\u6599\uff1b\u53ef\u70bc\u5316\u63d0\u5347\u4fee\u4e3a\uff1b\u4e5f\u53ef\u70bc\u6210\u4e39\u7075\u6839\u7528\u4e8e\u4e94\u884c\u8865\u5168\u3002")
+    reward["description"] = (
+        f"{attribute}\u884c{realm_name}\u5996\u529b\u51dd\u6210\u7684\u5996\u4e39\uff0c"
+        f"\u70bc\u5316\u7ea6\u53ef\u83b7\u5f97 {reward['cultivation_exp']} \u70b9\u4fee\u4e3a\uff0c"
+        "\u4e5f\u53ef\u4f5c\u4e39\u7075\u6839\u4e0e\u70bc\u4e39\u6750\u6599\u3002"
+    )
 
 
 def demon_core_purity(reward: dict[str, Any]) -> int:
@@ -3706,7 +5008,6 @@ def demon_core_purity(reward: dict[str, Any]) -> int:
     grade_bonus = GRADE_RANKS.get(str(reward.get("grade")), 1) * 3
     purity = max(realm_base, tier_base) + grade_bonus + random.randint(0, 4)
     return max(25, min(DAN_ROOT_MAX_PURITY, purity))
-
 
 def artifact_root_attribute(reward: dict[str, Any]) -> Optional[str]:
     required = reward_required_attribute(reward)
@@ -3877,8 +5178,7 @@ def missing_five_elements(record: UserRecord) -> list[str]:
 
 def needs_five_element_completion(record: UserRecord) -> bool:
     requirement = current_breakthrough_requirement(record)
-    return bool(requirement and requirement.get("target") == "炼虚期")
-
+    return bool(requirement and current_breakthrough_target_realm(record) == "炼虚期")
 
 def five_element_requirement_text(record: UserRecord) -> str:
     missing = missing_five_elements(record)
@@ -3899,14 +5199,19 @@ def breakthrough_status(record: UserRecord) -> str:
         return "尚未踏入修行路，发送“签到”先觉醒灵根。"
     requirement = current_breakthrough_requirement(record)
     if requirement is None:
+        if is_fake_immortal_conversion(record):
+            days = int(record.immortal_conversion_days or 0)
+            return f"当前已至假仙境，仙元力转化中 {days}/7；每日签到会推进转化，完成后正式踏入真仙境。"
         if record.realm_index >= len(REALMS) - 1:
             return f"当前已至{record.realm}，暂时无更高境界。"
         return f"当前{record.realm}进度 {record.realm_exp}/{record.progress_required}，继续修炼即可。"
-    target = str(requirement["target"])
+    target = current_breakthrough_target_realm(record)
+    requirement_key = breakthrough_requirement_key_for_realm_index(record.realm_index)
+    target_index = breakthrough_target_realm_index(requirement_key if requirement_key is not None else record.realm_index)
     needed = list(requirement["items"])
     count_text = "，".join(f"{name}x{reward_count_by_names(record, [name])}" for name in needed)
     cap_text = "；".join(
-        f"{name}：{breakthrough_item_quality_cap_text(str(name), record.realm_index + 1)}"
+        f"{name}：{breakthrough_item_quality_cap_text(str(name), target_index)}"
         for name in needed
     )
     five_text = f"\n{five_element_requirement_text(record)}" if needs_five_element_completion(record) else ""
@@ -4193,11 +5498,7 @@ def tianji_divination_text(record: UserRecord, question: str, today: Optional[da
 
 
 def method_max_layer(method: Optional[dict[str, Any]]) -> int:
-    if not method:
-        return 0
-    tier_rank = TIER_RANKS.get(str(method.get("tier", "\u51e1\u54c1")), 0)
-    grade_rank = GRADE_RANKS.get(str(method.get("grade", "\u4e2d\u54c1")), 1)
-    return max(3, min(12, 3 + tier_rank * 2 + grade_rank // 2))
+    return method_layer_cap(method)
 
 
 def method_layer_required(layer: int) -> int:
@@ -4209,12 +5510,10 @@ def method_layer(record: UserRecord, method: Optional[dict[str, Any]]) -> int:
         return 0
     key = reward_signature(method)
     layers = record.method_layers or {}
-    current = int(layers.get(key, 0))
-    if current > 0:
-        return max(1, min(method_max_layer(method), current))
-    tier_rank = TIER_RANKS.get(str(method.get("tier", "\u51e1\u54c1")), 0)
-    grade_rank = GRADE_RANKS.get(str(method.get("grade", "\u4e2d\u54c1")), 1)
-    return max(1, min(method_max_layer(method), 1 + tier_rank // 2 + grade_rank // 2))
+    current = int(layers.get(key, 0) or 0)
+    if current <= 0:
+        return 1
+    return max(1, min(method_max_layer(method), current))
 
 
 def method_proficiency_value(record: UserRecord, method: Optional[dict[str, Any]]) -> int:
@@ -4235,10 +5534,7 @@ def increase_method_proficiency(record: UserRecord, amount: int = 1, method: Opt
     method_item = method or record.equipped_method
     if not method_item or amount <= 0:
         return 0
-    if record.method_layers is None:
-        record.method_layers = {}
-    if record.method_proficiency is None:
-        record.method_proficiency = {}
+    ensure_method_tracking(record, method_item)
     key = reward_signature(method_item)
     layer = method_layer(record, method_item)
     max_layer = method_max_layer(method_item)
@@ -4255,7 +5551,6 @@ def increase_method_proficiency(record: UserRecord, amount: int = 1, method: Opt
     record.method_layers[key] = layer
     record.method_proficiency[key] = proficiency
     return gained_layers
-
 
 def method_kind(method: Optional[dict[str, Any]]) -> str:
     name = reward_name(method)
@@ -4274,8 +5569,8 @@ def method_required_race(method: Optional[dict[str, Any]], kind: str) -> Optiona
     if not method or kind != "\u6218\u6280\u7c7b":
         return None
     name = reward_name(method)
-    if "\u91d1\u7fc5" in name or "\u5927\u9e4f" in name:
-        return "\u5996\u65cf-\u91d1\u7fc5\u5927\u9e4f"
+    if "金羽" in name or "雷鹏" in name:
+        return "妖族-金羽雷鹏"
     if "\u9752\u83b2" in name:
         return "\u5996\u65cf-\u9752\u83b2"
     if stable_int(f"race-lock:{reward_signature(method)}") % 100 < 10:
@@ -4346,7 +5641,7 @@ def method_content_text(method: Optional[dict[str, Any]], kind: str) -> str:
     if kind == "\u953b\u4f53\u7c7b":
         return f"{name}\u5c06{attr_name}\u7075\u6c14\u5316\u5165\u6c14\u8840\uff0c\u589e\u5f3a\u8840\u91cf\u4e0e\u6297\u6253\u65ad\u80fd\u529b\uff0c\u5951\u5408\u4f53\u8d28\u65f6\u6536\u76ca\u66f4\u9ad8\u3002"
     if kind == "\u795e\u9b42\u7c7b":
-        return f"{name}\u4e13\u4fee\u8bc6\u6d77\u4e0e\u5fc3\u5ff5\uff0c\u5c42\u6570\u8fbe\u5230{SOUL_INSIGHT_LAYER}\u5c42\u540e\u53ef\u63d0\u524d\u7aa5\u89c1\u90e8\u5206\u79d8\u5883\u5371\u9669\u3002"
+        return f"{name}\u4e13\u4fee\u8bc6\u6d77\u4e0e\u5fc3\u5ff5\uff0c\u968f\u63a8\u6f14\u6df1\u5165\u53ef\u9010\u6e10\u7aa5\u89c1\u90e8\u5206\u79d8\u5883\u5371\u9669\u3002"
     return f"{name}\u5c06{attr_name}\u7075\u6c14\u538b\u7f29\u6210\u6218\u6280\uff0c\u53ef\u5728\u666e\u901a\u6597\u6cd5\u4e2d\u6839\u636e\u53d1\u8a00\u89e6\u53d1\u3002"
 
 
@@ -4391,6 +5686,7 @@ def method_profile(method: Optional[dict[str, Any]], record: Optional[UserRecord
         "kind": kind,
         "layer": layer,
         "max_layer": max_layer,
+        "max_layer_text": method_layer_cap_text(method),
         "proficiency": proficiency,
         "proficiency_required": proficiency_required,
         "origin": method_origin_text(method, kind),
@@ -4419,7 +5715,7 @@ def format_method_detail(record: UserRecord, method_index: int) -> tuple[bool, s
     techniques = "\u3001".join(technique_parts) or "\u6682\u65e0"
     lines = [
         f"\u3010\u529f\u6cd5\u9875\u3011{profile['display']}",
-        f"\u7c7b\u578b\uff1a{profile['kind']}\uff1b\u5c42\u6570\uff1a\u7b2c {profile['layer']} / {profile['max_layer']} \u5c42\uff1b\u7075\u6839\uff1a{compatible}",
+        f"\u7c7b\u578b\uff1a{profile['kind']}\uff1b\u5c42\u6570\uff1a\u7b2c {profile['layer']} / {profile['max_layer_text']} \u5c42\uff1b\u7075\u6839\uff1a{compatible}",
         f"\u79cd\u65cf\u9650\u5236\uff1a{race_req}",
         f"\u4fee\u70bc\u901f\u5ea6\uff1a\u7b7e\u5230\u7ea6 +{profile['sign_speed']} \u70b9/\u5929\uff0c\u804a\u5929\u7ea6 +{profile['chat_speed']:.1f} \u70b9/\u6761",
         f"\u953b\u4f53\u8840\u91cf\uff1a+{profile['hp_bonus']}",
@@ -4465,14 +5761,14 @@ def physique_hp_multiplier(physique: Optional[str]) -> float:
     return {
         "\u51e1\u4f53": 1.0,
         "\u77f3\u7334\u5e9f\u8109": 0.94,
-        "\u8352\u53e4\u5723\u4f53": 1.28,
-        "\u5148\u5929\u9053\u80ce": 1.12,
-        "\u592a\u9634\u4e4b\u4f53": 1.1,
-        "\u592a\u9633\u795e\u4f53": 1.12,
-        "\u9752\u83b2\u9053\u4f53": 1.15,
-        "\u91d1\u7fc5\u795e\u8109": 1.08,
-        "\u4ee5\u8eab\u4e3a\u79cd": 1.22,
-        "\u6df7\u6c8c\u795e\u9b54\u4f53": 1.34,
+        "远荒战体": 1.28,
+        "先天道胚": 1.12,
+        "玄阴灵体": 1.1,
+        "赤阳灵体": 1.12,
+        "青华灵体": 1.15,
+        "金羽神脉": 1.08,
+        "身界蕴种": 1.22,
+        "浑元战魔体": 1.34,
     }.get(str(physique), 1.0)
 
 
@@ -4482,11 +5778,11 @@ def method_physique_multiplier(record: UserRecord, profile: dict[str, Any]) -> f
     if not physique or not name:
         return 1.0
     pairs = (
-        ("\u8352\u53e4\u5723\u4f53", ("\u91d1\u8eab", "\u4e0d\u706d", "\u953b\u4f53")),
-        ("\u6df7\u6c8c\u795e\u9b54\u4f53", ("\u6df7\u6c8c", "\u4e07\u8c61", "\u592a\u865a")),
-        ("\u9752\u83b2\u9053\u4f53", ("\u9752\u83b2", "\u957f\u751f", "\u4e07\u7075")),
-        ("\u592a\u9634\u4e4b\u4f53", ("\u592a\u9634", "\u7384\u51b0", "\u5bd2")),
-        ("\u592a\u9633\u795e\u4f53", ("\u592a\u9633", "\u771f\u706b", "\u79bb\u706b")),
+        ("远荒战体", ("\u91d1\u8eab", "\u4e0d\u706d", "\u953b\u4f53")),
+        ("浑元战魔体", ("\u6df7\u6c8c", "\u4e07\u8c61", "空衡")),
+        ("青华灵体", ("\u9752\u83b2", "\u957f\u751f", "\u4e07\u7075")),
+        ("玄阴灵体", ("玄阴", "\u7384\u51b0", "\u5bd2")),
+        ("赤阳灵体", ("赤阳", "\u771f\u706b", "\u79bb\u706b")),
     )
     for body, tokens in pairs:
         if physique == body and any(token in name for token in tokens):
@@ -4610,9 +5906,9 @@ def combat_special_power(record: UserRecord, ability: str, kind: str) -> tuple[i
     speed = int(speed_bonus) * multiplier
     rarity = special_ability_rarity_text(ability)
     if ability in FORBIDDEN_REALM_ABILITIES:
-        return damage, defense, speed, f"触发{rarity}【{ability}】，禁域气机展开。"
+        return damage, defense, speed, f"触发{rarity}【{ability}】，限界气机展开。"
     if kind == "secret":
-        return damage, defense, speed, f"触发{rarity}【{ability}】，九秘套装共鸣{multiplier}倍，已悟九秘同步增强{multiplier}倍。"
+        return damage, defense, speed, f"触发{rarity}【{ability}】，星律共鸣共鸣{multiplier}倍，已悟星律同步增强{multiplier}倍。"
     return damage, defense, speed, f"触发{rarity}神通【{ability}】：{info.get('effect', '神通气机展开。')}"
 
 
@@ -4668,7 +5964,7 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
         bonus = physique_trait_power(record)
         damage += bonus
         defense += int(bonus * 0.35)
-        if str(record.physique or "") == "\u91d1\u7fc5\u795e\u8109":
+        if str(record.physique or "") == "金羽神脉":
             speed += 6
         suffix = f"\uff0c{reason}" if reason else ""
         logs.append(f"\u4f53\u8d28\u7279\u6027\u3010{trait}\u3011\u81ea\u884c\u590d\u82cf{suffix}")
@@ -4709,13 +6005,13 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
             matched = [tech for tech in GENERAL_TECHNIQUE_NAMES if sanitize_combat_text(tech) in text]
         used_special = False
         forbidden_terms = {
-            "神禁领域": "神禁领域",
-            "开启神禁": "神禁领域",
-            "神禁": "神禁领域",
-            "九禁": "九禁",
-            "开启九禁": "九禁",
-            "八禁": "八禁",
-            "开启八禁": "八禁",
+            "归极域": "归极域",
+            "开启归极": "归极域",
+            "归极": "归极域",
+            "重阈": "重阈",
+            "开启重阈": "重阈",
+            "初阈": "初阈",
+            "开启初阈": "初阈",
         }
         requested_forbidden = None
         for term, canonical in forbidden_terms.items():
@@ -4726,7 +6022,7 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
             used_special = True
             owned_forbidden = highest_forbidden_ability(abilities)
             if not owned_forbidden:
-                logs.append("尚未领悟禁域，强行开启只惊起一缕战意。")
+                logs.append("尚未领悟限界，强行开启只惊起一缕战意。")
             elif forbidden_rank(owned_forbidden) < forbidden_rank(requested_forbidden):
                 logs.append(f"尝试开启【{requested_forbidden}】失败，当前只能维持【{owned_forbidden}】。")
             else:
@@ -4736,8 +6032,8 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
                 speed += add_speed
                 triggered.append(owned_forbidden)
                 logs.append(message)
-        if "九秘" in text or any(secret.split("-", 1)[-1] in text for secret in abilities if secret.startswith("九秘")):
-            secrets = [secret for secret in abilities if secret.startswith("九秘")]
+        if "星律" in text or any(secret.split("-", 1)[-1] in text for secret in abilities if secret.startswith("星律")):
+            secrets = [secret for secret in abilities if secret.startswith("星律")]
             used_special = True
             if secrets:
                 secret = stable_choice(secrets, f"secret:{side_seed}:{idx}:{text}")
@@ -4748,9 +6044,9 @@ def evaluate_combat_actions(record: UserRecord, actions: Sequence[dict[str, Any]
                 triggered.append(secret)
                 logs.append(message)
             else:
-                logs.append("尚未悟得九秘残篇，天机一闪而逝。")
+                logs.append("尚未悟得星律残篇，天机一闪而逝。")
         for ability in abilities:
-            if ability in triggered or ability in FORBIDDEN_REALM_ABILITIES or ability.startswith("\u4e5d\u79d8"):
+            if ability in triggered or ability in FORBIDDEN_REALM_ABILITIES or ability.startswith("星律"):
                 continue
             info = special_ability_info(ability)
             terms = [ability, *list(info.get("aliases", []) or [])]
@@ -4840,17 +6136,59 @@ def simulate_normal_duel(
     right_fighter = normal_duel_fighter(right, right_name, right_actions, f"{right.user_id}:{left.user_id}:right")
     left_output = max(1, int(left_fighter["damage"] - right_fighter["defense"] * 0.55))
     right_output = max(1, int(right_fighter["damage"] - left_fighter["defense"] * 0.55))
-    right_fighter["hp"] = max(0, int(right_fighter["max_hp"] - left_output))
-    left_fighter["hp"] = max(0, int(left_fighter["max_hp"] - right_output))
-    left_fighter["dealt_damage"] = left_output
-    right_fighter["dealt_damage"] = right_output
-    ended_early = left_fighter["hp"] <= 0 or right_fighter["hp"] <= 0
+    left_fighter["dealt_damage"] = 0
+    right_fighter["dealt_damage"] = 0
+    left_fighter["raw_output"] = left_output
+    right_fighter["raw_output"] = right_output
+
+    left_initiative = (
+        int(left_fighter["speed"]),
+        int(left_fighter["power"]),
+        stable_int(f"initiative:{left.user_id}:{right.user_id}") % 100,
+    )
+    right_initiative = (
+        int(right_fighter["speed"]),
+        int(right_fighter["power"]),
+        stable_int(f"initiative:{right.user_id}:{left.user_id}") % 100,
+    )
+    if left_initiative >= right_initiative:
+        attack_order = [(left_fighter, right_fighter, left_output), (right_fighter, left_fighter, right_output)]
+    else:
+        attack_order = [(right_fighter, left_fighter, right_output), (left_fighter, right_fighter, left_output)]
+
+    ended_early = False
     elapsed_seconds = duration_seconds
-    if ended_early:
-        left_ko = duration_seconds * (left_fighter["max_hp"] / max(1, right_output)) if left_fighter["hp"] <= 0 else duration_seconds
-        right_ko = duration_seconds * (right_fighter["max_hp"] / max(1, left_output)) if right_fighter["hp"] <= 0 else duration_seconds
-        elapsed_seconds = max(5, int(min(left_ko, right_ko, duration_seconds)))
-    if left_fighter["hp"] > right_fighter["hp"]:
+    finisher: Optional[dict[str, Any]] = None
+    timeline: list[str] = []
+    first_attacker, first_defender, _ = attack_order[0]
+    timeline.append(
+        f"{first_attacker['nickname']}\u51ed\u901f\u5ea6\u62a2\u5230\u5148\u624b\uff0c{first_defender['nickname']}\u88ab\u8feb\u8f6c\u5165\u5b88\u52bf\u3002"
+    )
+    for turn_index, (attacker, defender, output) in enumerate(attack_order, start=1):
+        before_hp = max(0, int(defender["hp"]))
+        dealt = min(before_hp, max(1, int(output)))
+        defender["hp"] = max(0, before_hp - dealt)
+        attacker["dealt_damage"] = int(attacker.get("dealt_damage", 0)) + dealt
+        timeline.append(
+            f"{attacker['nickname']}\u7b2c{turn_index}\u624b\u9020\u6210{dealt}\u70b9\u4f24\u5bb3\uff0c"
+            f"{defender['nickname']}\u8840\u91cf\u964d\u81f3{defender['hp']}/{defender['max_hp']}\u3002"
+        )
+        if defender["hp"] <= 0:
+            ended_early = True
+            finisher = attacker
+            elapsed_seconds = max(5, min(duration_seconds, int(duration_seconds * (0.38 if turn_index == 1 else 0.68))))
+            timeline.append(
+                f"{attacker['nickname']}\u6293\u4f4f\u7834\u7efd\u5b9a\u4e0b\u80dc\u8d1f\uff0c{defender['nickname']}\u5df2\u65e0\u529b\u53cd\u51fb\u3002"
+            )
+            break
+
+    if finisher is left_fighter:
+        winner = left_fighter
+        loser = right_fighter
+    elif finisher is right_fighter:
+        winner = right_fighter
+        loser = left_fighter
+    elif left_fighter["hp"] > right_fighter["hp"]:
         winner = left_fighter
         loser = right_fighter
     elif right_fighter["hp"] > left_fighter["hp"]:
@@ -4860,7 +6198,6 @@ def simulate_normal_duel(
         left_score = left_fighter["power"] + left_fighter["speed"] * 40 + stable_int(f"tie:{left.user_id}:{right.user_id}") % 100
         right_score = right_fighter["power"] + right_fighter["speed"] * 40 + stable_int(f"tie:{right.user_id}:{left.user_id}") % 100
         winner, loser = (left_fighter, right_fighter) if left_score >= right_score else (right_fighter, left_fighter)
-    timeline = []
     for log in left_fighter["logs"][:4]:
         timeline.append(f"{left_fighter['nickname']}\uff1a{log}")
     for log in right_fighter["logs"][:4]:
@@ -4882,7 +6219,6 @@ def simulate_normal_duel(
         "summary": f"{winner['nickname']}\u80dc\u51fa\uff0c\u5269\u4f59\u8840\u91cf {winner['hp']}/{winner['max_hp']}\u3002",
     }
 
-
 def item_is_compatible(record: UserRecord, item: dict[str, Any]) -> bool:
     required_attribute = reward_required_attribute(item)
     if not required_attribute:
@@ -4890,34 +6226,53 @@ def item_is_compatible(record: UserRecord, item: dict[str, Any]) -> bool:
     return required_attribute in record.root_attributes
 
 
-def array_multiplier(record: UserRecord, method: Optional[dict[str, Any]] = None) -> float:
-    method_item = method or record.equipped_method
-    if not record.equipped_array or not method_item:
+def array_multiplier_cap(array: Optional[dict[str, Any]], layer: Optional[int] = None) -> float:
+    if not array:
         return 1.0
-    key = reward_signature(method_item)
-    proficiency = int((record.array_proficiency or {}).get(key, 0))
-    multiplier = min(10.0, 1.0 + proficiency / 100)
+    tier = str(array.get("tier", "凡品"))
+    current_layer = max(1, int(layer or 1))
+    if tier == "仙阶":
+        return max(20.0, current_layer * 20.0)
+    return ARRAY_MULTIPLIER_CAP_BY_TIER.get(tier, 5.0)
+
+
+def array_multiplier(record: UserRecord, method: Optional[dict[str, Any]] = None) -> float:
+    if not record.equipped_array:
+        return 1.0
+    array = record.equipped_array
+    layer = array_layer(record, array)
+    proficiency = array_proficiency_value(record, array)
+    cap = array_multiplier_cap(array, layer)
+    multiplier = min(cap, 1.0 + proficiency / 100)
     if record.cultivation_route == "阵法师":
-        multiplier = min(10.0, multiplier * 1.5)
+        multiplier = min(cap, multiplier * 1.5)
     return multiplier
 
 
 def increase_array_proficiency(record: UserRecord, amount: int = 1) -> None:
-    if not record.equipped_array or not record.equipped_method or amount <= 0:
+    if not record.equipped_array or amount <= 0:
         return
-    key = reward_signature(record.equipped_method)
-    if record.array_proficiency is None:
-        record.array_proficiency = {}
+    array = record.equipped_array
+    ensure_array_tracking(record, array)
+    key = reward_signature(array)
     gain = amount * (2 if record.cultivation_route == "阵法师" else 1)
-    record.array_proficiency[key] = min(900, int(record.array_proficiency.get(key, 0)) + gain)
-
+    cap = array_proficiency_cap(array, array_layer(record, array))
+    record.array_proficiency[key] = min(cap, int(record.array_proficiency.get(key, 0) or 0) + gain)
 
 def method_sign_bonus(record: UserRecord, base_exp: int) -> int:
     method = record.equipped_method
     if not method or not item_is_compatible(record, method):
         return 0
+    layer = method_layer(record, method)
     rate = METHOD_SIGN_RATE.get(str(method.get("tier")), 0.0)
-    bonus = int(base_exp * rate * grade_ratio(str(method.get("grade"))) * array_multiplier(record, method) * root_purity_multiplier(record, reward_required_attribute(method)))
+    bonus = int(
+        base_exp
+        * rate
+        * grade_ratio(str(method.get("grade")))
+        * max(1, layer)
+        * array_multiplier(record, method)
+        * root_purity_multiplier(record, reward_required_attribute(method))
+    )
     return max(1, bonus) if rate > 0 else 0
 
 
@@ -4925,9 +6280,11 @@ def method_chat_exp(record: UserRecord, count: int = 1) -> int:
     method = record.equipped_method
     if count <= 0 or not method or not item_is_compatible(record, method):
         return 0
+    layer = method_layer(record, method)
     raw = (
         METHOD_CHAT_BASE.get(str(method.get("tier")), 0.0)
         * grade_ratio(str(method.get("grade")))
+        * max(1.0, layer / 2)
         * array_multiplier(record, method)
         * root_purity_multiplier(record, reward_required_attribute(method))
         * count
@@ -4936,7 +6293,6 @@ def method_chat_exp(record: UserRecord, count: int = 1) -> int:
     if random.random() < raw - gained:
         gained += 1
     return gained
-
 
 def apply_chat_cultivation(record: UserRecord, count: int = 1) -> tuple[int, int]:
     gained_exp = method_chat_exp(record, count)
@@ -4963,7 +6319,7 @@ def route_status_text(record: UserRecord) -> str:
         "\u672f\u4fee\uff1a\u88c5\u5907\u975e\u5251\u7c7b\u7075\u5668\u65f6\u6cd5\u672f\u4f24\u5bb3\u63d0\u534730%\uff1b\u6307\u4ee4\uff1a\u9009\u62e9\u8def\u7ebf \u672f\u4fee\u3002",
         "\u70bc\u4e39\u5e08\uff1a\u53ef\u4f7f\u7528\u7075\u6750\u3001\u7075\u690d\u548c\u7075\u77f3\u70bc\u5236\u4e39\u836f\uff1b\u6307\u4ee4\uff1a\u9009\u62e9\u8def\u7ebf \u70bc\u4e39\u5e08\u3002",
         "\u9635\u6cd5\u5e08\uff1a\u9635\u6cd5\u719f\u7ec3\u5ea6\u63d0\u5347\u66f4\u5feb\uff0c\u9635\u6cd5\u6548\u679c\u63d0\u534750%\uff1b\u6307\u4ee4\uff1a\u9009\u62e9\u8def\u7ebf \u9635\u6cd5\u5e08\u3002",
-        "\u70bc\u5668\u5e08\uff1a\u53ef\u4f7f\u7528\u7075\u6750\u548c\u7075\u77f3\u70bc\u5236\u7075\u5668\u3001\u9635\u76d8\u4e0e\u4eff\u5236\u5e1d\u5175\uff1b\u6307\u4ee4\uff1a\u9009\u62e9\u8def\u7ebf \u70bc\u5668\u5e08\u3002",
+        "\u70bc\u5668\u5e08\uff1a\u53ef\u4f7f\u7528\u7075\u6750\u548c\u7075\u77f3\u70bc\u5236\u7075\u5668\u3001\u9635\u76d8\u4e0e\u4eff\u5236\u4ed9\u5e1d\u5175\uff1b\u6307\u4ee4\uff1a\u9009\u62e9\u8def\u7ebf \u70bc\u5668\u5e08\u3002",
         "",
         "\u3010\u90aa\u4fee\u540c\u4fee\u3011",
         "\u6307\u4ee4\uff1a\u9009\u62e9\u90aa\u4fee / \u9000\u51fa\u90aa\u4fee\u3002\u90aa\u4fee\u53ef\u4e0e\u4e3b\u8def\u7ebf\u5e76\u5b58\uff0c\u4f46\u574f\u7ed3\u5c40\u60e9\u7f5a\u66f4\u91cd\u3002",
@@ -5109,12 +6465,18 @@ def draw_tianji_mystic_entrances(record: UserRecord, today: date) -> tuple[bool,
     if not allowed:
         return False, reason, []
     entries = [entry for entry in draw_mystic_entrances(record) if str(entry.get("type")) not in NO_TIANJI_MYSTIC_TYPES]
-    while len(entries) < 3:
-        for entry in draw_mystic_entrances(record):
-            if str(entry.get("type")) not in NO_TIANJI_MYSTIC_TYPES:
-                entries.append(entry)
+    attempts = 0
+    while len(entries) < 3 and attempts < 8:
+        attempts += 1
+        drawn = [entry for entry in draw_mystic_entrances(record) if str(entry.get("type")) not in NO_TIANJI_MYSTIC_TYPES]
+        if not drawn:
+            break
+        for entry in drawn:
+            entries.append(entry)
             if len(entries) >= 3:
                 break
+    if not entries:
+        return False, "当前后台未开启可供天机推演的普通秘境。", []
     for entry in entries:
         entry["insight"] = True
         entry["tianji"] = True
@@ -5325,30 +6687,30 @@ def immortal_seed_power(seed: Optional[dict[str, Any]], record: Optional[UserRec
 
 
 def equipped_immortal_seed_name(record: UserRecord) -> str:
-    return reward_display_name(record.equipped_immortal_seed) if record.equipped_immortal_seed else "\u672a\u88c5\u5907\u4ed9\u79cd"
+    return reward_display_name(record.equipped_immortal_seed) if record.equipped_immortal_seed else "未纳入仙源"
 
 
 def equip_immortal_seed(record: UserRecord, seed_index: int) -> tuple[bool, str]:
     seeds = available_immortal_seeds(record)
     if seed_index < 1 or seed_index > len(seeds):
-        return False, f"\u8bf7\u9009\u62e9 1-{len(seeds)} \u4e4b\u95f4\u7684\u4ed9\u79cd\u7f16\u53f7\u3002"
+        return False, f"请选择 1-{len(seeds)} 之间的仙源编号。"
     required = REALMS.index("\u771f\u4ed9\u5883")
     if record.realm_index < required:
-        return False, "\u771f\u4ed9\u5883\u540e\u624d\u53ef\u88c5\u5907\u4ed9\u79cd\u3002"
+        return False, "真仙境后才可纳入仙源。"
     seed = normalize_reward(dict(seeds[seed_index - 1]), record)
     record.equipped_immortal_seed = seed
-    return True, f"\u5df2\u7eb3\u5165 {reward_display_name(seed)}\uff0c\u6218\u529b+{immortal_seed_power(seed, record)}\u3002"
+    return True, f"已纳入 {reward_display_name(seed)}，战力+{immortal_seed_power(seed, record)}。"
 
 
 def immortal_seed_text(record: UserRecord) -> str:
     seeds = available_immortal_seeds(record)
-    lines = ["\u3010\u4ed9\u79cd\u3011", f"\u5f53\u524d\u4ed9\u79cd\uff1a{equipped_immortal_seed_name(record)}"]
+    lines = ["【仙源】", f"当前仙源：{equipped_immortal_seed_name(record)}"]
     if not seeds:
-        lines.append("\u6682\u65e0\u4ed9\u79cd\u3002\u9ad8\u5371\u79d8\u5883\u3001\u5b8c\u7f8e\u4e16\u754c\u7cfb\u4e8b\u4ef6\u548c\u552f\u4e00\u9053\u5177\u6389\u843d\u53ef\u83b7\u5f97\u3002")
+        lines.append("暂无仙源。高危险秘境、天机事件和唯一道具掉落可获得。")
     for index, seed in enumerate(seeds, start=1):
         info = IMMORTAL_SEED_INFOS.get(reward_name(seed), {})
         lines.append(f"{index}. {reward_display_name(seed)}\uff5c{info.get('effect', seed.get('description', ''))}\uff5c\u6218\u529b+{immortal_seed_power(seed, record)}")
-    lines.append("\u53d1\u9001\u201c\u88c5\u5907\u4ed9\u79cd \u7f16\u53f7\u201d\u53ef\u5728\u771f\u4ed9\u540e\u7eb3\u5165\u5df1\u8eab\u3002")
+    lines.append("发送“装备仙源 编号”可在真仙后纳入己身；旧指令“装备仙种”仍兼容。")
     return "\n".join(lines)
 
 
@@ -5432,55 +6794,78 @@ def set_life_artifact(record: UserRecord, artifact_index: int) -> tuple[bool, st
     result = reward_position_by_category_index(record, ARTIFACT_CATEGORY, artifact_index)
     if result is None:
         return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u7075\u5668\u3002"
-    _, artifact = result
-    if item_required_realm_index(artifact) > record.realm_index:
-        return False, f"{reward_display_name(artifact)}\u81f3\u5c11\u9700{REALMS[item_required_realm_index(artifact)]}\u624d\u80fd\u796d\u4e3a\u672c\u547d\u7075\u5668\u3002"
+    list_index, artifact = result
+    artifact = normalize_reward(dict(artifact), record)
+    required_index = item_required_realm_index(artifact)
+    if required_index > record.realm_index:
+        return False, f"{reward_display_name(artifact)}\u81f3\u5c11\u9700{REALMS[required_index]}\u624d\u80fd\u796d\u4e3a\u672c\u547d\u7075\u5668\u3002"
+    if not artifact_is_compatible(record, artifact):
+        required_attribute = reward_required_attribute(artifact)
+        return False, f"{reward_display_name(artifact)} \u9700\u6c42{root_attribute_name(required_attribute)}\uff0c\u6682\u65f6\u65e0\u6cd5\u796d\u4e3a\u672c\u547d\u7075\u5668\u3002"
+    ensure_reward_instance_uid(artifact)
+    if record.rewards is not None and 0 <= list_index < len(record.rewards):
+        record.rewards[list_index] = artifact
     record.life_artifact = dict(artifact)
-    return True, f"\u5df2\u5c06 {reward_display_name(artifact)} \u796d\u4e3a\u672c\u547d\u7075\u5668\u3002\u672c\u547d\u7075\u5668\u4f1a\u968f\u5883\u754c\u6210\u957f\uff0c\u5e76\u5728\u6218\u529b\u8ba1\u7b97\u4e2d\u989d\u5916\u751f\u6548\u3002"
+    power_gain = int(artifact_power(artifact, record) * 0.38)
+    required_attribute = reward_required_attribute(artifact)
+    attribute_text = root_attribute_name(required_attribute) if required_attribute else "无属性限制"
+    return True, f"\u5df2\u5c06 {reward_display_name(artifact)} \u796d\u4e3a\u672c\u547d\u7075\u5668\u3002\u5951\u5408\uff1a{attribute_text}\uff1b\u672c\u547d\u6218\u529b\u989d\u5916\u751f\u6548 {power_gain}\u3002"
 
 
 def next_tier_grade(tier: str, grade: str) -> tuple[str, str]:
-    grade_index = GRADE_ORDER.index(grade) if grade in GRADE_ORDER else 1
-    tier_index = TIER_ORDER.index(tier) if tier in TIER_ORDER else 0
-    if grade_index < len(GRADE_ORDER) - 1:
-        return tier, GRADE_ORDER[grade_index + 1]
-    return TIER_ORDER[min(len(TIER_ORDER) - 1, tier_index + 1)], GRADE_ORDER[0]
+    result = next_growth_quality(tier, grade, TIER_ORDER)
+    return result if result is not None else ("仙阶", "极品")
 
 
 def array_deduction_text(record: UserRecord) -> str:
     arrays = available_arrays(record)
-    lines = ["\u3010\u9635\u6cd5\u63a8\u6f14\u3011", "\u540c\u540d\u9635\u76d8\u53ef\u4ee5\u5408\u6210\u63d0\u5347\u54c1\u8d28\uff1a2\u4ef6\u540c\u9636\u540c\u540d -> \u4e0b\u4e00\u6863\u54c1\u8d28\uff0c\u6781\u54c1\u540e\u5347\u9636\u4e3a\u4e0a\u4e00\u54c1\u9636\u4e0b\u54c1\u3002"]
+    lines = ["【阵法推演】", "重复获得阵盘会自动对同名阵盘推演：每次加一层，10层后升品或升阶；仙阶极品后可无限推演。"]
     if not arrays:
-        lines.append("\u6682\u65e0\u9635\u76d8\u3002")
+        lines.append("暂无阵盘。")
     for index, array in enumerate(arrays, start=1):
-        same = sum(1 for item in arrays if reward_name(item) == reward_name(array) and str(item.get('tier')) == str(array.get('tier')) and str(item.get('grade')) == str(array.get('grade')))
-        lines.append(f"{index}. {reward_display_name(array)}\uff5c\u540c\u540d\u540c\u54c1\u6570\u91cf {same}/2")
-    lines.append("\u53d1\u9001\u201c\u9635\u6cd5\u63a8\u6f14 \u7f16\u53f7\u201d\u8fdb\u884c\u5408\u6210\u3002")
+        layer = array_layer(record, array)
+        proficiency = array_proficiency_value(record, array)
+        cap = array_proficiency_cap(array, layer)
+        cap_text = array_layer_cap_text(array)
+        same = sum(1 for item in record.rewards or [] if reward_category(item) == ARRAY_CATEGORY and reward_name(item) == reward_name(array))
+        lines.append(
+            f"{index}. {reward_display_name(array)}｜第{layer}/{cap_text}层｜熟练度 {proficiency}/{cap}｜旧档同名数量 {same}"
+        )
+    lines.append("发送“阵法推演 编号”可查看该阵盘状态；后续重复获得同名阵盘会自动并入推演。")
     return "\n".join(lines)
 
 
 def deduce_array(record: UserRecord, array_index: int) -> tuple[bool, str]:
     arrays = available_arrays(record)
     if array_index < 1 or array_index > len(arrays):
-        return False, f"\u8bf7\u9009\u62e9 1-{len(arrays)} \u4e4b\u95f4\u7684\u9635\u76d8\u7f16\u53f7\u3002"
+        return False, f"请选择 1-{len(arrays)} 之间的阵盘编号。"
     target = arrays[array_index - 1]
-    positions = []
+    target_name = reward_name(target)
+    target_key = reward_signature(target)
+    material_index = None
     for list_index, reward in enumerate(record.rewards or []):
-        if reward_category(reward) == ARRAY_CATEGORY and reward_name(reward) == reward_name(target) and str(reward.get("tier")) == str(target.get("tier")) and str(reward.get("grade")) == str(target.get("grade")):
-            positions.append(list_index)
-        if len(positions) >= 2:
-            break
-    if len(positions) < 2:
-        return False, f"\u63a8\u6f14 {reward_display_name(target)} \u9700\u8981 2 \u4ef6\u540c\u540d\u540c\u54c1\u9635\u76d8\u3002"
-    new_tier, new_grade = next_tier_grade(str(target.get("tier")), str(target.get("grade")))
-    for list_index in sorted(positions, reverse=True):
-        if record.rewards is not None:
-            record.rewards.pop(list_index)
-    new_array = make_reward(new_tier, new_grade, ARRAY_CATEGORY, reward_name(target))
-    new_array["deduced"] = True
-    append_reward(record, new_array)
-    return True, f"\u9635\u7eb9\u91cd\u7ec4\uff0c2 \u4ef6 {reward_display_name(target)} \u5408\u6210\u4e3a {reward_display_name(new_array)}\u3002"
-
+        if reward_category(reward) != ARRAY_CATEGORY or reward_name(reward) != target_name:
+            continue
+        if reward_signature(reward) == target_key and material_index is None:
+            continue
+        material_index = list_index
+        break
+    if material_index is None:
+        layer = array_layer(record, target)
+        proficiency = array_proficiency_value(record, target)
+        cap = array_proficiency_cap(target, layer)
+        return True, f"{reward_display_name(target)} 当前第{layer}/{array_layer_cap_text(target)}层，熟练度 {proficiency}/{cap}；后续重复获得同名阵盘会自动推演。"
+    material = normalize_reward(record.rewards.pop(material_index), record) if record.rewards is not None else None
+    if material is None:
+        return False, "阵盘材料读取失败，请稍后再试。"
+    for list_index, reward in enumerate(record.rewards or []):
+        if reward_category(reward) == ARRAY_CATEGORY and reward_name(reward) == target_name:
+            before = reward_display_name(reward)
+            record.rewards[list_index] = advance_array_by_duplicate(record, normalize_reward(reward, record), material)
+            after = reward_display_name(record.rewards[list_index])
+            return True, f"阵纹重组，消耗 {reward_display_name(material)} 推演 {before}，当前为 {after} 第{array_layer(record, record.rewards[list_index])}层。"
+    append_reward(record, material)
+    return False, "没有找到可推演的目标阵盘。"
 
 def batch_sell_rewards(record: UserRecord, category: str, limit: int = 999) -> tuple[bool, str]:
     category = str(category).strip()
@@ -5507,7 +6892,7 @@ def batch_sell_rewards(record: UserRecord, category: str, limit: int = 999) -> t
 
 def emperor_artifact_catalog_text(owner_lookup: Optional[dict[str, str]] = None) -> str:
     owner_lookup = owner_lookup or {}
-    lines = ["\u3010\u5e1d\u5175\u56fe\u9274\u3011", "\u6781\u9053\u5e1d\u5175\u5177\u6709\u5168\u5c40\u552f\u4e00\u6027\uff1b\u672c\u4f53\u5df2\u6709\u4e3b\u65f6\uff0c\u540e\u7eed\u53ea\u80fd\u83b7\u5f97\u4eff\u5236\u54c1\u3002"]
+    lines = ["\u3010\u552f\u4e00\u88c5\u5907\u56fe\u9274\u3011", "\u552f\u4e00\u88c5\u5907\u5177\u6709\u5168\u5c40\u552f\u4e00\u6027\uff1b\u4ed9\u5e1d\u5175\u672c\u4f53\u5df2\u6709\u4e3b\u65f6\uff0c\u540e\u7eed\u53ea\u80fd\u83b7\u5f97\u4eff\u5236\u54c1\u3002"]
     for index, (name, info) in enumerate(EMPEROR_ARTIFACT_INFOS.items(), start=1):
         owner = owner_lookup.get(name) or "\u6682\u65e0\u62e5\u6709\u8005"
         lines.append(f"{index}. {name}\uff5c\u70bc\u5236\u8005\uff1a{info.get('creator')}\uff5c\u6750\u6599\uff1a{info.get('material')}\uff5c\u62e5\u6709\u8005\uff1a{owner}")
@@ -5517,7 +6902,7 @@ def emperor_artifact_catalog_text(owner_lookup: Optional[dict[str, str]] = None)
 
 def divine_ability_catalog_text(record: Optional[UserRecord] = None) -> str:
     text = special_ability_catalog_text(record)
-    return text.replace("\u7279\u6b8a\u80fd\u529b", "\u795e\u901a")
+    return text.replace("\u795e\u901a", "\u795e\u901a")
 
 
 def improve_root_once(root: Root) -> Root:
@@ -5641,28 +7026,28 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
         daily_tasks=tasks,
     )
 
-def draw_fishing_rewards(count: int) -> list[dict[str, Any]]:
+def draw_fishing_rewards(count: int, record: Optional[UserRecord] = None) -> list[dict[str, Any]]:
     rewards = []
     pool = [(reward, float(reward[5])) for reward in FISHING_REWARDS]
+    realm_index = int(record.realm_index) if record is not None else 0
     for _ in range(count):
         tier, grade, category, name, description, _ = weighted_choice(pool)
-        rewards.append(
-            normalize_reward(
-                {
-                    "tier": tier,
-                    "grade": grade,
-                    "category": category,
-                    "name": name,
-                    "description": description,
-                }
-            )
-        )
+        if category == ARTIFACT_CATEGORY:
+            raw = draw_configured_artifact_reward(tier, grade)
+        else:
+            raw = {
+                "tier": tier,
+                "grade": grade,
+                "category": category,
+                "name": name,
+                "description": description,
+            }
+        rewards.append(normalize_reward(raw, record))
     return rewards
-
 
 def apply_fishing(record: UserRecord, requested_count: int) -> list[dict[str, Any]]:
     count = max(1, min(requested_count, record.fishing_chances, 10))
-    rewards = draw_fishing_rewards(count)
+    rewards = draw_fishing_rewards(count, record)
     shown_rewards = []
     record.fishing_chances -= count
     record.pending_fishing = record.fishing_chances
@@ -5699,19 +7084,31 @@ def fishing_count_from_text(text: str, chances: int) -> int:
 
 def reward_display_name(reward: Optional[dict[str, Any]]) -> str:
     if not reward:
-        return "[\u65e0]"
-    return f"[{reward.get('tier', '\u672a\u77e5')}{reward.get('grade', '')}{reward.get('category', '')} {reward.get('name', '\u65e0\u540d\u7075\u7269')}]"
-
+        return "[无]"
+    tier = str(reward.get("tier", "未知"))
+    grade = str(reward.get("grade", ""))
+    category = reward_category(reward)
+    name = reward_name(reward) or "无名灵物"
+    if category == ARTIFACT_CATEGORY and tier == "仙阶":
+        prefix = f"{grade}仙器"
+    elif category == ARTIFACT_CATEGORY and tier != "仙帝兵":
+        realm_label = artifact_realm_label(reward)
+        prefix = f"{realm_label}{tier}{grade}{category}" if realm_label else f"{tier}{grade}{category}"
+    else:
+        prefix = f"{tier}{grade}{category}"
+    return f"[{prefix} {name}]"
 
 def available_artifacts(record: UserRecord) -> list[dict[str, Any]]:
     return rewards_by_category(record, ARTIFACT_CATEGORY)
 
 
 def available_methods(record: UserRecord) -> list[dict[str, Any]]:
+    ensure_unique_growth_rewards(record, METHOD_CATEGORY)
     return rewards_by_category(record, METHOD_CATEGORY)
 
 
 def available_arrays(record: UserRecord) -> list[dict[str, Any]]:
+    ensure_unique_growth_rewards(record, ARRAY_CATEGORY)
     return rewards_by_category(record, ARRAY_CATEGORY)
 
 
@@ -5756,21 +7153,21 @@ def available_special_ability_items(record: UserRecord) -> list[dict[str, Any]]:
 
 
 def normalize_special_abilities(abilities: Sequence[str] | None) -> list[str]:
-    result = list(dict.fromkeys(str(item) for item in (abilities or []) if item))
+    result = list(dict.fromkeys(canonical_item_name(str(item)) for item in (abilities or []) if item))
     owned = set(result)
-    if "\u795e\u7981\u9886\u57df" in owned:
-        result = [item for item in result if item not in {"\u516b\u7981", "\u4e5d\u7981"}]
-    elif "\u4e5d\u7981" in owned:
-        result = [item for item in result if item != "\u516b\u7981"]
+    if "归极域" in owned:
+        result = [item for item in result if item not in {"初阈", "重阈"}]
+    elif "重阈" in owned:
+        result = [item for item in result if item != "初阈"]
     return result
 
 
 def forbidden_rank(ability: Optional[str]) -> int:
-    if ability == "\u516b\u7981":
+    if ability == "初阈":
         return 1
-    if ability == "\u4e5d\u7981":
+    if ability == "重阈":
         return 2
-    if ability == "\u795e\u7981\u9886\u57df":
+    if ability == "归极域":
         return 3
     return 0
 
@@ -5784,7 +7181,7 @@ def highest_forbidden_ability(abilities: Sequence[str] | None) -> Optional[str]:
 
 
 def nine_secret_count(record: UserRecord) -> int:
-    return len([ability for ability in normalize_special_abilities(record.special_abilities) if ability.startswith("\u4e5d\u79d8")])
+    return len([ability for ability in normalize_special_abilities(record.special_abilities) if ability.startswith("星律")])
 
 
 def nine_secret_set_multiplier(record: UserRecord) -> int:
@@ -5809,7 +7206,7 @@ def special_ability_power_value(ability: str) -> int:
 
 def special_ability_power_total(record: UserRecord) -> int:
     abilities = normalize_special_abilities(record.special_abilities)
-    secret_count = len([ability for ability in abilities if ability.startswith("\u4e5d\u79d8")])
+    secret_count = len([ability for ability in abilities if ability.startswith("星律")])
     total = sum(special_ability_power_value(ability) for ability in abilities)
     if secret_count:
         total += secret_count * max(0, secret_count - 1) * 90
@@ -5820,7 +7217,7 @@ def special_ability_info(ability: str) -> dict[str, Any]:
     info = dict(SPECIAL_ABILITY_INFOS.get(ability, {
         "material": ability,
         "source": "\u5931\u843d\u4f20\u627f",
-        "effect": "\u4e00\u6bb5\u5c1a\u672a\u5b8c\u5168\u660e\u609f\u7684\u7279\u6b8a\u80fd\u529b\u3002",
+        "effect": "\u4e00\u6bb5\u5c1a\u672a\u5b8c\u5168\u660e\u609f\u7684\u795e\u901a\u3002",
         "aliases": [ability],
         "combat": (0.08, 0.04, 0),
     }))
@@ -5832,18 +7229,18 @@ def special_ability_material_requirement_text(record: UserRecord, material_name:
     material_name = str(material_name or "").strip()
     abilities = set(normalize_special_abilities(record.special_abilities))
     highest = highest_forbidden_ability(abilities)
-    if material_name in {"\u516b\u7981\u611f\u609f", "\u51e1\u9aa8\u6218\u610f\u672d"} and highest:
+    if material_name in {"初阈战札", "初阈战意札"} and highest:
         return f"\u5df2\u638c\u63e1\u3010{highest}\u3011\uff0c\u7981\u57df\u8def\u7ebf\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002"
-    if material_name == "\u4e5d\u7981\u611f\u609f":
-        if "\u795e\u7981\u9886\u57df" in abilities or "\u4e5d\u7981" in abilities:
-            return "\u4f60\u5df2\u638c\u63e1\u4e5d\u7981\u6216\u66f4\u9ad8\u7981\u57df\u3002"
-        if "\u516b\u7981" not in abilities:
-            return "\u9700\u5148\u9886\u609f\u516b\u7981\uff0c\u624d\u80fd\u501f\u4e5d\u7981\u611f\u609f\u8fdb\u9636\u3002"
-    if material_name == "\u795e\u7981\u70d9\u5370":
-        if "\u795e\u7981\u9886\u57df" in abilities:
-            return "\u4f60\u5df2\u638c\u63e1\u795e\u7981\u9886\u57df\u3002"
-        if "\u4e5d\u7981" not in abilities:
-            return "\u9700\u5148\u5c06\u516b\u7981\u63a8\u81f3\u4e5d\u7981\uff0c\u624d\u80fd\u627f\u8f7d\u795e\u7981\u70d9\u5370\u3002"
+    if material_name == "重阈战札":
+        if "归极域" in abilities or "重阈" in abilities:
+            return "你已掌握重阈或更高限界。"
+        if "初阈" not in abilities:
+            return "需先领悟初阈，才能借重阈战札进阶。"
+    if material_name == "归极印纹":
+        if "归极域" in abilities:
+            return "你已掌握归极域。"
+        if "重阈" not in abilities:
+            return "需先将初阈推至重阈，才能承载归极印纹。"
     return "\u5df2\u65e0\u53ef\u9886\u609f\u76ee\u6807"
 
 
@@ -5851,20 +7248,20 @@ def special_ability_material_target(record: UserRecord, material_name: str, seed
     material_name = str(material_name or "").strip()
     owned = set(normalize_special_abilities(record.special_abilities))
     highest = highest_forbidden_ability(owned)
-    if material_name == "\u4e5d\u79d8\u6b8b\u9875":
+    if material_name == "星律残页":
         candidates = [ability for ability in NINE_SECRET_ABILITIES if ability not in owned]
         if not candidates:
             return None
         return stable_choice(candidates, seed or f"nine-secret:{record.user_id}:{len(owned)}")
-    if material_name in {"\u516b\u7981\u611f\u609f", "\u51e1\u9aa8\u6218\u610f\u672d"}:
-        return None if highest else "\u516b\u7981"
-    if material_name == "\u4e5d\u7981\u611f\u609f":
-        if "\u516b\u7981" in owned and "\u4e5d\u7981" not in owned and "\u795e\u7981\u9886\u57df" not in owned:
-            return "\u4e5d\u7981"
+    if material_name in {"初阈战札", "初阈战意札"}:
+        return None if highest else "初阈"
+    if material_name == "重阈战札":
+        if "初阈" in owned and "重阈" not in owned and "归极域" not in owned:
+            return "重阈"
         return None
-    if material_name == "\u795e\u7981\u70d9\u5370":
-        if "\u4e5d\u7981" in owned and "\u795e\u7981\u9886\u57df" not in owned:
-            return "\u795e\u7981\u9886\u57df"
+    if material_name == "归极印纹":
+        if "重阈" in owned and "归极域" not in owned:
+            return "归极域"
         return None
     if material_name in SPECIAL_ABILITY_POOL:
         return None if material_name in owned else material_name
@@ -5888,7 +7285,7 @@ def draw_special_ability_material(record: Optional[UserRecord] = None) -> dict[s
         if preferred:
             pool = preferred
     if not pool:
-        return make_reward("\u7384\u9636", "\u4e0a\u54c1", SPECIAL_ABILITY_CATEGORY, "\u4e5d\u79d8\u6b8b\u9875")
+        return make_reward("\u7384\u9636", "\u4e0a\u54c1", SPECIAL_ABILITY_CATEGORY, "星律残页")
     weighted_pool = [
         (reward, float(reward[5]) * SPECIAL_ABILITY_MATERIAL_DIFFICULTY.get(str(reward[3]), 1.0))
         for reward in pool
@@ -5917,7 +7314,7 @@ def learn_special_ability(record: UserRecord, item_index: int) -> tuple[bool, st
     record.special_abilities = normalize_special_abilities(record.special_abilities)
     result = reward_position_by_category_index(record, SPECIAL_ABILITY_CATEGORY, item_index)
     if result is None:
-        return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u7279\u6b8a\u80fd\u529b\u4f20\u627f\u6750\u6599\u3002"
+        return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u795e\u901a\u4f20\u627f\u6750\u6599\u3002"
     list_index, item = result
     material = reward_name(item)
     seed = f"learn-special:{record.user_id}:{reward_signature(item)}:{item_index}:{len(record.special_abilities or [])}"
@@ -5930,19 +7327,19 @@ def learn_special_ability(record: UserRecord, item_index: int) -> tuple[bool, st
     if record.rewards is None or list_index >= len(record.rewards):
         return False, "\u4f20\u627f\u6750\u6599\u4f4d\u7f6e\u53d1\u751f\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u6253\u5f00\u80cc\u5305\u786e\u8ba4\u7f16\u53f7\u3002"
     record.rewards.pop(list_index)
-    if target == "\u4e5d\u7981":
-        abilities = [ability for ability in abilities if ability != "\u516b\u7981"]
-    elif target == "\u795e\u7981\u9886\u57df":
-        abilities = [ability for ability in abilities if ability not in {"\u516b\u7981", "\u4e5d\u7981"}]
+    if target == "重阈":
+        abilities = [ability for ability in abilities if ability != "初阈"]
+    elif target == "归极域":
+        abilities = [ability for ability in abilities if ability not in {"初阈", "重阈"}]
     abilities.append(target)
     record.special_abilities = normalize_special_abilities(abilities)
     info = special_ability_info(target)
     extra = ""
-    if target.startswith("\u4e5d\u79d8"):
+    if target.startswith("星律"):
         count = nine_secret_count(record)
-        extra = f"\n\u4e5d\u79d8\u5957\u88c5\uff1a\u5df2\u83b7{count}/9\u4ef6\uff0c\u5df2\u83b7\u4e5d\u79d8\u6548\u679c\u5728\u6597\u6cd5\u4e2d\u63d0\u5347{max(1, count)}\u500d\u3002"
+        extra = f"\n星律联动\uff1a\u5df2\u83b7{count}/9\u4ef6\uff0c\u5df2\u83b7星律\u6548\u679c\u5728\u6597\u6cd5\u4e2d\u63d0\u5347{max(1, count)}\u500d\u3002"
     elif target in FORBIDDEN_REALM_ABILITIES:
-        extra = "\n\u7981\u57df\u8def\u7ebf\uff1a\u516b\u7981 -> \u4e5d\u7981 -> \u795e\u7981\uff0c\u5347\u7ea7\u540e\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002"
+        extra = "\n\u7981\u57df\u8def\u7ebf\uff1a初阈 -> 重阈 -> 归极\uff0c\u5347\u7ea7\u540e\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002"
     return (
         True,
         "\n".join(
@@ -5964,7 +7361,7 @@ def special_ability_list_text(record: UserRecord) -> str:
     secret_count = nine_secret_count(record)
     lines = ["\u3010\u6211\u7684\u795e\u901a\u3011"]
     if secret_count:
-        lines.append(f"\u4e5d\u79d8\u5957\u88c5\uff1a{secret_count}/9\uff0c\u5df2\u83b7\u4e5d\u79d8\u6548\u679c\u6597\u6cd5\u65f6 {secret_count}x \u589e\u5f3a\u3002")
+        lines.append(f"星律联动\uff1a{secret_count}/9\uff0c\u5df2\u83b7星律\u6548\u679c\u6597\u6cd5\u65f6 {secret_count}x \u589e\u5f3a\u3002")
     highest = highest_forbidden_ability(abilities)
     if highest:
         lines.append(f"\u7981\u57df\u8def\u7ebf\uff1a\u5f53\u524d\u4fdd\u7559\u6700\u9ad8\u7ea7\u3010{highest}\u3011\u3002")
@@ -5973,7 +7370,7 @@ def special_ability_list_text(record: UserRecord) -> str:
         for index, ability in enumerate(abilities, start=1):
             info = special_ability_info(ability)
             damage, defense, speed = info.get("combat", (0.08, 0.04, 0))
-            multiplier = nine_secret_set_multiplier(record) if ability.startswith("\u4e5d\u79d8") else 1
+            multiplier = nine_secret_set_multiplier(record) if ability.startswith("星律") else 1
             lines.append(
                 f"{index}. {special_ability_rarity_text(ability)}\u3010{ability}\u3011\uff5c\u4f24\u5bb3+{int(float(damage) * 100)}%\uff5c\u9632\u5fa1+{int(float(defense) * 100)}%\uff5c\u901f\u5ea6+{int(speed)}\uff5c{multiplier}x\uff5c{info.get('effect', '')}"
             )
@@ -5982,7 +7379,7 @@ def special_ability_list_text(record: UserRecord) -> str:
     lines.append("")
     lines.append("\u3010\u53ef\u9886\u609f\u4f20\u627f\u6750\u6599\u3011")
     if not materials:
-        lines.append("\u6682\u65e0\u3002\u5782\u9493\u3001\u79d8\u5883\u548c\u7a81\u7834\u4f59\u97f5\u90fd\u6709\u673a\u4f1a\u83b7\u5f97\u4e5d\u79d8\u6b8b\u9875\u3001\u516b\u7981\u611f\u609f\u3001\u4e5d\u7981\u611f\u609f\u3001\u795e\u7981\u70d9\u5370\u7b49\u4f20\u627f\u6750\u6599\u3002")
+        lines.append("\u6682\u65e0\u3002\u5782\u9493\u3001\u79d8\u5883\u548c\u7a81\u7834\u4f59\u97f5\u90fd\u6709\u673a\u4f1a\u83b7\u5f97星律残页\u3001初阈战札\u3001重阈战札\u3001归极印纹\u7b49\u4f20\u627f\u6750\u6599\u3002")
     else:
         for index, item in enumerate(materials, start=1):
             material = reward_name(item)
@@ -5995,13 +7392,13 @@ def special_ability_list_text(record: UserRecord) -> str:
 
 def special_ability_catalog_text(record: Optional[UserRecord] = None) -> str:
     owned = set(normalize_special_abilities(record.special_abilities if record is not None else []))
-    secret_count = len([ability for ability in owned if ability.startswith("\u4e5d\u79d8")])
+    secret_count = len([ability for ability in owned if ability.startswith("星律")])
     lines = [
         "\u3010\u795e\u901a\u56fe\u9274\u3011",
         "\u83b7\u53d6\u8def\u5f84\uff1a\u5782\u9493\u3001\u79d8\u5883\u63a2\u7d22\u3001\u5883\u754c\u7a81\u7834\u4f59\u97f5\u4f1a\u4f4e\u6982\u7387\u6389\u843d\u4f20\u627f\u6750\u6599\uff0c\u73b0\u5df2\u63d0\u9ad8\u83b7\u53d6\u96be\u5ea6\u3002",
-        "\u56fa\u5b9a\u54c1\u9636\uff1a\u6240\u6709\u795e\u901a\u5747\u5df2\u56fa\u5b9a\u54c1\u9636\u4e0e\u54c1\u8d28\uff0c\u8be6\u89c1\u6bcf\u9879\u6807\u9898\uff1b\u4e5d\u79d8\u7edf\u4e00\u4e3a\u5929\u9636\u6781\u54c1\u3002",
-        "\u8fdb\u9636\u8def\u7ebf\uff1a\u516b\u7981 -> \u4e5d\u7981 -> \u795e\u7981\uff0c\u5347\u7ea7\u540e\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002",
-        f"\u4e5d\u79d8\u8054\u52a8\uff1a\u83b7\u53d6 n \u4ef6\u540e\uff0c\u5df2\u83b7\u4e5d\u79d8\u7684\u6597\u6cd5\u6548\u679c\u6309 n \u500d\u8ba1\u7b97\u3002\u5f53\u524d\uff1a{secret_count}/9\u3002",
+        "\u56fa\u5b9a\u54c1\u9636\uff1a\u6240\u6709\u795e\u901a\u5747\u5df2\u56fa\u5b9a\u54c1\u9636\u4e0e\u54c1\u8d28\uff0c\u8be6\u89c1\u6bcf\u9879\u6807\u9898\uff1b星律\u7edf\u4e00\u4e3a\u5929\u9636\u6781\u54c1\u3002",
+        "\u8fdb\u9636\u8def\u7ebf\uff1a初阈 -> 重阈 -> 归极\uff0c\u5347\u7ea7\u540e\u53ea\u4fdd\u7559\u6700\u9ad8\u7ea7\u80fd\u529b\u3002",
+        f"星律\u8054\u52a8\uff1a\u83b7\u53d6 n \u4ef6\u540e\uff0c\u5df2\u83b7星律\u7684\u6597\u6cd5\u6548\u679c\u6309 n \u500d\u8ba1\u7b97\u3002\u5f53\u524d\uff1a{secret_count}/9\u3002",
         "",
     ]
     for index, ability in enumerate(SPECIAL_ABILITY_POOL, start=1):
@@ -6022,10 +7419,38 @@ def normalize_artifact_slot(slot: Optional[str] = None, artifact: Optional[dict[
     text = str(slot or "").strip()
     if text in ARTIFACT_SLOT_ALIASES:
         return ARTIFACT_SLOT_ALIASES[text]
-    name = reward_name(artifact)
-    if any(token in name for token in ("盾", "甲", "铠", "衣", "裍", "袍", "护心", "护身")):
+    if text:
+        return text
+    if artifact_is_armor(artifact):
         return "护甲"
     return "主手"
+
+
+def artifact_is_armor(artifact: Optional[dict[str, Any]]) -> bool:
+    name = reward_name(artifact)
+    return name.endswith("甲") or any(token in name for token in ARTIFACT_ARMOR_NAME_TOKENS)
+
+
+def artifact_slot_allowed(slot: str, artifact: Optional[dict[str, Any]]) -> bool:
+    normalized = normalize_artifact_slot(slot)
+    if artifact_is_armor(artifact):
+        return normalized == "护甲"
+    return normalized in {"主手", "副手"}
+
+
+def artifact_power_rate(artifact: dict[str, Any]) -> float:
+    name = reward_name(artifact)
+    explicit_rate = ARTIFACT_NAME_POWER_RATE.get(name)
+    if explicit_rate is not None:
+        return explicit_rate
+    if str(artifact.get("tier")) != "天阶":
+        return 1.0
+    if any(token in name for token in ARTIFACT_SWORD_NAME_TOKENS):
+        return 1.0
+    for tokens, rate in ARTIFACT_TIAN_TYPE_POWER_RATES:
+        if any(token in name for token in tokens):
+            return rate
+    return 1.1
 
 
 def artifact_slots(record: UserRecord) -> dict[str, dict[str, Any]]:
@@ -6049,11 +7474,22 @@ def equipped_artifact_in_slot(record: UserRecord, slot: str) -> Optional[dict[st
 def equipped_artifact_lines(record: UserRecord) -> list[str]:
     slots = artifact_slots(record)
     lines = []
+    seen_names: set[str] = set()
     for slot in ARTIFACT_SLOTS:
         item = slots.get(slot)
-        lines.append(f"{slot}：{reward_display_name(item) if item else '\u672a\u88c5\u5907'}")
+        if item:
+            display = reward_display_name(item)
+            name = reward_name(item)
+            if not artifact_slot_allowed(slot, item) or artifact_power(item, record) <= 0:
+                display += "（未生效）"
+            elif name in seen_names:
+                display += "（同名削弱）"
+            else:
+                seen_names.add(name)
+        else:
+            display = "\u672a\u88c5\u5907"
+        lines.append(f"{slot}：{display}")
     return lines
-
 
 def equipped_artifact_summary(record: UserRecord) -> str:
     return "；".join(equipped_artifact_lines(record))
@@ -6062,25 +7498,38 @@ def equipped_artifact_summary(record: UserRecord) -> str:
 def artifact_is_compatible(record: UserRecord, artifact: dict[str, Any]) -> bool:
     return item_is_compatible(record, artifact)
 
-
 def artifact_power(artifact: Optional[dict[str, Any]], record: Optional[UserRecord] = None) -> int:
     if not artifact:
         return 0
-    base = ARTIFACT_POWER_BASE.get(str(artifact.get("tier")), 120)
-    ratio = ARTIFACT_GRADE_RATIO.get(str(artifact.get("grade")), 1.0)
-    power = int(base * ratio)
+    required_index = item_required_realm_index(artifact)
+    if record is not None and record.realm_index < required_index:
+        return 0
+    tier = str(artifact.get("tier", "凡品"))
+    grade = str(artifact.get("grade", "下品"))
+    if tier == "仙帝兵" or is_unique_reward(artifact):
+        base = ARTIFACT_POWER_BASE.get(tier, ARTIFACT_POWER_BASE.get("仙阶", 7600))
+        power = int(base * ARTIFACT_GRADE_RATIO.get(grade, 1.0))
+        if required_index:
+            power = int(power * (1.0 + required_index * 0.045))
+        power = int(power * artifact_power_rate(artifact))
+        if record is not None and is_unique_reward(artifact):
+            power = int(power * (1.0 + min(1.8, record.realm_index * 0.075)))
+            power += special_ability_power_total(record) // 4
+    else:
+        realm_base = ARTIFACT_REALM_POWER_BASE.get(required_index)
+        if realm_base is None:
+            realm_base = ARTIFACT_REALM_POWER_BASE[max(ARTIFACT_REALM_POWER_BASE)]
+        power = int(
+            realm_base
+            * ARTIFACT_TIER_POWER_RATIO.get(tier, 0.36)
+            * ARTIFACT_GRADE_RATIO.get(grade, 1.0)
+        )
+        power = int(power * artifact_power_rate(artifact))
     if record is not None and artifact_is_compatible(record, artifact):
         power = int(power * 1.15 * root_purity_multiplier(record, reward_required_attribute(artifact)))
-    required_index = item_required_realm_index(artifact)
-    if required_index:
-        power = int(power * (1.0 + required_index * 0.045))
-    if record is not None and is_unique_reward(artifact):
-        power = int(power * (1.0 + min(1.8, record.realm_index * 0.075)))
-        power += special_ability_power_total(record) // 4
     if record is not None and record.life_artifact and reward_signature(record.life_artifact) == reward_signature(artifact):
         power = int(power * 1.22)
     return power
-
 
 def method_power(method: Optional[dict[str, Any]], record: Optional[UserRecord] = None) -> int:
     if not method:
@@ -6133,8 +7582,19 @@ def talisman_power(talisman: Optional[dict[str, Any]], record: Optional[UserReco
 
 def equipped_artifact_power(record: UserRecord) -> int:
     total = 0
+    seen_names: set[str] = set()
     for slot, artifact in artifact_slots(record).items():
-        total += int(artifact_power(artifact, record) * ARTIFACT_SLOT_POWER_RATE.get(slot, 1.0))
+        if not artifact_slot_allowed(slot, artifact):
+            continue
+        power = artifact_power(artifact, record)
+        if power <= 0:
+            continue
+        name = reward_name(artifact)
+        if name in seen_names:
+            power = int(power * ARTIFACT_DUPLICATE_POWER_RATE)
+        else:
+            seen_names.add(name)
+        total += int(power * ARTIFACT_SLOT_POWER_RATE.get(slot, 1.0))
     return total
 
 
@@ -6190,9 +7650,19 @@ def equip_artifact(record: UserRecord, artifact_index: int, slot: Optional[str] 
         return False, f"{reward_display_name(artifact)} \u9700\u81f3\u5c11\u8fbe\u5230{REALMS[required_index]}\u624d\u80fd\u9a7e\u9a6d\u3002"
     if not artifact_is_compatible(record, artifact):
         required_attribute = reward_required_attribute(artifact)
-        return False, f"{reward_display_name(artifact)} \u9700\u6c42{required_attribute}\u7075\u6839\uff0c\u6682\u65f6\u65e0\u6cd5\u88c5\u5907\u3002"
+        return False, f"{reward_display_name(artifact)} \u9700\u6c42{root_attribute_name(required_attribute)}\uff0c\u6682\u65f6\u65e0\u6cd5\u88c5\u5907\u3002"
     target_slot = normalize_artifact_slot(slot, artifact)
+    if target_slot not in ARTIFACT_SLOTS:
+        return False, "槽位只能填写主手、副手或护甲。"
+    if not artifact_slot_allowed(target_slot, artifact):
+        if target_slot == "护甲":
+            return False, f"{reward_display_name(artifact)} 不是护甲/护盾类灵器，不能装备到护甲槽。"
+        return False, f"{reward_display_name(artifact)} 属于护甲/护盾类灵器，只能装备到护甲槽。"
     slots = artifact_slots(record)
+    artifact_name = reward_name(artifact)
+    for existing_slot, equipped in slots.items():
+        if existing_slot != target_slot and reward_name(equipped) == artifact_name:
+            return False, f"同名灵器不可同时装备：{reward_display_name(artifact)} 已在{existing_slot}，请先卸下或改用其他灵器搭配。"
     slots[target_slot] = dict(artifact)
     record.equipped_artifacts = slots
     record.equipped_artifact = slots.get("主手")
@@ -6207,12 +7677,9 @@ def equip_method(record: UserRecord, method_index: int) -> tuple[bool, str]:
     _, method = result
     if not item_is_compatible(record, method):
         required_attribute = reward_required_attribute(method)
-        return False, f"{reward_display_name(method)} \u9700\u6c42{required_attribute}\u7075\u6839\uff0c\u6682\u65f6\u65e0\u6cd5\u4fee\u884c\u3002"
+        return False, f"{reward_display_name(method)} \u9700\u6c42{root_attribute_name(required_attribute)}\uff0c\u6682\u65f6\u65e0\u6cd5\u4fee\u884c\u3002"
     record.equipped_method = dict(method)
-    if record.method_layers is None:
-        record.method_layers = {}
-    key = reward_signature(method)
-    record.method_layers.setdefault(key, method_layer(record, method))
+    ensure_method_tracking(record, method)
     profile = method_profile(method, record)
     return True, f"\u5df2\u53c2\u609f {reward_display_name(method)}\uff0c\u5f53\u524d\u4e3a{profile['kind']}\uff0c\u7b2c{profile['layer']}\u5c42\uff0c\u7b7e\u5230\u4e0e\u804a\u5929\u4fee\u4e3a\u5c06\u83b7\u5f97\u52a0\u6210\u3002"
 
@@ -6220,12 +7687,15 @@ def equip_method(record: UserRecord, method_index: int) -> tuple[bool, str]:
 def equip_array(record: UserRecord, array_index: int) -> tuple[bool, str]:
     result = reward_position_by_category_index(record, ARRAY_CATEGORY, array_index)
     if result is None:
-        return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u9635\u76d8\u3002"
+        return False, "没有找到这个编号的阵盘。"
     _, array = result
     record.equipped_array = dict(array)
+    ensure_array_tracking(record, record.equipped_array)
+    layer = array_layer(record, record.equipped_array)
+    proficiency = array_proficiency_value(record, record.equipped_array)
+    cap = array_proficiency_cap(record.equipped_array, layer)
     multiplier = array_multiplier(record)
-    return True, f"\u5df2\u5e03\u7f6e {reward_display_name(array)}\uff0c\u5f53\u524d\u9635\u6cd5\u6548\u679c {multiplier:.1f}x\u3002"
-
+    return True, f"已布置 {reward_display_name(array)}，第{layer}层，熟练度 {proficiency}/{cap}，当前阵法效果 {multiplier:.1f}x。"
 
 def equip_puppet(record: UserRecord, puppet_index: int) -> tuple[bool, str]:
     result = reward_position_by_category_index(record, PUPPET_CATEGORY, puppet_index)
@@ -6279,6 +7749,31 @@ def exp_gain_text(prefix: str, applied: int, leveled: int, result: ExpApplyResul
     if result.spirit_liquid:
         return f"{prefix}\uff0c\u5f53\u524d\u5df2\u81f3\u74f6\u9888\u5dc5\u5cf0\uff0c\u6ea2\u51fa\u4fee\u4e3a {result.overflow} \u51dd\u6210\u7cbe\u7eaf\u7075\u6db2 +{result.spirit_liquid}\u3002"
     return f"{prefix}\uff0c\u5f53\u524d\u65e0\u6cd5\u589e\u957f\u4fee\u4e3a\u3002"
+
+def refine_demon_core(record: UserRecord, material_index: int) -> tuple[bool, str]:
+    result = reward_position_by_category_index(record, "\u7075\u6750", material_index)
+    if result is None:
+        return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u7075\u6750\u3002"
+    list_index, material = result
+    if not is_demon_core_item(material):
+        return False, f"{reward_display_name(material)} \u4e0d\u662f\u5996\u4e39\uff0c\u65e0\u6cd5\u70bc\u5316\u4e3a\u4fee\u4e3a\u3002"
+    if record.root is None:
+        return False, "\u5c1a\u672a\u8e0f\u5165\u4fee\u884c\u8def\uff0c\u53d1\u9001\u201c\u7b7e\u5230\u201d\u5148\u89c9\u9192\u7075\u6839\u3002"
+    if is_cultivation_locked(record):
+        return False, blocked_cultivation_message(record)
+    if record.rewards is None or list_index >= len(record.rewards):
+        return False, "\u7075\u6750\u4f4d\u7f6e\u53d1\u751f\u53d8\u5316\uff0c\u8bf7\u91cd\u65b0\u6253\u5f00\u80cc\u5305\u786e\u8ba4\u7f16\u53f7\u3002"
+    consumed = normalize_reward(record.rewards.pop(list_index), record)
+    exp = demon_core_cultivation_exp(consumed)
+    exp_result = apply_exp(record, exp)
+    applied_exp, leveled = exp_result
+    if applied_exp <= 0 and exp_result.spirit_liquid <= 0:
+        append_reward(record, consumed)
+        return False, "\u5f53\u524d\u5df2\u81f3\u74f6\u9888\u5dc5\u5cf0\uff0c\u5996\u4e39\u5996\u529b\u6682\u65f6\u65e0\u6cd5\u878d\u5165\u4e39\u7530\uff0c\u8bf7\u5148\u7a81\u7834\u3002"
+    realm_name = demon_core_realm_name(consumed) or "\u672a\u77e5"
+    attribute = demon_core_attribute(consumed)
+    prefix = f"\u70bc\u5316 {reward_display_name(consumed)}\uff0c{attribute}\u884c{realm_name}\u5996\u529b\u5165\u4f53"
+    return True, exp_gain_text(prefix, applied_exp, leveled, exp_result)
 
 def refine_spirit_liquid(record: UserRecord, amount: Optional[int] = None, today: Optional[date] = None) -> tuple[bool, str]:
     if record.root is None:
@@ -6411,6 +7906,11 @@ def _batch_apply_exp_items(
         if category == SPIRIT_STONE_CATEGORY:
             reserve = int(SPIRIT_STONE_VALUES.get(str(normalized.get("tier")), 8) * grade_ratio(str(normalized.get("grade"))))
             exp = max(1, reserve // 2)
+        elif category == "\u7075\u6750" and is_demon_core_item(normalized):
+            reserve = 0
+            exp = demon_core_cultivation_exp(normalized)
+        elif category == "\u7075\u6750":
+            continue
         else:
             reserve = 0
             exp = tier_exp(CONSUMABLE_EXP_BASE, str(normalized.get("tier")), str(normalized.get("grade")))
@@ -6478,6 +7978,9 @@ def refine_spirit_stones_batch(record: UserRecord, limit: Optional[int] = None) 
     return _batch_apply_exp_items(record, SPIRIT_STONE_CATEGORY, limit, "炼化", reserve_stones=True)
 
 
+def refine_demon_cores_batch(record: UserRecord, limit: Optional[int] = None) -> tuple[bool, str]:
+    return _batch_apply_exp_items(record, "\u7075\u6750", limit, "炼化")
+
 def use_foods_batch(record: UserRecord, limit: Optional[int] = None) -> tuple[bool, str]:
     return _batch_apply_exp_items(record, FOOD_CATEGORY, limit, "享用")
 
@@ -6509,7 +8012,7 @@ def use_curio(record: UserRecord, curio_index: int) -> tuple[bool, str]:
             append_reward(record, result)
             return False, "\u5f53\u524d\u5df2\u81f3\u74f6\u9888\u5dc5\u5cf0\uff0c\u5947\u7269\u7075\u673a\u65e0\u6cd5\u70bc\u5316\uff0c\u8bf7\u5148\u7a81\u7834\u3002"
         return True, exp_gain_text(prefix, applied_exp, leveled, exp_result)
-    reward = draw_fishing_rewards(1)[0]
+    reward = draw_fishing_rewards(1, record)[0]
     append_reward(record, reward)
     return True, f"{reward_display_name(result)} \u5185\u85cf\u5939\u5c42\uff0c\u53d6\u51fa {reward_display_name(reward)}\u3002"
 
@@ -6720,8 +8223,8 @@ def build_high_risk_mystic_event_pool(realm_type: str) -> list[dict[str, Any]]:
         ("\u5947\u7269", "\u4e7e\u84dd\u51b0\u7130", "\u5bd2\u7130\u4e0d\u71c3\u7269\uff0c\u53ea\u7167\u795e\u9b42\uff0c\u4e00\u7f15\u4e7e\u84dd\u51b0\u7130\u88ab\u4f60\u5c01\u5165\u7389\u74f6\u3002"),
         ("\u5947\u7269", "\u865a\u5929\u9f0e", "\u53e4\u6bbf\u6df1\u5904\u6709\u9f0e\u5f71\u4e00\u95ea\uff0c\u865a\u5929\u9f0e\u7684\u9053\u97f5\u843d\u5165\u4f60\u624b\u4e2d\u3002"),
         ("\u5947\u7269", "\u4eba\u7687\u5370", "\u4eba\u9053\u6c14\u8fd0\u51dd\u6210\u5370\u73ba\uff0c\u4e00\u77ac\u95f4\u538b\u4f4f\u56db\u5468\u9b54\u6c14\u3002"),
-        (IMMORTAL_SEED_CATEGORY, "\u4ee5\u8eab\u4e3a\u79cd\u4ed9\u79cd", "\u4ed9\u53e4\u9053\u97f5\u5728\u4f53\u5185\u6210\u79cd\uff0c\u4e00\u77ac\u95f4\u50cf\u542c\u89c1\u4e07\u7075\u8bf5\u7ecf\u3002"),
-        (IMMORTAL_SEED_CATEGORY, "\u9cb2\u9e4f\u6781\u901f\u4ed9\u79cd", "\u4e00\u9053\u9cb2\u9e4f\u5f71\u75d5\u6380\u5f00\u96f7\u5149\uff0c\u4ed9\u79cd\u843d\u5165\u8840\u8109\u6df1\u5904\u3002"),
+        (IMMORTAL_SEED_CATEGORY, "内景星源仙源", "灵台忽开一线星井，内景星源化作温润仙光纳入掌心。"),
+        (IMMORTAL_SEED_CATEGORY, "迅岚流影仙源", "一缕青白风息绕过雷痕，迅岚流影仙源在指间凝成。"),
         (SPECIAL_ABILITY_CATEGORY, "\u4ed6\u5316\u81ea\u5728\u5f71", "\u4e00\u9053\u4ed6\u5316\u6218\u5f71\u5728\u8eab\u540e\u51dd\u51fa\uff0c\u968f\u5373\u5316\u6210\u4f20\u627f\u6750\u6599\u3002"),
     ]
     rewards.extend((ARTIFACT_CATEGORY, name, f"\u5e1d\u5a01\u4e00\u95ea\uff0c{name}\u7684\u771f\u5f62\u4ece\u9669\u5730\u6df1\u5904\u6d6e\u73b0\u3002") for name in EMPEROR_ARTIFACT_NAMES)
@@ -6798,7 +8301,7 @@ def draw_mystic_entrances(record: UserRecord) -> list[dict[str, Any]]:
             "recommended": recommended_realm_text(beast_index, beast_stage),
             "boss_realm_index": beast_index,
             "boss_realm": REALMS[beast_index],
-            "boss_name": random.choice(BEAST_NAME_PREFIXES) + random.choice(BEAST_NAME_SUFFIXES),
+            "boss_name": random_beast_name(),
             "danger": random.randint(18, 38),
         },
         {
@@ -6809,33 +8312,43 @@ def draw_mystic_entrances(record: UserRecord) -> list[dict[str, Any]]:
             "false_lure": random.random() < 0.35,
         },
         {
-            "type": "太古矿区",
-            "title": "太古矿区",
+            "type": "星古矿区",
+            "title": "星古矿区",
             "recommended_index": clamp_index(base_index + random.choice([1, 2, 2, 3])),
             "danger": random.randint(20, 44),
             "false_lure": random.random() < 0.18,
         },
         {
-            "type": "虚神界残域",
-            "title": "虚神界残域",
+            "type": "魂界残域",
+            "title": "魂界残域",
             "recommended_index": clamp_index(base_index + random.choice([0, 1, 2, 2])),
             "danger": random.randint(16, 40),
         },
         {
-            "type": "青铜仙殿",
-            "title": "青铜仙殿",
+            "type": "古铜云阙",
+            "title": "古铜云阙",
             "recommended_index": clamp_index(base_index + random.choice([3, 4, 4, 5])),
             "danger": random.randint(28, 56),
             "false_lure": random.random() < 0.28,
         },
     ]
+    candidate_entries = [entry for entry in candidate_entries if str(entry.get("type")) in MYSTIC_ENABLED_TYPES]
     for entry in candidate_entries:
         entry.setdefault("recommended", recommended_realm_text(int(entry.get("recommended_index", base_index))))
     beast_entries = [entry for entry in candidate_entries if entry["type"] == "兽潮"]
     others = [entry for entry in candidate_entries if entry["type"] != "兽潮"]
-    entries = beast_entries + random.sample(others, k=2)
-    if random.random() < 0.28:
-        high_type = random.choice(HIGH_RISK_MYSTIC_REALM_TYPES)
+    entries: list[dict[str, Any]] = []
+    if beast_entries:
+        entries.append(beast_entries[0])
+    if others:
+        entries.extend(random.sample(others, k=min(2, len(others))))
+    if len(entries) < min(3, len(candidate_entries)):
+        remaining = [entry for entry in candidate_entries if entry not in entries]
+        if remaining:
+            entries.extend(random.sample(remaining, k=min(min(3, len(candidate_entries)) - len(entries), len(remaining))))
+    high_risk_pool = [item for item in HIGH_RISK_MYSTIC_REALM_TYPES if item in MYSTIC_ENABLED_HIGH_RISK_TYPES]
+    if high_risk_pool and (random.random() < 0.28 or not entries):
+        high_type = random.choice(high_risk_pool)
         high_index = clamp_index(base_index + random.choice([2, 3, 4, 5]))
         entries.append(
             {
@@ -6868,14 +8381,14 @@ def start_mystic_realm(
     entrance = entrance or {}
     realm_type = str(entrance.get("type") or realm_type).strip()
     if realm_type not in MYSTIC_REALM_TYPES and not is_high_risk_mystic_type(realm_type):
-        return False, "秘境类型可选：上古宗门遗址、兽潮、上古大能洞府、太古矿区、虚神界残域、青铜仙殿，以及高危险地。"
+        return False, "秘境类型可选：上古宗门遗址、兽潮、上古大能洞府、星古矿区、魂界残域、古铜云阙，以及高危险地。"
     if record.mystic_realm:
         return False, mystic_realm_options_text(record)
     if is_cultivation_locked(record, today):
         return False, blocked_cultivation_message(record)
     recommended_index = int(entrance.get("recommended_index", max(1, min(len(REALMS) - 1, record.realm_index + 2))))
     boss_realm = str(entrance.get("boss_realm") or REALMS[min(len(REALMS) - 1, recommended_index)])
-    boss_name = str(entrance.get("boss_name") or (random.choice(BEAST_NAME_PREFIXES) + random.choice(BEAST_NAME_SUFFIXES)))
+    boss_name = str(entrance.get("boss_name") or random_beast_name())
     realm = {
         "type": realm_type,
         "title": mystic_realm_title_from_entry(entrance) if entrance else realm_type,
@@ -6900,26 +8413,24 @@ def start_mystic_realm(
     return True, f"{mystic_realm_intro(realm)}\n{mystic_realm_options_text(record)}"
 
 def mystic_reward_category(realm_type: str) -> str:
-    if realm_type == "上古宗门遗址":
-        return weighted_choice([("功法", 4), (SPECIAL_ABILITY_CATEGORY, 2), ("丹药", 2), ("阵盘", 2), ("灵材", 3), ("灵植", 2), ("仙缘", 1), ("杂物", 1)])
-    if realm_type == "兽潮":
-        return weighted_choice([("灵材", 6), ("灵石", 3), ("符箓", 2), ("灵食", 2), ("灵植", 1), (SPECIAL_ABILITY_CATEGORY, 1), ("仙缘", 1)])
-    if realm_type == "太古矿区":
-        return weighted_choice([("灵材", 6), ("灵石", 4), ("奇物", 2), ("杂物", 2), ("仙缘", 1)])
-    if realm_type == "虚神界残域":
-        return weighted_choice([(SPECIAL_ABILITY_CATEGORY, 4), ("功法", 3), ("灵材", 2), ("符箓", 2), ("奇物", 2), ("仙缘", 1)])
-    if realm_type == "青铜仙殿":
-        return weighted_choice([(SPECIAL_ABILITY_CATEGORY, 4), ("灵材", 3), ("奇物", 3), ("灵器", 2), ("功法", 2), ("仙缘", 1)])
-    return weighted_choice([("奇物", 3), (SPECIAL_ABILITY_CATEGORY, 3), ("灵器", 2), ("丹药", 2), ("阵盘", 2), ("灵材", 2), ("灵植", 2), ("仙缘", 1), ("杂物", 2)])
+    configured = MYSTIC_CATEGORY_WEIGHTS.get(realm_type) or MYSTIC_CATEGORY_WEIGHTS.get("default")
+    if configured:
+        return weighted_choice(configured)
+    defaults = default_mystic_category_weights()
+    return weighted_choice(_category_weight_pairs(defaults.get(realm_type) or defaults["default"]))
 
 
-def draw_reward_by_category(category: str) -> dict[str, Any]:
+def draw_reward_by_category(category: str, record: Optional[UserRecord] = None, preferred_realm_index: Optional[int] = None) -> dict[str, Any]:
     pool = [reward for reward in FISHING_REWARDS if reward[2] == category]
     if not pool:
-        return draw_fishing_rewards(1)[0]
+        return draw_fishing_rewards(1, record)[0]
     tier, grade, item_category, name, description, _ = weighted_choice([(reward, float(reward[5])) for reward in pool])
-    return normalize_reward({"tier": tier, "grade": grade, "category": item_category, "name": name, "description": description})
-
+    if item_category == ARTIFACT_CATEGORY:
+        realm_index = preferred_realm_index if preferred_realm_index is not None else (int(record.realm_index) if record is not None else 0)
+        reward = draw_configured_artifact_reward(tier, grade)
+    else:
+        reward = {"tier": tier, "grade": grade, "category": item_category, "name": name, "description": description}
+    return normalize_reward(reward, record)
 
 def mystic_reward_tier(record: UserRecord, realm: dict[str, Any]) -> str:
     recommended = int(realm.get("recommended_index", record.realm_index or 1))
@@ -6943,11 +8454,38 @@ def matching_fishing_reward(category: str, hint: str) -> Optional[tuple[str, str
     return weighted_choice([(reward, float(reward[5])) for reward in source_pool])
 
 
+
+def draw_mystic_override_reward(record: UserRecord, realm: dict[str, Any]) -> Optional[dict[str, Any]]:
+    rewards = MYSTIC_DROP_OVERRIDES.get(str(realm.get("type"))) or MYSTIC_DROP_OVERRIDES.get(str(realm.get("title"))) or []
+    if not rewards:
+        return None
+    weighted: list[tuple[dict[str, Any], float]] = []
+    for item in rewards:
+        try:
+            weight = float(item.get("weight", 1))
+        except (TypeError, ValueError):
+            weight = 1.0
+        if weight > 0:
+            weighted.append((item, weight))
+    if not weighted:
+        return None
+    raw = dict(weighted_choice(weighted))
+    raw.pop("weight", None)
+    if reward_category(raw) == ARTIFACT_CATEGORY and not str(raw.get("name") or "").strip():
+        return normalize_reward(draw_configured_artifact_reward(str(raw.get("tier") or ""), str(raw.get("grade") or "")), record)
+    return normalize_reward(raw, record)
+
+
 def draw_mystic_event_reward(record: UserRecord, realm: dict[str, Any], event: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    override_reward = draw_mystic_override_reward(record, realm)
+    if override_reward is not None:
+        return reward_category(override_reward), override_reward
     category = str(event.get("category") or mystic_reward_category(str(realm.get("type"))))
     hint = str(event.get("reward_hint") or "").strip()
     tier = mystic_reward_tier(record, realm)
     grade = weighted_choice([("极品", 1), ("上品", 2), ("中品", 4), ("下品", 3)])
+    if category == ARTIFACT_CATEGORY:
+        return category, normalize_reward(draw_configured_artifact_reward(tier, grade), record)
     if category == SPECIAL_ABILITY_CATEGORY:
         matched = matching_fishing_reward(category, hint) if hint else None
         if matched is not None:
@@ -6968,7 +8506,7 @@ def draw_mystic_event_reward(record: UserRecord, realm: dict[str, Any], event: d
             tier, grade, item_category, name, description, _ = matched
             return category, normalize_reward({"tier": tier, "grade": grade, "category": item_category, "name": name, "description": description}, record)
         return category, normalize_reward({"tier": tier, "grade": grade, "category": category, "name": hint}, record)
-    return category, draw_reward_by_category(category)
+    return category, draw_reward_by_category(category, record, int(realm.get("recommended_index", record.realm_index)))
 
 
 def boss_archetype_config(realm: dict[str, Any]) -> dict[str, Any]:
@@ -6991,7 +8529,7 @@ def realm_index_from_name(realm_name: str, fallback: int = 0) -> int:
 
 def boss_tier_for_realm(realm_index: int) -> str:
     if realm_index >= 13:
-        return "帝兵"
+        return "仙帝兵"
     if realm_index >= 10:
         return "仙阶"
     if realm_index >= 5:
@@ -7016,9 +8554,7 @@ def boss_grade_for_realm(realm_index: int) -> str:
 
 
 def boss_method_layers_for(method: dict[str, Any], realm_index: int) -> dict[str, int]:
-    layer = max(1, min(9, 1 + realm_index // 2))
-    return {reward_signature(method): layer}
-
+    return {reward_signature(method): 1}
 
 def boss_record_for_realm(realm: dict[str, Any], player: UserRecord) -> UserRecord:
     config = boss_archetype_config(realm)
@@ -7028,14 +8564,14 @@ def boss_record_for_realm(realm: dict[str, Any], player: UserRecord) -> UserReco
     grade = boss_grade_for_realm(realm_index)
     boss_name = str(realm.get("boss_name") or "秘境首领")
     boss = UserRecord(user_id=f"boss:{mystic_boss_limit_key(realm)}:{boss_name}")
-    root_tier = tier if tier in TIER_RANKS and tier != "帝兵" else "天阶"
+    root_tier = tier if tier in TIER_RANKS and tier != "仙帝兵" else "天阶"
     purity = min(100, 72 + realm_index * 3)
     boss.root = make_root(root_tier, grade, attr, purity=purity, sources=[attr], source_purities={attr: purity})
     boss.realm_index = max(0, min(len(REALMS) - 1, realm_index))
     boss.realm_exp = int(realm_progress_required(boss.root, boss.realm_index) * min(0.88, 0.18 + realm_index * 0.035))
     boss.total_exp = cumulative_realm_exp(boss.root, boss.realm_index) + boss.realm_exp
     boss.sign_count = 30 + realm_index * 16
-    boss.combat_race = str(config.get("race") or "妖族-荒古异兽")
+    boss.combat_race = str(config.get("race") or "妖族-远荒异兽")
     boss.physique = str(config.get("physique") or "凡体")
     boss.special_abilities = [str(item) for item in config.get("abilities", ())]
     method = make_reward(tier, grade, METHOD_CATEGORY, str(config.get("method") or "万兽吞灵诀"))
@@ -7045,7 +8581,7 @@ def boss_record_for_realm(realm: dict[str, Any], player: UserRecord) -> UserReco
     method["content"] = "首领本命传承，战斗时会自行催发。"
     boss.equipped_method = method
     boss.method_layers = boss_method_layers_for(method, realm_index)
-    boss.method_proficiency = {reward_signature(method): max(80, realm_index * 35)}
+    boss.method_proficiency = {reward_signature(method): 0}
     artifact = make_reward(tier, grade, ARTIFACT_CATEGORY, str(config.get("artifact") or "兽王爪"))
     offhand = make_reward(tier, grade, ARTIFACT_CATEGORY, str(config.get("offhand") or "兽骨牌"))
     armor = make_reward(tier, grade, ARTIFACT_CATEGORY, str(config.get("armor") or "兽王甲"))
@@ -7059,6 +8595,7 @@ def boss_record_for_realm(realm: dict[str, Any], player: UserRecord) -> UserReco
     boss.equipped_talisman = talisman
     array = make_reward(tier, grade, ARRAY_CATEGORY, str(config.get("array") or "万兽奔雷阵"))
     boss.equipped_array = array
+    boss.array_layers = {reward_signature(array): 1}
     boss.array_proficiency = {reward_signature(array): max(100, realm_index * 45)}
     return boss
 
@@ -7208,8 +8745,11 @@ def boss_demon_core_reward(record: UserRecord, realm: dict[str, Any]) -> dict[st
             "grade": grade,
             "category": "灵材",
             "name": f"{attr}系{boss_realm}{boss_name}妖丹",
-            "description": f"{attr}行妖力凝成的首领妖丹，可作丹灵根补全五行。",
+            "description": f"{attr}行妖力凝成的首领妖丹，可作丹灵根补全五行，也可炼化为修为。",
             "required_attribute": attr,
+            "element": attr,
+            "beast_realm": boss_realm,
+            "source": f"秘境首领：{boss_realm}·{boss_name}",
         },
         record,
     )
@@ -7540,7 +9080,8 @@ def explore_mystic_realm(record: UserRecord, option_index: int, today: Optional[
                 lines.append(f"{success_text}触发 {reward_display_name(reward)}，但当前瓶颈或禁修阻住了灵机。")
         else:
             append_reward(record, reward)
-            lines.append(f"{success_text}获得 {reward_display_name(reward)}。")
+            reward_note = str(reward.get("growth_deduction_text") or f"获得 {reward_display_name(reward)}")
+            lines.append(f"{success_text}{reward_note}。")
         if category not in {"仙缘", "功法", "灵器", "阵盘", "傀儡", "灵植", SPECIAL_ABILITY_CATEGORY} and not is_cultivation_locked(record, today):
             exp = max(1, tier_exp(CONSUMABLE_EXP_BASE, str(reward.get("tier")), str(reward.get("grade"))) // 4)
             applied, _ = apply_exp(record, exp)
@@ -7564,13 +9105,24 @@ def explore_mystic_realm(record: UserRecord, option_index: int, today: Optional[
 
 def artifact_is_sword(artifact: Optional[dict[str, Any]]) -> bool:
     name = reward_name(artifact)
-    return any(token in name for token in ("剑", "飞剑", "剑谱"))
+    return any(token in name for token in ARTIFACT_SWORD_NAME_TOKENS)
 
 
 def route_power_multiplier(record: UserRecord) -> float:
-    slots = artifact_slots(record)
-    has_artifact = bool(slots)
-    has_sword = any(artifact_is_sword(item) for item in slots.values())
+    effective_artifacts = []
+    seen_names: set[str] = set()
+    for slot, artifact in artifact_slots(record).items():
+        if not artifact_slot_allowed(slot, artifact):
+            continue
+        if artifact_power(artifact, record) <= 0:
+            continue
+        name = reward_name(artifact)
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        effective_artifacts.append(artifact)
+    has_artifact = bool(effective_artifacts)
+    has_sword = any(artifact_is_sword(item) for item in effective_artifacts)
     if record.cultivation_route == "剑修" and has_sword:
         return 1.3
     if record.cultivation_route == "术修" and has_artifact and not has_sword:

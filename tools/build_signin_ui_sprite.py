@@ -11,12 +11,13 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 BG_PATH = ROOT / "assets" / "panel_backgrounds" / "signin_background.png"
-FONT_PATH = ROOT / "assets" / "fonts" / "NotoSansSC-VF.ttf"
+FONT_PATH = ROOT / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf"
 OUT_ROOT = ROOT / "assets" / "ui_sprite" / "signin" / "output"
-SPEC_DIR = OUT_ROOT / "spec"
-SHEET_DIR = OUT_ROOT / "spritesheet"
+BUILD_ROOT = ROOT / "build" / "ui_sprite" / "signin"
+SPEC_DIR = BUILD_ROOT / "spec"
+SHEET_DIR = BUILD_ROOT / "spritesheet"
 SPRITES_DIR = OUT_ROOT / "sprites"
-HTML_DIR = OUT_ROOT / "html"
+HTML_DIR = BUILD_ROOT / "html"
 
 OLD_AVATAR_PATH = Path(
     r"C:\Users\hszxjs\Desktop\b_6fd0a2b19991d594c05b91942159b137.jpg"
@@ -45,7 +46,7 @@ TEXT = {
 }
 
 GRID_ITEMS = [
-    ("\u7075\u5668", "[\u5929\u9636\u6781\u54c1\u7075\u5668 \u592a\u865a\u65a9\u661f\u5251]"),
+    ("\u7075\u5668", "[\u5929\u9636\u6781\u54c1\u7075\u5668 星阙断岳剑]"),
     ("\u529f\u6cd5", "[\u5929\u9636\u4e0a\u54c1\u529f\u6cd5 \u79bb\u706b\u70bc\u754c\u7bc7]"),
     ("\u9635\u76d8", "[\u7384\u9636\u6781\u54c1\u9635\u76d8 \u5c0f\u4e94\u884c\u805a\u7075\u76d8]"),
     ("\u9635\u6cd5\u719f\u7ec3", "\u719f\u7ec3\u5ea6 640/900 \u30fb 7.4x"),
@@ -547,7 +548,7 @@ def write_html() -> None:
   <style>
     @font-face {{
       font-family: XiuxianUI;
-      src: url("../../../../fonts/NotoSansSC-VF.ttf") format("truetype");
+      src: url("../../../../assets/fonts/HarmonyOS_Sans_SC.ttf") format("truetype");
       font-weight: 100 900;
     }}
     html, body {{
@@ -555,7 +556,7 @@ def write_html() -> None:
       width: 1254px;
       height: 1254px;
       background: transparent;
-      font-family: XiuxianUI, "Noto Sans SC", sans-serif;
+      font-family: XiuxianUI, "HarmonyOS Sans SC", sans-serif;
     }}
     .ui-root {{
       position: relative;

@@ -32,6 +32,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "httpx>=0.24.0",
     "pydantic>=1.10",
+    "starlette>=0.37.0",
 ]
 
 [project.urls]
@@ -57,15 +58,17 @@ nonebot_plugin_xiuxian_signin = "."
 [tool.setuptools.package-data]
 nonebot_plugin_xiuxian_signin = [
     "py.typed",
-    "assets/fonts/*.ttf",
+    "assets/fonts/HarmonyOS_Sans_SC.ttf",
+    "assets/fonts/LICENSE-update.txt",
+    "assets/character_portraits/manifest.json",
+    "assets/character_portraits/portraits/*.png",
     "assets/item_icons/item_icon_records.json",
     "assets/item_icons/items/*.png",
     "assets/panel_backgrounds/*.png",
     "assets/realm_quality_icons/realm_quality_icon_manifest.json",
-    "assets/realm_quality_icons/*.png",
+    "assets/realm_quality_icons/quality_*.png",
     "assets/spirit_root_icons/spirit_root_icon_manifest.json",
     "assets/spirit_root_icons/*.png",
-    "assets/ui_sprite/signin/output/spec/*.json",
     "assets/ui_sprite/signin/output/sprites/*.png",
 ]
 

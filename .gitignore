@@ -29,3 +29,23 @@ group_members.json
 .idea/
 .DS_Store
 Thumbs.db
+# Generated artifacts
+/assets/panel_previews/
+/assets/gpt_source/
+/assets/ui-sprite-runs/
+/assets/ui_sprite/*/output/html/
+/assets/ui_sprite/*/output/spec/
+/assets/ui_sprite/*/output/spritesheet/
+/assets/ui_sprite/*/output/previews/
+/assets/item_icons/_debug/
+/assets/item_icons/_backup*/
+/assets/item_icons/*_preview.png
+/assets/item_icons/*_report.json
+/assets/item_icons/*_report.md
+/assets/item_icons/*_mapping.*
+/assets/item_icons/cut_summary.json
+/assets/item_icons/sheet_grid_detection.json
+/assets/realm_quality_icons/*_preview.png
+/assets/realm_quality_icons/*_report.json
+/assets/realm_quality_icons/*.before_*.json
+/assets/*_sheet.png

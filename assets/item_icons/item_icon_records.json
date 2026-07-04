@@ -1,7 +1,7 @@
 [
   {
     "index": 1,
-    "item_name": "鸿蒙一气",
+    "item_name": "元初一气",
     "category": "仙缘",
     "tier": "天阶",
     "grade": "极品",
@@ -14,7 +14,7 @@
   },
   {
     "index": 2,
-    "item_name": "混沌莲胎",
+    "item_name": "浑元灵胎",
     "category": "仙缘",
     "tier": "天阶",
     "grade": "上品",
@@ -27,7 +27,7 @@
   },
   {
     "index": 3,
-    "item_name": "大道真种",
+    "item_name": "万道真种",
     "category": "仙缘",
     "tier": "天阶",
     "grade": "中品",
@@ -40,7 +40,7 @@
   },
   {
     "index": 4,
-    "item_name": "太初仙契",
+    "item_name": "星初仙契",
     "category": "仙缘",
     "tier": "天阶",
     "grade": "下品",
@@ -66,7 +66,7 @@
   },
   {
     "index": 6,
-    "item_name": "洞天福脉",
+    "item_name": "洞府福脉",
     "category": "仙缘",
     "tier": "地阶",
     "grade": "极品",
@@ -79,7 +79,7 @@
   },
   {
     "index": 7,
-    "item_name": "星河道胎",
+    "item_name": "星河灵胎",
     "category": "仙缘",
     "tier": "地阶",
     "grade": "上品",
@@ -105,7 +105,7 @@
   },
   {
     "index": 9,
-    "item_name": "青莲仙引",
+    "item_name": "青华仙引",
     "category": "仙缘",
     "tier": "地阶",
     "grade": "下品",
@@ -326,7 +326,7 @@
   },
   {
     "index": 26,
-    "item_name": "太虚斩星剑",
+    "item_name": "星阙断岳剑",
     "category": "灵器",
     "tier": "天阶",
     "grade": "极品",
@@ -378,7 +378,7 @@
   },
   {
     "index": 30,
-    "item_name": "青帝长生杖",
+    "item_name": "青衡万木杖",
     "category": "灵器",
     "tier": "天阶",
     "grade": "上品",
@@ -391,7 +391,7 @@
   },
   {
     "index": 31,
-    "item_name": "扶桑万灵弓",
+    "item_name": "青桑万灵弓",
     "category": "灵器",
     "tier": "天阶",
     "grade": "中品",
@@ -404,7 +404,7 @@
   },
   {
     "index": 32,
-    "item_name": "青莲开天尺",
+    "item_name": "青华开岳尺",
     "category": "灵器",
     "tier": "天阶",
     "grade": "下品",
@@ -417,7 +417,7 @@
   },
   {
     "index": 33,
-    "item_name": "建木归墟杖",
+    "item_name": "巨木归墟杖",
     "category": "灵器",
     "tier": "天阶",
     "grade": "极品",
@@ -430,7 +430,7 @@
   },
   {
     "index": 34,
-    "item_name": "九霄镇海印",
+    "item_name": "云海镇澜印",
     "category": "灵器",
     "tier": "天阶",
     "grade": "上品",
@@ -495,7 +495,7 @@
   },
   {
     "index": 39,
-    "item_name": "朱雀焚世旗",
+    "item_name": "赤羽焚世旗",
     "category": "灵器",
     "tier": "天阶",
     "grade": "下品",
@@ -508,7 +508,7 @@
   },
   {
     "index": 40,
-    "item_name": "太阳炼神炉",
+    "item_name": "赤阳炼神炉",
     "category": "灵器",
     "tier": "天阶",
     "grade": "极品",
@@ -534,7 +534,7 @@
   },
   {
     "index": 42,
-    "item_name": "山河社稷印",
+    "item_name": "坤舆镇岳印",
     "category": "灵器",
     "tier": "天阶",
     "grade": "中品",
@@ -586,7 +586,7 @@
   },
   {
     "index": 46,
-    "item_name": "紫霄御雷槌",
+    "item_name": "玄雷破劫槌",
     "category": "灵器",
     "tier": "天阶",
     "grade": "下品",
@@ -599,7 +599,7 @@
   },
   {
     "index": 47,
-    "item_name": "紫霄万劫剑",
+    "item_name": "玄雷万劫剑",
     "category": "灵器",
     "tier": "天阶",
     "grade": "极品",
@@ -638,7 +638,7 @@
   },
   {
     "index": 50,
-    "item_name": "玄冥封天镜",
+    "item_name": "寒冥锁天镜",
     "category": "灵器",
     "tier": "天阶",
     "grade": "下品",
@@ -651,7 +651,7 @@
   },
   {
     "index": 51,
-    "item_name": "太阴封界轮",
+    "item_name": "玄阴封界轮",
     "category": "灵器",
     "tier": "天阶",
     "grade": "上品",
@@ -1340,7 +1340,7 @@
   },
   {
     "index": 104,
-    "item_name": "雷竹引劫剑",
+    "item_name": "雷枝引劫剑",
     "category": "灵器",
     "tier": "玄阶",
     "grade": "上品",
@@ -1951,7 +1951,7 @@
   },
   {
     "index": 166,
-    "item_name": "太白斩星经",
+    "item_name": "白衡斩星经",
     "category": "功法",
     "tier": "天阶",
     "grade": "极品",
@@ -1990,7 +1990,7 @@
   },
   {
     "index": 170,
-    "item_name": "青帝长生经",
+    "item_name": "青衡生息经",
     "category": "功法",
     "tier": "天阶",
     "grade": "上品",
@@ -2003,7 +2003,7 @@
   },
   {
     "index": 171,
-    "item_name": "青莲造化经",
+    "item_name": "青华造化经",
     "category": "功法",
     "tier": "天阶",
     "grade": "中品",
@@ -2029,7 +2029,7 @@
   },
   {
     "index": 173,
-    "item_name": "建木通天录",
+    "item_name": "巨木通天录",
     "category": "功法",
     "tier": "天阶",
     "grade": "极品",
@@ -2042,7 +2042,7 @@
   },
   {
     "index": 174,
-    "item_name": "玄冥归海经",
+    "item_name": "寒冥归海经",
     "category": "功法",
     "tier": "天阶",
     "grade": "上品",
@@ -2107,7 +2107,7 @@
   },
   {
     "index": 179,
-    "item_name": "太阳真火录",
+    "item_name": "赤阳真火录",
     "category": "功法",
     "tier": "天阶",
     "grade": "下品",
@@ -2185,7 +2185,7 @@
   },
   {
     "index": 186,
-    "item_name": "紫霄神雷诀",
+    "item_name": "玄霄神雷诀",
     "category": "功法",
     "tier": "天阶",
     "grade": "下品",
@@ -2211,7 +2211,7 @@
   },
   {
     "index": 188,
-    "item_name": "紫霄御劫篇",
+    "item_name": "玄雷御劫篇",
     "category": "功法",
     "tier": "天阶",
     "grade": "上品",
@@ -2237,7 +2237,7 @@
   },
   {
     "index": 190,
-    "item_name": "太阴玄冰录",
+    "item_name": "玄阴冰魄录",
     "category": "功法",
     "tier": "天阶",
     "grade": "下品",
@@ -2250,7 +2250,7 @@
   },
   {
     "index": 191,
-    "item_name": "太阴封神录",
+    "item_name": "玄阴封神录",
     "category": "功法",
     "tier": "天阶",
     "grade": "上品",
@@ -2289,7 +2289,7 @@
   },
   {
     "index": 195,
-    "item_name": "白虎庚金诀",
+    "item_name": "白锋庚金诀",
     "category": "功法",
     "tier": "地阶",
     "grade": "上品",
@@ -4031,7 +4031,7 @@
   },
   {
     "index": 351,
-    "item_name": "周天星斗阵盘",
+    "item_name": "星罗天衡阵盘",
     "category": "阵盘",
     "tier": "天阶",
     "grade": "极品",
@@ -4044,7 +4044,7 @@
   },
   {
     "index": 352,
-    "item_name": "太虚锁界盘",
+    "item_name": "星墟锁界盘",
     "category": "阵盘",
     "tier": "天阶",
     "grade": "上品",
@@ -4057,7 +4057,7 @@
   },
   {
     "index": 353,
-    "item_name": "九曜归墟盘",
+    "item_name": "星律归墟盘",
     "category": "阵盘",
     "tier": "天阶",
     "grade": "中品",
@@ -4070,7 +4070,7 @@
   },
   {
     "index": 354,
-    "item_name": "四象护山盘",
+    "item_name": "四仪护山盘",
     "category": "阵盘",
     "tier": "地阶",
     "grade": "极品",
@@ -4083,7 +4083,7 @@
   },
   {
     "index": 355,
-    "item_name": "玄武镇宅盘",
+    "item_name": "玄甲镇宅盘",
     "category": "阵盘",
     "tier": "地阶",
     "grade": "上品",
@@ -4096,7 +4096,7 @@
   },
   {
     "index": 356,
-    "item_name": "青龙引雷盘",
+    "item_name": "青麟引雷盘",
     "category": "阵盘",
     "tier": "地阶",
     "grade": "中品",
@@ -4200,7 +4200,7 @@
   },
   {
     "index": 366,
-    "item_name": "混沌星砂",
+    "item_name": "浑元星砂",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4213,7 +4213,7 @@
   },
   {
     "index": 367,
-    "item_name": "太白仙金",
+    "item_name": "白曜仙金",
     "category": "灵材",
     "tier": "天阶",
     "grade": "中品",
@@ -4265,7 +4265,7 @@
   },
   {
     "index": 371,
-    "item_name": "太阳真火液",
+    "item_name": "赤阳真火液",
     "category": "灵材",
     "tier": "天阶",
     "grade": "中品",
@@ -4278,7 +4278,7 @@
   },
   {
     "index": 372,
-    "item_name": "太阴寒髓",
+    "item_name": "玄阴寒髓",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4291,7 +4291,7 @@
   },
   {
     "index": 373,
-    "item_name": "玄黄母气",
+    "item_name": "坤元母气",
     "category": "灵材",
     "tier": "天阶",
     "grade": "中品",
@@ -4304,7 +4304,7 @@
   },
   {
     "index": 374,
-    "item_name": "大道莲子",
+    "item_name": "万道莲实",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4330,7 +4330,7 @@
   },
   {
     "index": 376,
-    "item_name": "准圣妖丹",
+    "item_name": "古妖王丹",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4343,7 +4343,7 @@
   },
   {
     "index": 377,
-    "item_name": "仙殿青铜锈",
+    "item_name": "云殿铜锈",
     "category": "灵材",
     "tier": "天阶",
     "grade": "中品",
@@ -4369,7 +4369,7 @@
   },
   {
     "index": 379,
-    "item_name": "虚神魂晶",
+    "item_name": "魂界灵晶",
     "category": "灵材",
     "tier": "天阶",
     "grade": "中品",
@@ -4382,7 +4382,7 @@
   },
   {
     "index": 380,
-    "item_name": "太古兽骨",
+    "item_name": "远古兽骨",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4408,7 +4408,7 @@
   },
   {
     "index": 382,
-    "item_name": "虚空仙金",
+    "item_name": "空痕仙金",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4421,7 +4421,7 @@
   },
   {
     "index": 383,
-    "item_name": "凰血赤金",
+    "item_name": "赤羽曜金",
     "category": "灵材",
     "tier": "天阶",
     "grade": "中品",
@@ -4434,7 +4434,7 @@
   },
   {
     "index": 384,
-    "item_name": "龙纹黑金",
+    "item_name": "玄龙纹金",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4460,7 +4460,7 @@
   },
   {
     "index": 386,
-    "item_name": "万物母气",
+    "item_name": "坤元母气",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4473,7 +4473,7 @@
   },
   {
     "index": 387,
-    "item_name": "万物母气源根",
+    "item_name": "坤源根",
     "category": "灵材",
     "tier": "天阶",
     "grade": "中品",
@@ -4486,7 +4486,7 @@
   },
   {
     "index": 388,
-    "item_name": "不死药青莲残躯",
+    "item_name": "青华生机残晶",
     "category": "灵材",
     "tier": "天阶",
     "grade": "上品",
@@ -4668,7 +4668,7 @@
   },
   {
     "index": 402,
-    "item_name": "太古源石",
+    "item_name": "荒脉源石",
     "category": "灵材",
     "tier": "地阶",
     "grade": "中品",
@@ -4681,7 +4681,7 @@
   },
   {
     "index": 403,
-    "item_name": "青铜仙纹",
+    "item_name": "古铜云纹",
     "category": "灵材",
     "tier": "地阶",
     "grade": "上品",
@@ -4694,7 +4694,7 @@
   },
   {
     "index": 404,
-    "item_name": "青竹蜂云剑剑胚",
+    "item_name": "翠雷云竹剑剑胚",
     "category": "灵材",
     "tier": "地阶",
     "grade": "中品",
@@ -4707,7 +4707,7 @@
   },
   {
     "index": 405,
-    "item_name": "金雷竹",
+    "item_name": "金纹雷枝",
     "category": "灵材",
     "tier": "地阶",
     "grade": "上品",
@@ -4720,7 +4720,7 @@
   },
   {
     "index": 406,
-    "item_name": "辟邪神雷竹叶",
+    "item_name": "破邪雷叶",
     "category": "灵材",
     "tier": "地阶",
     "grade": "中品",
@@ -4733,7 +4733,7 @@
   },
   {
     "index": 407,
-    "item_name": "大衍神沙",
+    "item_name": "星衍灵沙",
     "category": "灵材",
     "tier": "地阶",
     "grade": "上品",
@@ -4915,7 +4915,7 @@
   },
   {
     "index": 421,
-    "item_name": "虚神魂砂",
+    "item_name": "魂界灵砂",
     "category": "灵材",
     "tier": "玄阶",
     "grade": "中品",
@@ -4941,7 +4941,7 @@
   },
   {
     "index": 423,
-    "item_name": "青竹蜂云剑图谱",
+    "item_name": "翠雷云竹剑图谱",
     "category": "灵材",
     "tier": "玄阶",
     "grade": "中品",
@@ -4954,7 +4954,7 @@
   },
   {
     "index": 424,
-    "item_name": "金雷竹枝",
+    "item_name": "金纹雷枝",
     "category": "灵材",
     "tier": "玄阶",
     "grade": "上品",
@@ -5370,7 +5370,7 @@
   },
   {
     "index": 456,
-    "item_name": "乾坤挪移符",
+    "item_name": "移形换位符",
     "category": "符箓",
     "tier": "天阶",
     "grade": "上品",
@@ -6072,7 +6072,7 @@
   },
   {
     "index": 512,
-    "item_name": "鸿蒙紫气",
+    "item_name": "元初紫气",
     "category": "奇物",
     "tier": "天阶",
     "grade": "上品",
@@ -6293,7 +6293,7 @@
   },
   {
     "index": 531,
-    "item_name": "道祖法旨",
+    "item_name": "道源符诏",
     "category": "奇物",
     "tier": "地阶",
     "grade": "上品",
@@ -6501,7 +6501,7 @@
   },
   {
     "index": 548,
-    "item_name": "大道真箓",
+    "item_name": "万道真箓",
     "category": "奇物",
     "tier": "地阶",
     "grade": "中品",
@@ -6852,8 +6852,8 @@
   },
   {
     "index": 578,
-    "item_name": "九秘残页",
-    "category": "特殊能力",
+    "item_name": "星律残页",
+    "category": "神通",
     "tier": "凡品、地阶、天阶、玄阶、黄阶",
     "grade": "上品、中品、极品",
     "sheet_index": 5,
@@ -6865,8 +6865,8 @@
   },
   {
     "index": 579,
-    "item_name": "神禁烙印",
-    "category": "特殊能力",
+    "item_name": "归极印纹",
+    "category": "神通",
     "tier": "地阶、天阶",
     "grade": "上品、下品、中品",
     "sheet_index": 5,
@@ -6878,8 +6878,8 @@
   },
   {
     "index": 580,
-    "item_name": "他化自在影",
-    "category": "特殊能力",
+    "item_name": "万象战影",
+    "category": "神通",
     "tier": "天阶",
     "grade": "中品、极品",
     "sheet_index": 5,
@@ -6891,8 +6891,8 @@
   },
   {
     "index": 581,
-    "item_name": "因果断线真箓",
-    "category": "特殊能力",
+    "item_name": "命络断线真箓",
+    "category": "神通",
     "tier": "天阶",
     "grade": "下品、中品",
     "sheet_index": 5,
@@ -6904,8 +6904,8 @@
   },
   {
     "index": 582,
-    "item_name": "牧天九歌玉简",
-    "category": "特殊能力",
+    "item_name": "云章九歌玉简",
+    "category": "神通",
     "tier": "地阶、天阶",
     "grade": "极品",
     "sheet_index": 5,
@@ -6917,8 +6917,8 @@
   },
   {
     "index": 583,
-    "item_name": "天问一式法旨",
-    "category": "特殊能力",
+    "item_name": "叩穹一式符令",
+    "category": "神通",
     "tier": "天阶",
     "grade": "下品、极品",
     "sheet_index": 5,
@@ -6931,7 +6931,7 @@
   {
     "index": 584,
     "item_name": "元婴天兆星痕",
-    "category": "特殊能力",
+    "category": "神通",
     "tier": "地阶、天阶",
     "grade": "上品、极品",
     "sheet_index": 5,
@@ -6943,8 +6943,8 @@
   },
   {
     "index": 585,
-    "item_name": "九禁感悟",
-    "category": "特殊能力",
+    "item_name": "重阈战札",
+    "category": "神通",
     "tier": "凡品、地阶、天阶、玄阶",
     "grade": "上品、中品",
     "sheet_index": 5,
@@ -6956,8 +6956,8 @@
   },
   {
     "index": 586,
-    "item_name": "至尊骨符文",
-    "category": "特殊能力",
+    "item_name": "灵骨天纹",
+    "category": "神通",
     "tier": "地阶、天阶",
     "grade": "上品、下品",
     "sheet_index": 5,
@@ -6969,8 +6969,8 @@
   },
   {
     "index": 587,
-    "item_name": "以身为种道痕",
-    "category": "特殊能力",
+    "item_name": "身界蕴种道痕",
+    "category": "神通",
     "tier": "地阶、天阶",
     "grade": "极品",
     "sheet_index": 5,
@@ -6982,8 +6982,8 @@
   },
   {
     "index": 589,
-    "item_name": "杀戮本源血符",
-    "category": "特殊能力",
+    "item_name": "血战真源血符",
+    "category": "神通",
     "tier": "地阶",
     "grade": "上品、极品",
     "sheet_index": 5,
@@ -6995,8 +6995,8 @@
   },
   {
     "index": 590,
-    "item_name": "梦道轮回沙",
-    "category": "特殊能力",
+    "item_name": "梦潮回环沙",
+    "category": "神通",
     "tier": "地阶、天阶",
     "grade": "下品、中品",
     "sheet_index": 5,
@@ -7008,8 +7008,8 @@
   },
   {
     "index": 591,
-    "item_name": "八禁感悟",
-    "category": "特殊能力",
+    "item_name": "初阈战札",
+    "category": "神通",
     "tier": "凡品、玄阶、黄阶",
     "grade": "极品",
     "sheet_index": 5,
@@ -7021,8 +7021,8 @@
   },
   {
     "index": 592,
-    "item_name": "道经轮海残章",
-    "category": "特殊能力",
+    "item_name": "沧元道章残页",
+    "category": "神通",
     "tier": "地阶、玄阶",
     "grade": "下品、中品",
     "sheet_index": 5,
@@ -7034,8 +7034,8 @@
   },
   {
     "index": 593,
-    "item_name": "斗战圣法残卷",
-    "category": "特殊能力",
+    "item_name": "战演真法残卷",
+    "category": "神通",
     "tier": "天阶、玄阶",
     "grade": "下品、极品",
     "sheet_index": 5,
@@ -7047,8 +7047,8 @@
   },
   {
     "index": 594,
-    "item_name": "鲲鹏极速羽痕",
-    "category": "特殊能力",
+    "item_name": "风掣疾行风痕",
+    "category": "神通",
     "tier": "天阶、玄阶",
     "grade": "上品、极品",
     "sheet_index": 5,
@@ -7060,8 +7060,8 @@
   },
   {
     "index": 595,
-    "item_name": "古神一指骨纹",
-    "category": "特殊能力",
+    "item_name": "沉岳指印骨纹",
+    "category": "神通",
     "tier": "地阶、玄阶",
     "grade": "上品、极品",
     "sheet_index": 5,
@@ -7073,8 +7073,8 @@
   },
   {
     "index": 596,
-    "item_name": "神藏开阖残图",
-    "category": "特殊能力",
+    "item_name": "内府开阖残图",
+    "category": "神通",
     "tier": "玄阶",
     "grade": "中品、极品",
     "sheet_index": 5,
@@ -7086,8 +7086,8 @@
   },
   {
     "index": 597,
-    "item_name": "掌天瓶影拓片",
-    "category": "特殊能力",
+    "item_name": "翠盏灵影拓片",
+    "category": "神通",
     "tier": "地阶、黄阶",
     "grade": "上品",
     "sheet_index": 5,
@@ -7099,8 +7099,8 @@
   },
   {
     "index": 598,
-    "item_name": "青帝莲相旧纹",
-    "category": "特殊能力",
+    "item_name": "青华法相旧纹",
+    "category": "神通",
     "tier": "天阶、黄阶",
     "grade": "下品、中品",
     "sheet_index": 5,
@@ -7112,8 +7112,8 @@
   },
   {
     "index": 599,
-    "item_name": "柳神法相枝影",
-    "category": "特殊能力",
+    "item_name": "青枝护相枝影",
+    "category": "神通",
     "tier": "天阶、黄阶",
     "grade": "下品、中品",
     "sheet_index": 5,
@@ -7125,8 +7125,8 @@
   },
   {
     "index": 601,
-    "item_name": "岁月意境残砂",
-    "category": "特殊能力",
+    "item_name": "流年意境残砂",
+    "category": "神通",
     "tier": "地阶、黄阶",
     "grade": "上品、极品",
     "sheet_index": 6,
@@ -7138,8 +7138,8 @@
   },
   {
     "index": 602,
-    "item_name": "问道旧简",
-    "category": "特殊能力",
+    "item_name": "问玄旧简",
+    "category": "神通",
     "tier": "凡品、天阶、黄阶",
     "grade": "下品、中品",
     "sheet_index": 6,
@@ -7151,8 +7151,8 @@
   },
   {
     "index": 603,
-    "item_name": "凡骨战意札",
-    "category": "特殊能力",
+    "item_name": "初阈战意札",
+    "category": "神通",
     "tier": "凡品、玄阶",
     "grade": "上品、极品",
     "sheet_index": 6,
@@ -7164,8 +7164,8 @@
   },
   {
     "index": 604,
-    "item_name": "小神藏残图",
-    "category": "特殊能力",
+    "item_name": "小内府残图",
+    "category": "神通",
     "tier": "凡品、玄阶",
     "grade": "下品、极品",
     "sheet_index": 6,
@@ -7177,8 +7177,8 @@
   },
   {
     "index": 605,
-    "item_name": "青元剑芒残页",
-    "category": "特殊能力",
+    "item_name": "澄元剑芒残页",
+    "category": "神通",
     "tier": "凡品、玄阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -7190,8 +7190,8 @@
   },
   {
     "index": 606,
-    "item_name": "掌天瓶影碎片",
-    "category": "特殊能力",
+    "item_name": "翠盏灵影碎片",
+    "category": "神通",
     "tier": "凡品、地阶",
     "grade": "上品、极品",
     "sheet_index": 6,
@@ -7385,7 +7385,7 @@
   },
   {
     "index": 621,
-    "item_name": "准圣妖血丹",
+    "item_name": "古妖王血丹",
     "category": "丹药",
     "tier": "天阶",
     "grade": "极品",
@@ -7398,7 +7398,7 @@
   },
   {
     "index": 622,
-    "item_name": "青竹蜂云剑",
+    "item_name": "翠雷云竹剑",
     "category": "灵器",
     "tier": "玄阶",
     "grade": "上品",
@@ -7411,7 +7411,7 @@
   },
   {
     "index": 623,
-    "item_name": "庚金青竹蜂云剑",
+    "item_name": "玄金雷枝剑",
     "category": "灵器",
     "tier": "地阶",
     "grade": "极品",
@@ -7424,7 +7424,7 @@
   },
   {
     "index": 624,
-    "item_name": "大庚剑阵",
+    "item_name": "玄金列星剑阵",
     "category": "阵盘",
     "tier": "天阶",
     "grade": "极品",
@@ -7437,7 +7437,7 @@
   },
   {
     "index": 625,
-    "item_name": "虚空镜仿制品",
+    "item_name": "空衡明镜仿制品",
     "category": "灵器",
     "tier": "仙阶",
     "grade": "中品",
@@ -7450,7 +7450,7 @@
   },
   {
     "index": 626,
-    "item_name": "万物母气鼎仿制品",
+    "item_name": "坤元源鼎仿制品",
     "category": "灵器",
     "tier": "仙阶",
     "grade": "上品",
@@ -7515,7 +7515,7 @@
   },
   {
     "index": 631,
-    "item_name": "虚神照魂镜",
+    "item_name": "魂界照魂镜",
     "category": "灵器",
     "tier": "地阶",
     "grade": "下品",
@@ -7567,7 +7567,7 @@
   },
   {
     "index": 635,
-    "item_name": "小庚剑阵盘",
+    "item_name": "小玄金剑阵盘",
     "category": "阵盘",
     "tier": "玄阶",
     "grade": "极品",
@@ -7580,7 +7580,7 @@
   },
   {
     "index": 636,
-    "item_name": "太白仙金剑胎",
+    "item_name": "白曜星金剑胎",
     "category": "灵器",
     "tier": "天阶",
     "grade": "极品",
@@ -7593,7 +7593,7 @@
   },
   {
     "index": 637,
-    "item_name": "青铜仙纹盘",
+    "item_name": "古铜云纹盘",
     "category": "阵盘",
     "tier": "天阶",
     "grade": "上品",
@@ -7606,7 +7606,7 @@
   },
   {
     "index": 638,
-    "item_name": "凰血赤金炉仿品",
+    "item_name": "赤羽曜金炉仿品",
     "category": "灵器",
     "tier": "仙阶",
     "grade": "下品",
@@ -7619,7 +7619,7 @@
   },
   {
     "index": 639,
-    "item_name": "龙纹黑金鼎仿品",
+    "item_name": "玄龙纹金鼎仿品",
     "category": "灵器",
     "tier": "仙阶",
     "grade": "中品",
@@ -7632,7 +7632,7 @@
   },
   {
     "index": 640,
-    "item_name": "狠人面具仿品",
+    "item_name": "尘镜隐面仿品",
     "category": "灵器",
     "tier": "仙阶",
     "grade": "中品",
@@ -7684,7 +7684,7 @@
   },
   {
     "index": 644,
-    "item_name": "太虚观想篇",
+    "item_name": "星墟观想篇",
     "category": "功法",
     "tier": "",
     "grade": "",
@@ -7697,7 +7697,7 @@
   },
   {
     "index": 645,
-    "item_name": "昆仑镜碎光",
+    "item_name": "镜湖碎光",
     "category": "奇物",
     "tier": "",
     "grade": "",
@@ -7710,7 +7710,7 @@
   },
   {
     "index": 646,
-    "item_name": "乾蓝冰焰",
+    "item_name": "玄蓝冰焰",
     "category": "奇物",
     "tier": "",
     "grade": "",
@@ -7723,7 +7723,7 @@
   },
   {
     "index": 647,
-    "item_name": "虚天鼎",
+    "item_name": "穹衡古鼎",
     "category": "奇物",
     "tier": "",
     "grade": "",
@@ -7736,7 +7736,7 @@
   },
   {
     "index": 648,
-    "item_name": "人皇印",
+    "item_name": "人道镇印",
     "category": "奇物",
     "tier": "",
     "grade": "",
@@ -7762,9 +7762,9 @@
   },
   {
     "index": 650,
-    "item_name": "青莲帝兵",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "青华生灭印",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "B5",
@@ -7775,9 +7775,9 @@
   },
   {
     "index": 651,
-    "item_name": "虚空镜",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "空衡明镜",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "C5",
@@ -7788,9 +7788,9 @@
   },
   {
     "index": 652,
-    "item_name": "恒宇炉",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "恒焰天炉",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "D5",
@@ -7801,9 +7801,9 @@
   },
   {
     "index": 653,
-    "item_name": "万物母气鼎",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "坤元源鼎",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "E5",
@@ -7814,9 +7814,9 @@
   },
   {
     "index": 654,
-    "item_name": "青铜面具",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "尘镜隐面",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "F5",
@@ -7827,9 +7827,9 @@
   },
   {
     "index": 655,
-    "item_name": "吞天魔罐",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "晦星封藏瓮",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "G5",
@@ -7840,9 +7840,9 @@
   },
   {
     "index": 656,
-    "item_name": "龙纹黑金鼎",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "玄龙纹金鼎",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "H5",
@@ -7853,9 +7853,9 @@
   },
   {
     "index": 657,
-    "item_name": "青铜仙殿",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "古铜云阙",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "I5",
@@ -7866,9 +7866,9 @@
   },
   {
     "index": 658,
-    "item_name": "狠人仙剑",
-    "category": "帝兵",
-    "tier": "帝兵",
+    "item_name": "断尘仙剑",
+    "category": "仙帝兵",
+    "tier": "仙帝兵",
     "grade": "极品",
     "sheet_index": 6,
     "cell": "J5",
@@ -7879,8 +7879,8 @@
   },
   {
     "index": 659,
-    "item_name": "以身为种仙种",
-    "category": "仙种",
+    "item_name": "内景星源仙源",
+    "category": "仙源",
     "tier": "仙阶",
     "grade": "",
     "sheet_index": 6,
@@ -7888,12 +7888,12 @@
     "row": 5,
     "col": 11,
     "icon": "items/item_659.png",
-    "opaque_pixels": 4645
+    "opaque_pixels": 8709
   },
   {
     "index": 660,
-    "item_name": "柳神涅槃仙种",
-    "category": "仙种",
+    "item_name": "翠脉回春仙源",
+    "category": "仙源",
     "tier": "仙阶",
     "grade": "",
     "sheet_index": 6,
@@ -7901,12 +7901,12 @@
     "row": 5,
     "col": 12,
     "icon": "items/item_660.png",
-    "opaque_pixels": 3088
+    "opaque_pixels": 8978
   },
   {
     "index": 661,
-    "item_name": "鲲鹏极速仙种",
-    "category": "仙种",
+    "item_name": "迅岚流影仙源",
+    "category": "仙源",
     "tier": "仙阶",
     "grade": "",
     "sheet_index": 6,
@@ -7914,12 +7914,12 @@
     "row": 6,
     "col": 1,
     "icon": "items/item_661.png",
-    "opaque_pixels": 2864
+    "opaque_pixels": 8731
   },
   {
     "index": 662,
-    "item_name": "十洞天仙种",
-    "category": "仙种",
+    "item_name": "守环玄域仙源",
+    "category": "仙源",
     "tier": "仙阶",
     "grade": "",
     "sheet_index": 6,
@@ -7927,12 +7927,12 @@
     "row": 6,
     "col": 2,
     "icon": "items/item_662.png",
-    "opaque_pixels": 2525
+    "opaque_pixels": 8715
   },
   {
     "index": 663,
-    "item_name": "轮回梦道仙种",
-    "category": "仙种",
+    "item_name": "澄梦回澜仙源",
+    "category": "仙源",
     "tier": "仙阶",
     "grade": "",
     "sheet_index": 6,
@@ -7940,12 +7940,12 @@
     "row": 6,
     "col": 3,
     "icon": "items/item_663.png",
-    "opaque_pixels": 4438
+    "opaque_pixels": 8721
   },
   {
     "index": 664,
-    "item_name": "八禁",
-    "category": "特殊能力",
+    "item_name": "初阈",
+    "category": "神通",
     "tier": "玄阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -7957,8 +7957,8 @@
   },
   {
     "index": 665,
-    "item_name": "九禁",
-    "category": "特殊能力",
+    "item_name": "重阈",
+    "category": "神通",
     "tier": "地阶",
     "grade": "中品",
     "sheet_index": 6,
@@ -7970,8 +7970,8 @@
   },
   {
     "index": 666,
-    "item_name": "神禁领域",
-    "category": "特殊能力",
+    "item_name": "归极域",
+    "category": "神通",
     "tier": "天阶",
     "grade": "下品",
     "sheet_index": 6,
@@ -7983,8 +7983,8 @@
   },
   {
     "index": 667,
-    "item_name": "九秘-临字秘",
-    "category": "特殊能力",
+    "item_name": "星律-定魂篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -7996,8 +7996,8 @@
   },
   {
     "index": 668,
-    "item_name": "九秘-兵字秘",
-    "category": "特殊能力",
+    "item_name": "星律-御器篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8009,8 +8009,8 @@
   },
   {
     "index": 669,
-    "item_name": "九秘-斗字秘",
-    "category": "特殊能力",
+    "item_name": "星律-斗衡篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8022,8 +8022,8 @@
   },
   {
     "index": 670,
-    "item_name": "九秘-者字秘",
-    "category": "特殊能力",
+    "item_name": "星律-回生篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8035,8 +8035,8 @@
   },
   {
     "index": 671,
-    "item_name": "九秘-皆字秘",
-    "category": "特殊能力",
+    "item_name": "星律-贯元篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8048,8 +8048,8 @@
   },
   {
     "index": 672,
-    "item_name": "九秘-数字秘",
-    "category": "特殊能力",
+    "item_name": "星律-观势篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8061,8 +8061,8 @@
   },
   {
     "index": 673,
-    "item_name": "九秘-组字秘",
-    "category": "特殊能力",
+    "item_name": "星律-布阵篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8074,8 +8074,8 @@
   },
   {
     "index": 674,
-    "item_name": "九秘-前字秘",
-    "category": "特殊能力",
+    "item_name": "星律-先觉篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8087,8 +8087,8 @@
   },
   {
     "index": 675,
-    "item_name": "九秘-行字秘",
-    "category": "特殊能力",
+    "item_name": "星律-流影篇",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8100,8 +8100,8 @@
   },
   {
     "index": 676,
-    "item_name": "掌天瓶影",
-    "category": "特殊能力",
+    "item_name": "翠盏灵影",
+    "category": "神通",
     "tier": "地阶",
     "grade": "上品",
     "sheet_index": 6,
@@ -8113,8 +8113,8 @@
   },
   {
     "index": 677,
-    "item_name": "青元剑芒",
-    "category": "特殊能力",
+    "item_name": "澄元剑芒",
+    "category": "神通",
     "tier": "玄阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8127,7 +8127,7 @@
   {
     "index": 678,
     "item_name": "元婴天兆",
-    "category": "特殊能力",
+    "category": "神通",
     "tier": "地阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8139,8 +8139,8 @@
   },
   {
     "index": 679,
-    "item_name": "道经轮海",
-    "category": "特殊能力",
+    "item_name": "沧元道章",
+    "category": "神通",
     "tier": "地阶",
     "grade": "中品",
     "sheet_index": 6,
@@ -8152,8 +8152,8 @@
   },
   {
     "index": 680,
-    "item_name": "斗战圣法",
-    "category": "特殊能力",
+    "item_name": "战演真法",
+    "category": "神通",
     "tier": "天阶",
     "grade": "下品",
     "sheet_index": 6,
@@ -8165,8 +8165,8 @@
   },
   {
     "index": 681,
-    "item_name": "荒古圣血",
-    "category": "特殊能力",
+    "item_name": "玄金血脉",
+    "category": "神通",
     "tier": "天阶",
     "grade": "中品",
     "sheet_index": 6,
@@ -8178,8 +8178,8 @@
   },
   {
     "index": 682,
-    "item_name": "青帝莲相",
-    "category": "特殊能力",
+    "item_name": "青华法相",
+    "category": "神通",
     "tier": "天阶",
     "grade": "下品",
     "sheet_index": 6,
@@ -8191,8 +8191,8 @@
   },
   {
     "index": 683,
-    "item_name": "以身为种",
-    "category": "特殊能力",
+    "item_name": "身界蕴种",
+    "category": "神通",
     "tier": "天阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8204,8 +8204,8 @@
   },
   {
     "index": 684,
-    "item_name": "十洞天神环",
-    "category": "特殊能力",
+    "item_name": "环域灵轮",
+    "category": "神通",
     "tier": "天阶",
     "grade": "中品",
     "sheet_index": 6,
@@ -8217,8 +8217,8 @@
   },
   {
     "index": 685,
-    "item_name": "鲲鹏极速",
-    "category": "特殊能力",
+    "item_name": "风掣疾行",
+    "category": "神通",
     "tier": "天阶",
     "grade": "上品",
     "sheet_index": 6,
@@ -8230,8 +8230,8 @@
   },
   {
     "index": 686,
-    "item_name": "柳神法相",
-    "category": "特殊能力",
+    "item_name": "青枝护相",
+    "category": "神通",
     "tier": "天阶",
     "grade": "中品",
     "sheet_index": 6,
@@ -8243,8 +8243,8 @@
   },
   {
     "index": 687,
-    "item_name": "古神一指",
-    "category": "特殊能力",
+    "item_name": "沉岳指印",
+    "category": "神通",
     "tier": "地阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8256,8 +8256,8 @@
   },
   {
     "index": 688,
-    "item_name": "岁月意境",
-    "category": "特殊能力",
+    "item_name": "流年意境",
+    "category": "神通",
     "tier": "地阶",
     "grade": "上品",
     "sheet_index": 6,
@@ -8269,8 +8269,8 @@
   },
   {
     "index": 689,
-    "item_name": "杀戮本源",
-    "category": "特殊能力",
+    "item_name": "血战真源",
+    "category": "神通",
     "tier": "地阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8282,8 +8282,8 @@
   },
   {
     "index": 690,
-    "item_name": "梦道轮回",
-    "category": "特殊能力",
+    "item_name": "梦潮回环",
+    "category": "神通",
     "tier": "天阶",
     "grade": "下品",
     "sheet_index": 6,
@@ -8295,8 +8295,8 @@
   },
   {
     "index": 691,
-    "item_name": "因果断线",
-    "category": "特殊能力",
+    "item_name": "命络断线",
+    "category": "神通",
     "tier": "天阶",
     "grade": "中品",
     "sheet_index": 6,
@@ -8308,8 +8308,8 @@
   },
   {
     "index": 692,
-    "item_name": "牧天九歌",
-    "category": "特殊能力",
+    "item_name": "云章九歌",
+    "category": "神通",
     "tier": "地阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8321,8 +8321,8 @@
   },
   {
     "index": 693,
-    "item_name": "天问一式",
-    "category": "特殊能力",
+    "item_name": "叩穹一式",
+    "category": "神通",
     "tier": "天阶",
     "grade": "下品",
     "sheet_index": 6,
@@ -8334,8 +8334,8 @@
   },
   {
     "index": 694,
-    "item_name": "神藏开阖",
-    "category": "特殊能力",
+    "item_name": "内府开阖",
+    "category": "神通",
     "tier": "玄阶",
     "grade": "极品",
     "sheet_index": 6,
@@ -8347,8 +8347,8 @@
   },
   {
     "index": 695,
-    "item_name": "荒古圣血金纹",
-    "category": "特殊能力",
+    "item_name": "玄金血纹",
+    "category": "神通",
     "tier": "天阶",
     "grade": "中品",
     "sheet_index": 6,

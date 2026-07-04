@@ -12,8 +12,8 @@ ICON_ROOT = ROOT / "assets" / "item_icons"
 ITEM_DIR = ICON_ROOT / "items"
 GRID_PATH = ICON_ROOT / "sheet_grid_detection.json"
 RECORD_PATH = ICON_ROOT / "item_icon_records.json"
-REPORT_PATH = ICON_ROOT / "edge_connected_recut_report.json"
-PREVIEW_PATH = ICON_ROOT / "edge_connected_recut_preview.png"
+REPORT_PATH = ROOT / "build" / "reports" / "item_icons" / "edge_connected_recut_report.json"
+PREVIEW_PATH = ROOT / "build" / "reports" / "item_icons" / "edge_connected_recut_preview.png"
 KNOWN_ICON_SWAP_PAIRS = [(index, index + 10) for index in range(456, 466)]
 
 
@@ -202,6 +202,7 @@ def build_preview(records: list[dict[str, Any]], limit: int = 48) -> None:
         y = (index // cols) * (cell + 18) + 4
         preview.alpha_composite(icon, (x, y))
         draw.text(((index % cols) * cell + 4, y + 84), str(record.get("index")), fill=(40, 40, 40, 255))
+    PREVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
     preview.save(PREVIEW_PATH)
 
 
@@ -271,6 +272,7 @@ def main() -> None:
 
     apply_known_icon_corrections(updated_records)
     RECORD_PATH.write_text(json.dumps(updated_records, ensure_ascii=False, indent=2), encoding="utf-8")
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     build_preview(updated_records)
     print(f"recut {len(updated_records)} icons")
