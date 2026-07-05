@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 ROOT = Path(__file__).resolve().parent
 CHARACTER_MANIFEST_PATH = ROOT / "assets" / "character_portraits" / "manifest.json"
+SPELL_ICON_DIR = ROOT / "assets" / "beast_realm_spell_icons"
 FOLLOWER_LABEL = "随从"
 RECRUIT_LOCATION = "任务堂"
 
@@ -183,6 +184,7 @@ def spell_card(
         "tier": tier,
         "realm": BEAST_REALM_TIERS[tier - 1],
         "category": category,
+        "icon_id": card_id,
         "effect": effect,
         "target": target,
         "rules": rules,
@@ -786,7 +788,7 @@ BEAST_REALM_SPELL_BY_ID = {card["id"]: card for card in BEAST_REALM_SPELLS}
 BEAST_REALM_ALL_CARDS_BY_ID = {**BEAST_REALM_CARD_BY_ID, **BEAST_REALM_SPELL_BY_ID}
 _BASE_BEAST_REALM_CARDS = deepcopy(BEAST_REALM_CARDS)
 _BASE_BEAST_REALM_SPELLS = deepcopy(BEAST_REALM_SPELLS)
-_CARD_TEXT_FIELDS = {"portrait_id", "name", "realm", "faction", "element", "effect", "story", "source_realm", "archetype", "category", "target"}
+_CARD_TEXT_FIELDS = {"portrait_id", "icon_id", "name", "realm", "faction", "element", "effect", "story", "source_realm", "archetype", "category", "target"}
 _CARD_INT_FIELDS = {"tier", "attack", "defense", "pool_copies", "cost"}
 _CARD_STRUCT_FIELDS = {"rules"}
 
@@ -849,6 +851,16 @@ def rebuild_card_indexes() -> None:
     BEAST_REALM_ALL_CARDS_BY_ID = {**BEAST_REALM_CARD_BY_ID, **BEAST_REALM_SPELL_BY_ID}
 
 
+def spell_icon_filename_for(card: dict[str, Any]) -> str:
+    icon_id = str(card.get("icon_id") or card.get("id") or "").strip().replace("\\", "/").split("/")[-1]
+    if not icon_id or icon_id in {".", ".."}:
+        return ""
+    if not icon_id.endswith(".png"):
+        icon_id = f"{icon_id}.png"
+    path = SPELL_ICON_DIR / icon_id
+    return icon_id if path.is_file() else ""
+
+
 def apply_admin_config(config: dict[str, Any]) -> None:
     global BEAST_REALM_CARDS, BEAST_REALM_SPELLS, BEAST_REALM_CARD_POOL_COPIES
     realm_config = config.get("beast_realm", {}) if isinstance(config, dict) else {}
@@ -869,6 +881,10 @@ def admin_card_payload() -> dict[str, Any]:
         item = _normalize_card(deepcopy(card))
         if item.get("kind") == "beast":
             item["pool_copies"] = _int_setting(item.get("pool_copies"), BEAST_REALM_CARD_POOL_COPIES, 0)
+        if item.get("kind") == "spell":
+            icon = spell_icon_filename_for(item)
+            if icon:
+                item["icon"] = icon
         cards.append(item)
     factions = sorted({str(card.get("faction")) for card in BEAST_REALM_CARDS if card.get("faction")})
     elements = sorted({str(card.get("element")) for card in BEAST_REALM_CARDS if card.get("element")})
@@ -975,20 +991,19 @@ def help_text() -> str:
 
 def catalog_text() -> str:
     lines = [
-        "【御兽秘境卡牌图鉴】",
-        "随从牌共有270张，来自通用角色库并按妖兽、散修、佛修等阵营区分；法术牌20张，分为丹药、符箓、神通、阵法。",
+        "【御兽秘境全牌库】",
+        f"随从牌{len(BEAST_REALM_CARDS)}张，法术牌{len(BEAST_REALM_SPELLS)}张；发送 御兽秘境图鉴 可查看当前运行态完整牌库。",
     ]
     for tier, realm in enumerate(BEAST_REALM_TIERS, start=1):
+        tier_cards = [item for item in BEAST_REALM_CARDS if int(item.get("tier", 1)) == tier]
         lines.append("")
-        lines.append(f"【{realm}随从】")
-        for card in [item for item in BEAST_REALM_CARDS if int(item["tier"]) == tier]:
-            lines.append(
-                f"{card['name']}｜{card['attack']}/{card['defense']}｜{card['faction']}·{card['element']}｜{card['effect']}"
-            )
+        lines.append(f"【{realm}随从牌库】")
+        for index, card in enumerate(tier_cards, start=1):
+            lines.append(card_summary_line(card, index, "随从"))
     lines.append("")
-    lines.append("【法术牌】")
-    for card in BEAST_REALM_SPELLS:
-        lines.append(f"{card['name']}｜{card['realm']}｜{card['category']}｜{card['effect']}")
+    lines.append("【法术牌库】")
+    for index, card in enumerate(BEAST_REALM_SPELLS, start=1):
+        lines.append(card_summary_line(card, index, "法术"))
     return "\n".join(lines)
 
 

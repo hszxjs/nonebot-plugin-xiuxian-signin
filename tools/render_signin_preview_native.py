@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
 BG_PATH = ROOT / "assets/panel_backgrounds/signin_background.png"
+SIGNIN_PANEL_BG = ROOT / "assets/ui_sprite/signin/output/sprites/signin_background_base.png"
+PORTRAIT_FRAME_PATH = ROOT / "assets/ui_sprite/signin/output/sprites/portrait_frame_overlay.png"
 OLD_PATH = Path(
     r"C:\Users\hszxjs\Documents\Tencent Files\3305167706\nt_qq\nt_data\Pic\2026-06\Ori\6013980e9e6913183936ee99485ced48.png"
 )
@@ -72,18 +73,21 @@ def wrap_text(
     max_lines: int,
 ) -> list[str]:
     lines: list[str] = []
-    current = ""
-    for char in text:
-        trial = current + char
-        if text_size(draw, trial, font)[0] <= max_width or not current:
-            current = trial
-            continue
-        lines.append(current)
-        current = char
+    for paragraph in str(text or "").splitlines() or [""]:
+        current = ""
+        for char in paragraph:
+            trial = current + char
+            if text_size(draw, trial, font)[0] <= max_width or not current:
+                current = trial
+                continue
+            lines.append(current)
+            current = char
+            if len(lines) >= max_lines:
+                return lines[:max_lines]
+        if current and len(lines) < max_lines:
+            lines.append(current)
         if len(lines) >= max_lines:
-            break
-    if current and len(lines) < max_lines:
-        lines.append(current)
+            return lines[:max_lines]
     return lines[:max_lines]
 
 
@@ -119,13 +123,13 @@ def draw_clamped(
         y += text_size(draw, "修", font)[1] + line_gap
 
 
-def old_avatar_inner() -> Image.Image:
+def old_avatar_inner(size: int) -> Image.Image:
     old = Image.open(OLD_PATH).convert("RGBA")
-    return old.crop((143, 160, 330, 347)).resize((164, 164), Image.Resampling.LANCZOS)
+    return old.crop((143, 160, 330, 347)).resize((size, size), Image.Resampling.LANCZOS)
 
 
-def avatar_for_generated_frame() -> Image.Image:
-    avatar = old_avatar_inner()
+def avatar_for_generated_frame(size: int) -> Image.Image:
+    avatar = old_avatar_inner(size)
     mask = Image.new("L", avatar.size, 0)
     draw = ImageDraw.Draw(mask)
     draw.ellipse((0, 0, avatar.width - 1, avatar.height - 1), fill=255)
@@ -150,35 +154,38 @@ def draw_field(
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    image = Image.open(BG_PATH).convert("RGBA")
+    image = Image.open(SIGNIN_PANEL_BG if SIGNIN_PANEL_BG.exists() else BG_PATH).convert("RGBA")
     draw = ImageDraw.Draw(image)
 
-    avatar = avatar_for_generated_frame()
-    # Native generated background coordinates. This centers the avatar inside the existing oval frame.
-    image.alpha_composite(avatar, (128, 134))
+    avatar = avatar_for_generated_frame(260)
+    # Match the production sign-in card: background, avatar, then portrait frame overlay.
+    image.alpha_composite(avatar, (199, 122))
+    if PORTRAIT_FRAME_PATH.exists():
+        portrait_frame = Image.open(PORTRAIT_FRAME_PATH).convert("RGBA")
+        image.alpha_composite(portrait_frame, (145, 55))
 
-    # Personal information goes only in the blank landscape area to the right of the avatar.
-    draw_clamped(draw, (340, 112, 820, 168), "今日已完成签到", 42, DARK, weight=3)
-    draw_clamped(draw, (342, 178, 820, 222), "落雨・乱心思", 31, "#4b5565", weight=2)
-    draw_clamped(draw, (342, 230, 815, 266), "宿主今日气息稳定，无需重复闭关", 20, GOLD, weight=2)
+    # Personal information goes in the blank landscape area to the right of the avatar.
+    draw_clamped(draw, (545, 150, 900, 206), "今日已完成签到", 42, DARK, weight=3)
+    draw_clamped(draw, (545, 214, 930, 254), "落雨・乱心思", 31, "#4b5565", weight=2)
+    draw_clamped(draw, (545, 260, 955, 292), "宿主今日气息稳定，无需重复闭关", 20, GOLD, weight=2)
 
     # Root / realm broad frame.
     draw_field(
         draw,
         "灵根",
-        "变异灵根极品雷灵根 | 由火+水先天异变",
-        (130, 354, 270, 384),
-        (130, 390, 760, 454),
+        "变异灵根极品雷灵根\n由火+水先天异变",
+        (238, 455, 390, 484),
+        (238, 488, 545, 562),
         ACCENT,
-        28,
+        19,
         2,
     )
     draw_field(
         draw,
         "当前境界",
         "炼虚期巅峰",
-        (820, 354, 1020, 384),
-        (820, 392, 1125, 452),
+        (835, 440, 1005, 468),
+        (835, 472, 1038, 535),
         DARK,
         34,
         1,
@@ -187,21 +194,20 @@ def main() -> None:
         draw,
         "灵根精纯度",
         "雷灵根96%（火96%+水96%） / 后天：金88% / 木91% / 土91%",
-        (146, 505, 305, 532),
-        (328, 500, 1080, 552),
+        (475, 455, 680, 484),
+        (475, 490, 790, 560),
         ACCENT,
-        18,
+        19,
         2,
     )
 
     # Stats boxes.
-    draw_field(draw, "签到次数", "5 次", (130, 630, 320, 660), (130, 675, 465, 730), DARK, 36, 1)
-    draw_field(draw, "累计修为", "9398 点", (690, 630, 900, 660), (690, 675, 1085, 730), ACCENT, 36, 1)
+    draw_field(draw, "签到次数", "5 次", (188, 608, 380, 638), (188, 650, 500, 704), DARK, 36, 1)
+    draw_field(draw, "累计修为", "9398 点", (650, 608, 858, 638), (650, 650, 1040, 704), ACCENT, 36, 1)
 
     # Adventure status frame. Three columns, three rows, each value clamped inside its cell.
-    draw_clamped(draw, (125, 804, 380, 842), "历练状态", 25, DARK, weight=3)
-    columns = [(130, 440), (470, 780), (810, 1120)]
-    rows = [(870, 936), (966, 1032), (1062, 1128)]
+    columns = [(210, 455), (500, 755), (800, 1060)]
+    rows = [(754, 820), (842, 908), (930, 996)]
     entries = [
         ("灵器", "[天阶极品灵器 星阙断岳剑]"),
         ("功法", "[天阶上品功法 离火炼界篇]"),
@@ -229,10 +235,10 @@ def main() -> None:
             2,
         )
 
-    # No progress bar in this preview. Keep only progress text inside the bottom-right frame.
-    draw_clamped(draw, (112, 1165, 330, 1205), "经验进度", 25, DARK, weight=3)
-    draw_clamped(draw, (820, 1165, 1116, 1205), "4736/4736 ・ 巅峰", 22, DARK, weight=2)
-    draw_clamped(draw, (112, 1210, 520, 1240), "明日再来，灵气自会积蓄", 17, MUTED, weight=1)
+    # Progress text sits in the jade trough, matching render_signin_card.
+    draw_clamped(draw, (320, 1045, 520, 1080), "经验进度", 24, "#ffffff", weight=3)
+    draw_clamped(draw, (785, 1045, 1065, 1080), "4736/4736 ・ 巅峰", 21, "#ffffff", weight=2)
+    draw_clamped(draw, (760, 1130, 1085, 1160), "明日再来，灵气自会积蓄", 16, MUTED, weight=1)
 
     image.save(OUT_PATH)
     print(OUT_PATH)

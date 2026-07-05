@@ -16,6 +16,7 @@ from .storage import JsonStore
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
 CHARACTER_PORTRAIT_ROOT = Path(__file__).parent / "assets" / "character_portraits" / "portraits"
+BEAST_SPELL_ICON_ROOT = Path(__file__).parent / "assets" / "beast_realm_spell_icons"
 _ITEM_ICON_RECORD_CACHE: list[dict[str, Any]] | None = None
 _ITEM_ICON_LOOKUP_CACHE: tuple[dict[str, str], dict[str, str], list[tuple[str, str]]] | None = None
 
@@ -90,6 +91,19 @@ def safe_character_portrait_path(file_name: str) -> Path | None:
     try:
         root = CHARACTER_PORTRAIT_ROOT.resolve()
         path = (CHARACTER_PORTRAIT_ROOT / name).resolve()
+        path.relative_to(root)
+    except (OSError, ValueError):
+        return None
+    return path if path.is_file() else None
+
+
+def safe_beast_spell_icon_path(file_name: str) -> Path | None:
+    name = str(file_name or "").replace("\\", "/").split("/")[-1]
+    if not name or name in {".", ".."} or not name.endswith(".png"):
+        return None
+    try:
+        root = BEAST_SPELL_ICON_ROOT.resolve()
+        path = (BEAST_SPELL_ICON_ROOT / name).resolve()
         path.relative_to(root)
     except (OSError, ValueError):
         return None
@@ -369,7 +383,7 @@ ADMIN_HTML = """<!doctype html>
   </section>
   <section id="beastCards" class="item-layout hidden">
     <div class="panel"><div id="beastSummary" class="summary-cards"></div><div class="row item-actions"><div class="field"><label>默认卡池数量</label><input id="beastPoolDefault" type="number" min="0" step="1"></div><button class="primary" onclick="saveBeastRealmGlobal()">保存全局配置</button><button onclick="loadBeastCards()">刷新</button></div><div class="item-tools"><input id="cardSearch" placeholder="搜索名称 / ID / 阵营 / 效果 / 故事" oninput="renderBeastCards()"><select id="cardKindFilter" onchange="renderBeastCards()"><option value="">全部卡牌</option><option value="beast">随从牌</option><option value="spell">法术牌</option></select><select id="cardFactionFilter" onchange="renderBeastCards()"><option value="">全部阵营</option></select><button onclick="renderBeastCards()">筛选</button></div><div id="beastCardGrid" class="card-grid"></div></div>
-    <div class="panel detail"><div class="detail-head"><div id="cardPreview" class="card-preview"><span class="placeholder">头像</span></div><div><div id="cardTitle" class="detail-title">请选择卡牌</div><div id="cardChips" class="chips"></div></div></div><div class="row item-actions"><button class="primary" onclick="saveBeastCard()">保存卡牌</button><button onclick="resetBeastCardForm()">撤回未保存修改</button><button onclick="clearBeastCardOverride()">恢复默认</button></div><div class="form-grid"><div class="field"><label>ID</label><input id="cardId" readonly></div><div class="field"><label>类型</label><input id="cardKind" readonly></div><div class="field"><label>名称</label><input id="cardName"></div><div class="field"><label>境界序号</label><select id="cardTier"></select></div><div class="field"><label>境界名称</label><input id="cardRealm"></div><div class="field"><label>攻击</label><input id="cardAttack" type="number" min="0" step="1"></div><div class="field"><label>防御</label><input id="cardDefense" type="number" min="1" step="1"></div><div class="field"><label>费用</label><input id="cardCost" type="number" min="0" step="1"></div><div class="field"><label>卡池数量</label><input id="cardPoolCopies" type="number" min="0" step="1"></div><div class="field"><label>阵营/种族</label><input id="cardFaction"></div><div class="field"><label>元素</label><input id="cardElement"></div><div class="field"><label>法术类别</label><input id="cardCategory"></div><div class="field"><label>法术目标</label><select id="cardTarget"></select></div><div class="field"><label>头像 ID</label><input id="cardPortraitId"></div><div class="field"><label>原始境界</label><input id="cardSourceRealm"></div><div class="field wide"><label>原型/标签</label><input id="cardArchetype"></div><div class="field wide"><label>效果描述</label><textarea id="cardEffect"></textarea></div><div class="field wide"><label>故事</label><textarea id="cardStory"></textarea></div><div class="field wide"><label>规则 JSON</label><textarea id="cardRules" class="rules-textarea"></textarea></div></div></div>
+    <div class="panel detail"><div class="detail-head"><div id="cardPreview" class="card-preview"><span class="placeholder">头像</span></div><div><div id="cardTitle" class="detail-title">请选择卡牌</div><div id="cardChips" class="chips"></div></div></div><div class="row item-actions"><button class="primary" onclick="saveBeastCard()">保存卡牌</button><button onclick="resetBeastCardForm()">撤回未保存修改</button><button onclick="clearBeastCardOverride()">恢复默认</button></div><div class="form-grid"><div class="field"><label>ID</label><input id="cardId" readonly></div><div class="field"><label>类型</label><input id="cardKind" readonly></div><div class="field"><label>名称</label><input id="cardName"></div><div class="field"><label>境界序号</label><select id="cardTier"></select></div><div class="field"><label>境界名称</label><input id="cardRealm"></div><div class="field"><label>攻击</label><input id="cardAttack" type="number" min="0" step="1"></div><div class="field"><label>防御</label><input id="cardDefense" type="number" min="1" step="1"></div><div class="field"><label>费用</label><input id="cardCost" type="number" min="0" step="1"></div><div class="field"><label>卡池数量</label><input id="cardPoolCopies" type="number" min="0" step="1"></div><div class="field"><label>阵营/种族</label><input id="cardFaction"></div><div class="field"><label>元素</label><input id="cardElement"></div><div class="field"><label>法术类别</label><input id="cardCategory"></div><div class="field"><label>法术目标</label><select id="cardTarget"></select></div><div class="field"><label>头像 ID</label><input id="cardPortraitId"></div><div class="field"><label>图标 ID</label><input id="cardIconId"></div><div class="field"><label>原始境界</label><input id="cardSourceRealm"></div><div class="field wide"><label>原型/标签</label><input id="cardArchetype"></div><div class="field wide"><label>效果描述</label><textarea id="cardEffect"></textarea></div><div class="field wide"><label>故事</label><textarea id="cardStory"></textarea></div><div class="field wide"><label>规则 JSON</label><textarea id="cardRules" class="rules-textarea"></textarea></div></div></div>
   </section>  <section id="equipment" class="grid hidden"><div class="panel muted"><h3 class="section-title">灵器规则</h3>配置每个境界可能刷新出的灵器、阶级范围、品质和权重；玩家可获得任意境界灵器，但装备仍受灵器自身境界限制。<div class="row"><button onclick="loadEquipment()">刷新</button><button class="primary" onclick="saveEquipment()">保存</button></div><details><summary>战力倍率等高级配置</summary><textarea id="equipmentJson" class="mini-textarea"></textarea></details></div><div class="panel"><div id="equipmentPools" class="config-list"></div></div></section>
   <section id="mystic" class="grid hidden"><div class="panel muted"><h3 class="section-title">秘境掉落</h3>勾选开启的秘境，并为每个秘境配置类别权重和固定掉落。<div class="row"><button onclick="loadMystic()">刷新</button><button class="primary" onclick="saveMystic()">保存</button></div><h3 class="section-title">普通秘境</h3><div id="mysticTypeChecks" class="check-grid"></div><h3 class="section-title">高危险地</h3><div id="mysticHighRiskChecks" class="check-grid"></div><details><summary>原始秘境配置</summary><textarea id="mysticJson" class="mini-textarea"></textarea></details></div><div class="panel"><div id="mysticConfigList" class="config-list"></div></div></section>
   <section id="config" class="grid hidden"><div class="panel muted"><h3 class="section-title">原始配置</h3>完整 admin_config.json，保存后立刻应用。<div class="row"><button onclick="loadConfig()">刷新</button><button class="primary" onclick="saveConfig()">保存</button></div></div><div class="panel"><textarea id="configJson" class="config-textarea"></textarea></div></section>
@@ -378,6 +392,8 @@ ADMIN_HTML = """<!doctype html>
 let selectedUser='',selectedRecord=null,players=[],items=[],selectedItem=null,itemMeta={},beastCards=[],selectedBeastCard=null,beastMeta={};
 const API_BASE=window.location.pathname.replace(/[/]$/,'');
 const playerFieldOrder=['user_id','root','realm_index','realm_exp','total_exp','sign_count','spirit_stones','fishing_chances','pending_exp','spirit_liquid','cultivation_route','faction_identity','foundation_type','realm_marks','special_abilities','rewards','equipped_artifacts','equipped_method','equipped_array','equipped_talisman','life_artifact','immortal_seeds','equipped_immortal_seed','mystic_realm'];
+function bindDomIdGlobals(){document.querySelectorAll('[id]').forEach(el=>{let id=el.id;if(!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(id)||Object.prototype.hasOwnProperty.call(window,id))return;Object.defineProperty(window,id,{configurable:true,get(){return document.getElementById(id)}})})}
+bindDomIdGlobals();
 function status(t,c=''){let e=document.getElementById('status');e.textContent=t;e.className='status '+c}
 function tok(){return document.getElementById('token').value||localStorage.getItem('xiuxianAdminToken')||''}
 function api(p,o={}){let h=Object.assign({'Content-Type':'application/json'},o.headers||{});if(tok())h['X-Xiuxian-Token']=tok();return fetch(API_BASE+p,Object.assign({},o,{headers:h})).then(async r=>{let d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d})}
@@ -387,9 +403,9 @@ function pretty(x){return JSON.stringify(x,null,2)}
 function showTab(id,tab){document.querySelectorAll('section').forEach(x=>x.classList.toggle('hidden',x.id!==id));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(tab)tab.classList.add('active');if(id==='players')loadPlayers();if(id==='items')loadItems();if(id==='beastCards')loadBeastCards();if(id==='equipment')loadEquipment();if(id==='mystic')loadMystic();if(id==='config')loadConfig()}
 function iconUrl(icon){if(!icon)return '';let path=String(icon).split('/').map(encodeURIComponent).join('/');let suffix=tok()?'?token='+encodeURIComponent(tok()):'';return API_BASE+'/assets/item-icons/'+path+suffix}
 function iconHtml(icon,name){let url=iconUrl(icon);return url?`<img src="${url}" alt="${esc(name)}" loading="lazy">`:`<span class="placeholder">无图</span>`}
-async function loadPlayers(){try{let q=document.getElementById('playerSearch').value.trim();let d=await api('/api/players'+(q?'?q='+encodeURIComponent(q):''));players=d.players||[];playersBody.innerHTML=players.map(p=>`<tr onclick="selectPlayer('${esc(p.user_id)}')"><td><b>${esc(p.nickname||p.user_id)}</b><br><span class="muted">${esc(p.user_id)}</span></td><td>${esc(p.realm)}</td><td>${esc(p.battle_power)}</td><td>${esc(p.spirit_stones)}</td></tr>`).join('');status('已载入 '+players.length+' 个玩家。','ok')}catch(e){status(e.message,'err')}}
+async function loadPlayers(){try{let q=document.getElementById('playerSearch').value.trim();let d=await api('/api/players'+(q?'?q='+encodeURIComponent(q):''));players=d.players||[];document.getElementById('playersBody').innerHTML=players.map(p=>`<tr onclick="selectPlayer('${esc(p.user_id)}')"><td><b>${esc(p.nickname||p.user_id)}</b><br><span class="muted">${esc(p.user_id)}</span></td><td>${esc(p.realm)}</td><td>${esc(p.battle_power)}</td><td>${esc(p.spirit_stones)}</td></tr>`).join('');status('已载入 '+players.length+' 个玩家。','ok')}catch(e){status(e.message,'err')}}
 async function selectPlayer(id){try{selectedUser=id;let d=await api('/api/players/'+encodeURIComponent(id));selectedRecord=d.record||{};renderPlayerForm();status('玩家档案已载入。','ok')}catch(e){status(e.message,'err')}}
-function renderPlayerForm(){playerTitle.textContent='玩家 '+selectedUser;let keys=[...playerFieldOrder.filter(k=>Object.prototype.hasOwnProperty.call(selectedRecord,k)),...Object.keys(selectedRecord).filter(k=>!playerFieldOrder.includes(k))];playerFields.innerHTML=keys.map(k=>fieldHtml(k,selectedRecord[k])).join('')}
+function renderPlayerForm(){document.getElementById('playerTitle').textContent='玩家 '+selectedUser;let keys=[...playerFieldOrder.filter(k=>Object.prototype.hasOwnProperty.call(selectedRecord,k)),...Object.keys(selectedRecord).filter(k=>!playerFieldOrder.includes(k))];document.getElementById('playerFields').innerHTML=keys.map(k=>fieldHtml(k,selectedRecord[k])).join('')}
 function fieldHtml(k,v){let complex=v&&typeof v==='object';let label=esc(k);if(complex){return `<div class="field wide"><label>${label}</label><textarea data-key="${label}" data-type="json">${esc(pretty(v))}</textarea></div>`}return `<div class="field"><label>${label}</label><input data-key="${label}" data-type="scalar" value="${esc(v??'')}"></div>`}
 function collectPlayerForm(){let next=Object.assign({},selectedRecord||{});document.querySelectorAll('#playerFields [data-key]').forEach(el=>{let k=el.dataset.key;let raw=el.value;if(el.dataset.type==='json'){next[k]=raw.trim()?JSON.parse(raw):null}else if(raw===''){next[k]=null}else if(/^-?\\d+$/.test(raw)){next[k]=Number(raw)}else if(raw==='true'||raw==='false'){next[k]=raw==='true'}else{next[k]=raw}});return next}
 function resetPlayerForm(){if(selectedRecord)renderPlayerForm()}
@@ -399,7 +415,7 @@ async function loadItems(){try{let keep=selectedItem&&selectedItem.name;let d=aw
 function fillItemFilters(){let cats=[...new Set(items.map(x=>x.category).filter(Boolean))].sort();let tiers=[...new Set(items.flatMap(x=>x.tiers||[]).filter(Boolean))];itemCategory.innerHTML='<option value="">全部类别</option>'+cats.map(x=>`<option>${esc(x)}</option>`).join('');itemTier.innerHTML='<option value="">全部阶级</option>'+tiers.map(x=>`<option>${esc(x)}</option>`).join('')}
 function filteredItems(){let q=(itemSearch.value||'').toLowerCase();let c=itemCategory.value;let t=itemTier.value;return items.filter(x=>(!q||pretty(x).toLowerCase().includes(q))&&(!c||x.category===c)&&(!t||(x.tiers||[]).includes(t))).slice(0,600)}
 function renderItems(){let rows=filteredItems();itemGrid.innerHTML=rows.map(x=>`<article class="item-card ${selectedItem&&selectedItem.name===x.name?'active':''}" onclick="selectItem('${esc(x.name)}')"><div class="item-icon">${iconHtml(x.icon,x.name)}</div><div><div class="item-name">${esc(x.name)}</div><div class="item-meta">${esc(x.category||'未分类')}</div><div>${(x.tiers||[]).slice(0,2).map(v=>`<span class="chip">${esc(v)}</span>`).join('')}</div></div></article>`).join('')}
-function asList(v){return Array.isArray(v)?v.map(x=>String(x)).filter(Boolean):String(v||'').split(/[、,，\n]/).map(x=>x.trim()).filter(Boolean)}
+function asList(v){return Array.isArray(v)?v.map(x=>String(x)).filter(Boolean):String(v||'').split(/[、,，\\n]/).map(x=>x.trim()).filter(Boolean)}
 function optionPool(values,selected){let pool=(values||[]).map(x=>String(x)).filter(Boolean);asList(selected).forEach(v=>{if(v&&!pool.includes(v))pool.unshift(v)});return pool}
 function setField(id,v){document.getElementById(id).value=Array.isArray(v)?v.join('、'):(v??'')}
 function setSelectField(id,values,value,emptyLabel){let el=document.getElementById(id);let current=String(value||'');let html=emptyLabel===null?'':'<option value="">'+esc(emptyLabel||'未指定')+'</option>';html+=optionPool(values,current).map(v=>'<option value="'+esc(v)+'" '+(v===current?'selected':'')+'>'+esc(v)+'</option>').join('');el.innerHTML=html;el.value=current}
@@ -417,15 +433,15 @@ async function saveMystic(){try{let m=JSON.parse(mysticJson.value);let d=await a
 async function loadConfig(){try{let d=await api('/api/config');configJson.value=pretty(d.config||{});status('配置已载入。','ok')}catch(e){status(e.message,'err')}}
 async function saveConfig(){try{await api('/api/config',{method:'PUT',body:configJson.value});status('配置已保存。','ok')}catch(e){status(e.message,'err')}}
 
-function cardPortraitUrl(card){let pid=String((card&&card.portrait_id)||'').trim();if(!pid)return '';let suffix=tok()?'?token='+encodeURIComponent(tok()):'';return API_BASE+'/assets/character-portraits/'+encodeURIComponent(pid+'.png')+suffix}
-function cardPortraitHtml(card){let url=cardPortraitUrl(card);return url?'<img src="'+url+'" alt="'+esc(card.name||card.id)+'" loading="lazy">':'<span class="placeholder">无图</span>'}
+function cardAssetUrl(card){let suffix=tok()?'?token='+encodeURIComponent(tok()):'';if(card&&card.kind==='spell'&&card.icon){return API_BASE+'/assets/beast-spell-icons/'+encodeURIComponent(card.icon)+suffix}let pid=String((card&&card.portrait_id)||'').trim();if(!pid)return '';return API_BASE+'/assets/character-portraits/'+encodeURIComponent(pid+'.png')+suffix}
+function cardPortraitHtml(card){let url=cardAssetUrl(card);return url?'<img src="'+url+'" alt="'+esc(card.name||card.id)+'" loading="lazy">':'<span class="placeholder">无图</span>'}
 async function loadBeastCards(){try{let keep=selectedBeastCard&&selectedBeastCard.id;let d=await api('/api/beast-realm/cards');beastCards=d.cards||[];beastMeta=d.meta||{};if(document.getElementById('beastPoolDefault'))beastPoolDefault.value=String(beastMeta.default_pool_copies??10);fillBeastFilters();renderBeastCards();if(keep&&beastCards.some(x=>x.id===keep))selectBeastCard(keep);else if(beastCards.length)selectBeastCard(beastCards[0].id);status('已载入 '+beastCards.length+' 张御兽秘境卡牌。','ok')}catch(e){status(e.message,'err')}}
 function fillBeastFilters(){let factions=[...new Set(beastCards.map(x=>x.faction||x.category).filter(Boolean))].sort();cardFactionFilter.innerHTML='<option value="">全部阵营</option>'+factions.map(x=>'<option>'+esc(x)+'</option>').join('');cardTier.innerHTML=(beastMeta.realms||[]).map((name,i)=>'<option value="'+(i+1)+'">'+(i+1)+' · '+esc(name)+'</option>').join('');cardTarget.innerHTML=selectOptions(beastMeta.targets||['ally','team','enemy'],'','未指定')}
 function filteredBeastCards(){let q=(cardSearch.value||'').toLowerCase();let k=cardKindFilter.value;let f=cardFactionFilter.value;return beastCards.filter(x=>(!q||pretty(x).toLowerCase().includes(q))&&(!k||x.kind===k)&&(!f||(x.faction===f||x.category===f))).slice(0,900)}
 function renderBeastSummary(rows){rows=rows||filteredBeastCards();let followers=beastCards.filter(x=>x.kind==='beast').length;let spells=beastCards.filter(x=>x.kind==='spell').length;let customized=beastCards.filter(x=>x.customized).length;beastSummary.innerHTML='<div class="summary-card"><b>'+rows.length+'</b><span class="muted">当前筛选</span></div><div class="summary-card"><b>'+followers+'</b><span class="muted">随从牌</span></div><div class="summary-card"><b>'+spells+'</b><span class="muted">法术牌</span></div><div class="summary-card"><b>'+customized+'</b><span class="muted">已覆写</span></div>'}
-function renderBeastCards(){let rows=filteredBeastCards();renderBeastSummary(rows);beastCardGrid.innerHTML=rows.map(x=>'<article class="beast-card '+(selectedBeastCard&&selectedBeastCard.id===x.id?'active':'')+'" onclick="selectBeastCard(\''+esc(x.id)+'\')"><div class="card-thumb">'+cardPortraitHtml(x)+'</div><div><div class="item-name">'+esc(x.name)+'</div><div class="item-meta">'+esc(x.kind==='spell'?'法术牌':'随从牌')+' · '+esc(x.realm||'')+' · '+esc((x.cost??0)+'灵石')+'</div><div><span class="chip">'+esc(x.faction||x.category||'无阵营')+'</span>'+(x.customized?'<span class="chip">已修改</span>':'')+'</div></div></article>').join('')}
-function selectBeastCard(id){selectedBeastCard=beastCards.find(x=>x.id===id)||null;renderBeastCards();let x=selectedBeastCard;if(!x)return;cardPreview.innerHTML=cardPortraitHtml(x);cardTitle.textContent=x.name||x.id;cardChips.innerHTML=[x.id,x.kind==='spell'?'法术牌':'随从牌',x.realm,(x.cost??0)+'灵石',x.faction||x.category,x.customized?'已修改':''].filter(Boolean).map(v=>'<span class="chip">'+esc(v)+'</span>').join('');setField('cardId',x.id);setField('cardKind',x.kind);setField('cardName',x.name||'');cardTier.value=String(x.tier||1);setField('cardRealm',x.realm||'');setField('cardAttack',x.attack??0);setField('cardDefense',x.defense??1);setField('cardCost',x.cost??(x.kind==='spell'?Math.max(2,Number(x.tier||1)+1):3));setField('cardPoolCopies',x.pool_copies??(beastMeta.default_pool_copies??10));setField('cardFaction',x.faction||'');setField('cardElement',x.element||'');setField('cardCategory',x.category||'');setSelectField('cardTarget',beastMeta.targets||['ally','team','enemy'],x.target||'','未指定');setField('cardPortraitId',x.portrait_id||'');setField('cardSourceRealm',x.source_realm||'');setField('cardArchetype',x.archetype||'');setField('cardEffect',x.effect||'');setField('cardStory',x.story||'');setField('cardRules',pretty(x.rules||{}))}
-function beastCardPayload(){if(!selectedBeastCard)throw new Error('请先选择卡牌');let rulesText=(cardRules.value||'').trim();let rules=rulesText?JSON.parse(rulesText):(selectedBeastCard.kind==='spell'?[]:{});return {portrait_id:cardPortraitId.value,name:cardName.value,tier:numberValue(cardTier.value,1),realm:cardRealm.value,attack:numberValue(cardAttack.value,0),defense:numberValue(cardDefense.value,1),cost:numberValue(cardCost.value,3),pool_copies:numberValue(cardPoolCopies.value,beastMeta.default_pool_copies||10),faction:cardFaction.value,element:cardElement.value,category:cardCategory.value,target:cardTarget.value,effect:cardEffect.value,story:cardStory.value,rules:rules,source_realm:cardSourceRealm.value,archetype:cardArchetype.value}}
+function renderBeastCards(){let rows=filteredBeastCards();renderBeastSummary(rows);beastCardGrid.innerHTML=rows.map(x=>'<article class="beast-card '+(selectedBeastCard&&selectedBeastCard.id===x.id?'active':'')+'" onclick="selectBeastCard(\\''+esc(x.id)+'\\')"><div class="card-thumb">'+cardPortraitHtml(x)+'</div><div><div class="item-name">'+esc(x.name)+'</div><div class="item-meta">'+esc(x.kind==='spell'?'法术牌':'随从牌')+' · '+esc(x.realm||'')+' · '+esc((x.cost??0)+'灵石')+'</div><div><span class="chip">'+esc(x.faction||x.category||'无阵营')+'</span>'+(x.customized?'<span class="chip">已修改</span>':'')+'</div></div></article>').join('')}
+function selectBeastCard(id){selectedBeastCard=beastCards.find(x=>x.id===id)||null;renderBeastCards();let x=selectedBeastCard;if(!x)return;cardPreview.innerHTML=cardPortraitHtml(x);cardTitle.textContent=x.name||x.id;cardChips.innerHTML=[x.id,x.kind==='spell'?'法术牌':'随从牌',x.realm,(x.cost??0)+'灵石',x.faction||x.category,x.customized?'已修改':''].filter(Boolean).map(v=>'<span class="chip">'+esc(v)+'</span>').join('');setField('cardId',x.id);setField('cardKind',x.kind);setField('cardName',x.name||'');cardTier.value=String(x.tier||1);setField('cardRealm',x.realm||'');setField('cardAttack',x.attack??0);setField('cardDefense',x.defense??1);setField('cardCost',x.cost??(x.kind==='spell'?Math.max(2,Number(x.tier||1)+1):3));setField('cardPoolCopies',x.pool_copies??(beastMeta.default_pool_copies??10));setField('cardFaction',x.faction||'');setField('cardElement',x.element||'');setField('cardCategory',x.category||'');setSelectField('cardTarget',beastMeta.targets||['ally','team','enemy'],x.target||'','未指定');setField('cardPortraitId',x.portrait_id||'');setField('cardIconId',x.icon_id||'');setField('cardSourceRealm',x.source_realm||'');setField('cardArchetype',x.archetype||'');setField('cardEffect',x.effect||'');setField('cardStory',x.story||'');setField('cardRules',pretty(x.rules||{}))}
+function beastCardPayload(){if(!selectedBeastCard)throw new Error('请先选择卡牌');let rulesText=(cardRules.value||'').trim();let rules=rulesText?JSON.parse(rulesText):(selectedBeastCard.kind==='spell'?[]:{});return {portrait_id:cardPortraitId.value,icon_id:cardIconId.value,name:cardName.value,tier:numberValue(cardTier.value,1),realm:cardRealm.value,attack:numberValue(cardAttack.value,0),defense:numberValue(cardDefense.value,1),cost:numberValue(cardCost.value,3),pool_copies:numberValue(cardPoolCopies.value,beastMeta.default_pool_copies||10),faction:cardFaction.value,element:cardElement.value,category:cardCategory.value,target:cardTarget.value,effect:cardEffect.value,story:cardStory.value,rules:rules,source_realm:cardSourceRealm.value,archetype:cardArchetype.value}}
 function resetBeastCardForm(){if(selectedBeastCard)selectBeastCard(selectedBeastCard.id)}
 async function saveBeastRealmGlobal(){try{let d=await api('/api/config');let cfg=d.config||{};cfg.beast_realm=cfg.beast_realm&&typeof cfg.beast_realm==='object'?cfg.beast_realm:{};cfg.beast_realm.card_pool_copies=numberValue(beastPoolDefault.value,beastMeta.default_pool_copies||10);cfg.beast_realm.card_overrides=cfg.beast_realm.card_overrides&&typeof cfg.beast_realm.card_overrides==='object'?cfg.beast_realm.card_overrides:{};await api('/api/config',{method:'PUT',body:pretty(cfg)});await loadBeastCards();status('御兽秘境全局卡池配置已保存。','ok')}catch(e){status(e.message,'err')}}
 async function saveBeastCard(){try{if(!selectedBeastCard)throw new Error('请先选择卡牌');let id=selectedBeastCard.id;let payload=beastCardPayload();let d=await api('/api/config');let cfg=d.config||{};cfg.beast_realm=cfg.beast_realm&&typeof cfg.beast_realm==='object'?cfg.beast_realm:{};cfg.beast_realm.card_overrides=cfg.beast_realm.card_overrides&&typeof cfg.beast_realm.card_overrides==='object'?cfg.beast_realm.card_overrides:{};cfg.beast_realm.card_overrides[id]=payload;await api('/api/config',{method:'PUT',body:pretty(cfg)});await loadBeastCards();selectBeastCard(id);status('御兽秘境卡牌已保存。','ok')}catch(e){status(e.message,'err')}}
@@ -584,6 +600,15 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
             return json_response({"ok": False, "error": "portrait not found"}, 404)
         return Response(portrait_path.read_bytes(), media_type="image/png")
 
+
+    async def beast_spell_icon(request: Request) -> Any:
+        if not authorized(manager, request):
+            return unauthorized()
+        icon_path = safe_beast_spell_icon_path(str(request.path_params["icon_name"]))
+        if icon_path is None:
+            return json_response({"ok": False, "error": "spell icon not found"}, 404)
+        return Response(icon_path.read_bytes(), media_type="image/png")
+
     async def mystic(request: Request) -> Any:
         if not authorized(manager, request):
             return unauthorized()
@@ -605,6 +630,7 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         (base_path + "/api/items", items, ["GET"]),
         (base_path + "/api/beast-realm/cards", beast_cards, ["GET"]),
         (base_path + "/assets/character-portraits/{portrait_name}", character_portrait, ["GET"]),
+        (base_path + "/assets/beast-spell-icons/{icon_name}", beast_spell_icon, ["GET"]),
         (base_path + "/api/mystic", mystic, ["GET"]),
         (base_path + "/api/equipment-rules", equipment_rules, ["GET"]),
     ):
@@ -688,6 +714,9 @@ def start_admin_server(
                     return
                 if api_path.startswith("/assets/character-portraits/") and method == "GET":
                     self._send_character_portrait(api_path[len("/assets/character-portraits/") :])
+                    return
+                if api_path.startswith("/assets/beast-spell-icons/") and method == "GET":
+                    self._send_beast_spell_icon(api_path[len("/assets/beast-spell-icons/") :])
                     return
                 self._handle_api(method, api_path, query)
             except Exception as exc:
@@ -787,6 +816,23 @@ def start_admin_server(
                 body = portrait_path.read_bytes()
             except OSError:
                 self._send_json({"ok": False, "error": "portrait not readable"}, 404)
+                return
+            self.send_response(200)
+            self._send_common_headers("image/png")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+
+        def _send_beast_spell_icon(self, file_name: str) -> None:
+            icon_path = safe_beast_spell_icon_path(unquote(file_name))
+            if icon_path is None:
+                self._send_json({"ok": False, "error": "spell icon not found"}, 404)
+                return
+            try:
+                body = icon_path.read_bytes()
+            except OSError:
+                self._send_json({"ok": False, "error": "spell icon not readable"}, 404)
                 return
             self.send_response(200)
             self._send_common_headers("image/png")

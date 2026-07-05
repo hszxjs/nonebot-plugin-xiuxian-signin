@@ -27,6 +27,7 @@ from nonebot.rule import Rule
 
 from . import beast_realm as beast_realm_game
 from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_signin_card, render_text_panel, set_font_paths
+from .beast_realm_cards import render_beast_realm_panel
 from .character_assets import beast_portrait_bytes
 from .config import Config
 from .domain import (
@@ -463,6 +464,7 @@ normal_duel_sessions: dict[str, dict[str, Any]] = {}
 doudizhu_tables: dict[str, dict[str, Any]] = {}
 beast_realm_tables: dict[str, dict[str, Any]] = {}
 beast_realm_private_routes: dict[str, str] = {}
+BEAST_REALM_ICON = "beast_realm"
 rank_scheduler_task: Optional[asyncio.Task] = None
 admin_http_server = None
 
@@ -1249,15 +1251,24 @@ def panel_segment(
     icon: str = "scroll",
     footer: str = "",
 ) -> MessageSegment:
-    image_bytes = render_text_panel(
-        title=title,
-        content=content,
-        subtitle=subtitle,
-        icon=icon,
-        accent=panel_accent(record),
-        width=config.xiuxian_signin_image_width,
-        footer=footer,
-    )
+    if icon == BEAST_REALM_ICON:
+        image_bytes = render_beast_realm_panel(
+            title=title,
+            content=content,
+            subtitle=subtitle,
+            width=config.xiuxian_signin_image_width,
+            footer=footer,
+        )
+    else:
+        image_bytes = render_text_panel(
+            title=title,
+            content=content,
+            subtitle=subtitle,
+            icon=icon,
+            accent=panel_accent(record),
+            width=config.xiuxian_signin_image_width,
+            footer=footer,
+        )
     return MessageSegment.image(BytesIO(image_bytes))
 
 
@@ -2941,7 +2952,7 @@ async def send_beast_realm_leader_panel(table: dict[str, Any], player: dict[str,
         "峰主选择",
         beast_realm_game.leader_choice_text(player),
         record,
-        icon="mystic",
+        icon=BEAST_REALM_ICON,
         footer="开局前发送“选择峰主 1/2/3”。所有修士选定峰主后，群聊由峰主发送“开始御兽秘境”。",
     )
 
@@ -2964,7 +2975,7 @@ async def send_beast_realm_recruit_panels(table: dict[str, Any]) -> None:
             "任务堂",
             beast_realm_game.player_text(player, table),
             record,
-            icon="mystic",
+            icon=BEAST_REALM_ICON,
             footer=footer,
         )
         if not sent:
@@ -2989,7 +3000,7 @@ async def send_beast_realm_group_report(table: dict[str, Any], title: str, conte
         return
     await get_bot().send_group_msg(
         group_id=int(beast_realm_group_id_from_key(group_key)),
-        message=panel_segment(title, content, icon="mystic"),
+        message=panel_segment(title, content, icon=BEAST_REALM_ICON),
     )
 async def is_help_message(event: MessageEvent) -> bool:
     return normalized_plain_text(event) in HELP_TEXTS
@@ -3362,9 +3373,9 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
     group_key = beast_realm_group_key_from_event(event)
 
     if text_value == "御兽秘境帮助" or (text_value == "御兽秘境" and group_key not in beast_realm_tables):
-        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon="mystic")
+        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon=BEAST_REALM_ICON)
     if text_value in {"御兽秘境图鉴", "御兽卡牌", "御兽卡牌图鉴"}:
-        await finish_panel(matcher, "御兽秘境图鉴", beast_realm_game.catalog_text(), record, icon="mystic")
+        await finish_panel(matcher, "御兽秘境图鉴", beast_realm_game.catalog_text(), record, icon=BEAST_REALM_ICON)
 
     table = beast_realm_tables.get(group_key)
     if table and table.get("phase") == "lobby" and float(table.get("expires_at", 0)) < time.monotonic():
@@ -3376,7 +3387,7 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
 
     if text_value.startswith("御兽秘境开局") or text_value.startswith("开启御兽秘境") or text_value in {"御兽秘境PVE", "御兽秘境PVP"}:
         if table:
-            await finish_panel(matcher, "御兽秘境", beast_realm_game.status_text(table), record, icon="mystic")
+            await finish_panel(matcher, "御兽秘境", beast_realm_game.status_text(table), record, icon=BEAST_REALM_ICON)
         mode = beast_realm_game.parse_mode(text_value)
         if mode == "solo_pve":
             await finish_panel(matcher, "御兽秘境1V2", "1V2单人PVE仅支持私聊开启，请私聊发送 御兽秘境1V2。", record, icon="warning")
@@ -3386,13 +3397,13 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
         host_player = beast_realm_game.table_player(table, user_id)
         sent = await send_beast_realm_leader_panel(table, host_player) if host_player else False
         hint = "\n\n峰主候选已发送到私聊，请发送 选择峰主 1/2/3。" if sent else "\n\n峰主候选私聊发送失败，请检查好友或临时会话权限；也可私聊发送 峰主 查看。"
-        await finish_panel(matcher, "御兽秘境开局", beast_realm_game.lobby_text(table) + hint, record, icon="mystic")
+        await finish_panel(matcher, "御兽秘境开局", beast_realm_game.lobby_text(table) + hint, record, icon=BEAST_REALM_ICON)
 
     if not table:
-        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon="mystic")
+        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon=BEAST_REALM_ICON)
 
     if text_value in {"御兽秘境", "御兽秘境状态"}:
-        await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon="mystic")
+        await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon=BEAST_REALM_ICON)
 
     if text_value == "加入御兽秘境":
         ok, message = beast_realm_game.add_player(table, user_id, nickname_from_event(event) or f"QQ {user_id}")
@@ -3401,7 +3412,7 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
             player = beast_realm_game.table_player(table, user_id)
             sent = await send_beast_realm_leader_panel(table, player) if player else False
             message += "\n\n峰主候选已发送到私聊，请发送 选择峰主 1/2/3。" if sent else "\n\n峰主候选私聊发送失败，请检查好友或临时会话权限；也可私聊发送 峰主 查看。"
-        await finish_panel(matcher, "加入御兽秘境" if ok else "操作失败", message, record, icon="mystic" if ok else "warning")
+        await finish_panel(matcher, "加入御兽秘境" if ok else "操作失败", message, record, icon=BEAST_REALM_ICON if ok else "warning")
 
     if text_value == "退出御兽秘境":
         ok, message = beast_realm_game.remove_player(table, user_id)
@@ -3409,14 +3420,14 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
             beast_realm_private_routes.pop(user_id, None)
         if ok and not beast_realm_game.active_human_players(table):
             cleanup_beast_realm_table(group_key)
-        await finish_panel(matcher, "退出御兽秘境" if ok else "操作失败", message, record, icon="mystic" if ok else "warning")
+        await finish_panel(matcher, "退出御兽秘境" if ok else "操作失败", message, record, icon=BEAST_REALM_ICON if ok else "warning")
 
     if text_value == "结束御兽秘境":
         player = beast_realm_game.table_player(table, user_id)
         if str(table.get("host_id")) != user_id and not player:
             await finish_panel(matcher, "操作失败", "只有峰主或本局修士可以结束御兽秘境。", record, icon="warning")
         cleanup_beast_realm_table(group_key)
-        await finish_panel(matcher, "御兽秘境", "本群御兽秘境已结束。", record, icon="mystic")
+        await finish_panel(matcher, "御兽秘境", "本群御兽秘境已结束。", record, icon=BEAST_REALM_ICON)
 
     if text_value == "开始御兽秘境":
         if str(table.get("host_id")) != user_id:
@@ -3425,7 +3436,7 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
         if not ok:
             await finish_panel(matcher, "操作失败", message, record, icon="warning")
         await send_beast_realm_recruit_panels(table)
-        await finish_panel(matcher, "御兽秘境", message, record, icon="mystic")
+        await finish_panel(matcher, "御兽秘境", message, record, icon=BEAST_REALM_ICON)
 
     if text_value == "御兽结算":
         player = beast_realm_game.table_player(table, user_id)
@@ -3441,7 +3452,7 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
             await send_beast_realm_recruit_panels(table)
         await matcher.finish()
 
-    await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon="mystic")
+    await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon=BEAST_REALM_ICON)
 
 
 @beast_realm_private_cmd.handle()
@@ -3457,7 +3468,7 @@ async def handle_beast_realm_private(matcher: Matcher, event: PrivateMessageEven
         beast_realm_tables[group_key] = table
         route_beast_realm_players(table)
         player = beast_realm_game.table_player(table, user_id)
-        await finish_panel(matcher, "御兽秘境1V2", beast_realm_game.leader_choice_text(player), record, icon="mystic", footer="选择峰主后发送“开始御兽秘境”，全流程在私聊完成。")
+        await finish_panel(matcher, "御兽秘境1V2", beast_realm_game.leader_choice_text(player), record, icon=BEAST_REALM_ICON, footer="选择峰主后发送“开始御兽秘境”，全流程在私聊完成。")
     if not group_key or not table or table.get("phase") not in {"lobby", "recruit"}:
         if group_key and not table:
             cleanup_beast_realm_table(group_key)
@@ -3471,12 +3482,12 @@ async def handle_beast_realm_private(matcher: Matcher, event: PrivateMessageEven
         ok, message = beast_realm_game.start_table(table)
         if not ok:
             await finish_panel(matcher, "操作失败", message, record, icon="warning")
-        await matcher.send(panel_segment("御兽秘境1V2", message, record, icon="mystic"))
+        await matcher.send(panel_segment("御兽秘境1V2", message, record, icon=BEAST_REALM_ICON))
         await send_beast_realm_recruit_panels(table)
         return
 
     title, content = beast_realm_game.private_action(table, player, text_value)
-    await matcher.send(panel_segment(title, content, record, icon="mystic" if title != "操作失败" else "warning"))
+    await matcher.send(panel_segment(title, content, record, icon=BEAST_REALM_ICON if title != "操作失败" else "warning"))
     if table.get("phase") == "lobby":
         return
 
@@ -3484,7 +3495,7 @@ async def handle_beast_realm_private(matcher: Matcher, event: PrivateMessageEven
     if ready_command and not was_ready and beast_realm_game.all_humans_ready(table):
         report = beast_realm_game.resolve_round(table)
         if str(table.get("mode")) == "solo_pve":
-            await matcher.send(panel_segment("御兽秘境战报", report, record, icon="mystic"))
+            await matcher.send(panel_segment("御兽秘境战报", report, record, icon=BEAST_REALM_ICON))
         else:
             await send_beast_realm_group_report(table, "御兽秘境战报", report)
         if table.get("phase") == "ended":

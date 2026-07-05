@@ -65,6 +65,7 @@ nonebot_plugin_xiuxian_signin = [
     "assets/item_icons/item_icon_records.json",
     "assets/item_icons/items/*.png",
     "assets/panel_backgrounds/*.png",
+    "assets/beast_realm_spell_icons/*.png",
     "assets/realm_quality_icons/realm_quality_icon_manifest.json",
     "assets/realm_quality_icons/quality_*.png",
     "assets/spirit_root_icons/spirit_root_icon_manifest.json",

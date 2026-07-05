@@ -30,6 +30,7 @@ group_members.json
 .DS_Store
 Thumbs.db
 # Generated artifacts
+/ui-sprite-runs/
 /assets/panel_previews/
 /assets/gpt_source/
 /assets/ui-sprite-runs/
