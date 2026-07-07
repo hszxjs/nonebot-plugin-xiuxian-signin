@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Callable
 
 
 RECENT_ACTIVE_DAYS = 7
@@ -57,7 +57,29 @@ def realm_name(record: dict[str, Any], realm_names: dict[int, str]) -> str:
     return value or "未知境界"
 
 
-def summarize_player(user_id: str, record: dict[str, Any], today: date, realm_names: dict[int, str]) -> dict[str, Any]:
+BattlePowerResolver = Callable[[str, dict[str, Any]], Any]
+
+
+def resolve_battle_power(
+    user_id: str,
+    record: dict[str, Any],
+    battle_power_resolver: BattlePowerResolver | None,
+) -> Any:
+    if battle_power_resolver is None:
+        return record.get("battle_power")
+    try:
+        return battle_power_resolver(user_id, record)
+    except Exception:
+        return record.get("battle_power")
+
+
+def summarize_player(
+    user_id: str,
+    record: dict[str, Any],
+    today: date,
+    realm_names: dict[int, str],
+    battle_power_resolver: BattlePowerResolver | None = None,
+) -> dict[str, Any]:
     last_sign = parse_record_date(record.get("last_sign_date"))
     days_since_sign = (today - last_sign).days if last_sign else None
     return {
@@ -65,7 +87,7 @@ def summarize_player(user_id: str, record: dict[str, Any], today: date, realm_na
         "nickname": player_display_name(record, user_id),
         "realm": realm_name(record, realm_names),
         "realm_index": int_value(record.get("realm_index"), -1),
-        "battle_power": int_value(record.get("battle_power")),
+        "battle_power": int_value(resolve_battle_power(user_id, record, battle_power_resolver)),
         "spirit_stones": int_value(record.get("spirit_stones")),
         "last_sign_date": last_sign.isoformat() if last_sign else "",
         "days_since_sign": days_since_sign,
@@ -79,12 +101,13 @@ def build_dashboard_payload(
     users: dict[str, Any],
     today: date,
     realm_names: dict[int, str] | None = None,
+    battle_power_resolver: BattlePowerResolver | None = None,
 ) -> dict[str, Any]:
     realm_names = realm_names or {}
     summaries: list[dict[str, Any]] = []
     for user_id, raw in users.items():
         if isinstance(raw, dict):
-            summaries.append(summarize_player(str(user_id), raw, today, realm_names))
+            summaries.append(summarize_player(str(user_id), raw, today, realm_names, battle_power_resolver))
 
     total_players = len(summaries)
     signed_today = sum(1 for item in summaries if item["signed_today"])

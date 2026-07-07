@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from datetime import date
 from pathlib import Path
@@ -11,6 +12,13 @@ SPEC = importlib.util.spec_from_file_location("admin_dashboard", MODULE_PATH)
 admin_dashboard = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(admin_dashboard)
+
+DOMAIN_PATH = Path(__file__).resolve().parents[1] / "domain.py"
+DOMAIN_SPEC = importlib.util.spec_from_file_location("domain", DOMAIN_PATH)
+domain = importlib.util.module_from_spec(DOMAIN_SPEC)
+sys.modules["domain"] = domain
+assert DOMAIN_SPEC and DOMAIN_SPEC.loader
+DOMAIN_SPEC.loader.exec_module(domain)
 
 
 class AdminDashboardTests(unittest.TestCase):
@@ -90,3 +98,33 @@ class AdminDashboardTests(unittest.TestCase):
         self.assertEqual(payload["recent_signins"][0]["user_id"], "overflow")
         self.assertEqual(payload["inactive_players"][0]["user_id"], "bad")
         self.assertEqual(payload["inactive_players"][0]["last_sign_date"], "")
+
+    def test_dashboard_resolves_real_user_record_battle_power(self) -> None:
+        record = domain.UserRecord(
+            user_id="real",
+            realm_index=3,
+            realm_exp=120,
+            total_exp=450,
+            sign_count=8,
+            spirit_stones=88,
+            last_sign_date="2026-07-08",
+        )
+        raw = record.to_dict()
+        self.assertNotIn("battle_power", raw)
+
+        def battle_power_resolver(user_id: str, data: dict[str, object]) -> int:
+            payload = dict(data)
+            payload["user_id"] = user_id
+            return domain.battle_power(domain.UserRecord.from_dict(payload))
+
+        payload = admin_dashboard.build_dashboard_payload(
+            {"real": raw},
+            date(2026, 7, 8),
+            {3: "筑基"},
+            battle_power_resolver,
+        )
+
+        expected_power = domain.battle_power(record)
+        self.assertGreater(expected_power, 0)
+        self.assertEqual(payload["metrics"]["average_battle_power"], expected_power)
+        self.assertEqual(payload["top_battle_power"][0]["battle_power"], expected_power)

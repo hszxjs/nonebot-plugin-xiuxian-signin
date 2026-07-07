@@ -311,7 +311,13 @@ class AdminManager:
             for item in self.equipment_meta().get("realms", [])
             if isinstance(item, dict) and "index" in item and "name" in item
         }
-        return build_dashboard_payload(users, self.today(), realm_names)
+
+        def battle_power_resolver(user_id: str, raw: dict[str, Any]) -> int:
+            data = dict(raw)
+            data["user_id"] = str(data.get("user_id") or user_id)
+            return domain.battle_power(domain.UserRecord.from_dict(data))
+
+        return build_dashboard_payload(users, self.today(), realm_names, battle_power_resolver)
 
     def item_meta(self, items: list[dict[str, Any]]) -> dict[str, Any]:
         categories = list(dict.fromkeys(list(domain.REWARD_CATEGORIES) + [domain.IMMORTAL_SEED_CATEGORY]))

@@ -189,34 +189,41 @@ class AdminRouteTests(unittest.TestCase):
             self.assertTrue(installed)
             self.assertEqual(manager.apply_config_calls, 1)
 
-            paths = [route["path"] for route in driver.server_app.routes]
+            def route_index(path: str, method: str) -> int:
+                for index, route in enumerate(driver.server_app.routes):
+                    if route["path"] == path and method in route["methods"]:
+                        return index
+                self.fail(f"Missing route {method} {path}")
+
             unknown_path = "/xiuxian-admin/api/{api_path:path}"
-            self.assertIn(unknown_path, paths)
-            known_api_paths = {
-                "/xiuxian-admin/api/dashboard",
-                "/xiuxian-admin/api/config",
-                "/xiuxian-admin/api/players",
-                "/xiuxian-admin/api/players/{user_id}",
-                "/xiuxian-admin/api/backup",
-                "/xiuxian-admin/api/items",
-                "/xiuxian-admin/api/beast-realm/cards",
-                "/xiuxian-admin/api/mystic",
-                "/xiuxian-admin/api/equipment-rules",
-            }
-            for known_api_path in known_api_paths:
-                self.assertLess(paths.index(known_api_path), paths.index(unknown_path))
+            known_api_routes = (
+                ("GET", "/xiuxian-admin/api/dashboard"),
+                ("GET", "/xiuxian-admin/api/config"),
+                ("PUT", "/xiuxian-admin/api/config"),
+                ("GET", "/xiuxian-admin/api/players"),
+                ("GET", "/xiuxian-admin/api/players/{user_id}"),
+                ("PUT", "/xiuxian-admin/api/players/{user_id}"),
+                ("POST", "/xiuxian-admin/api/backup"),
+                ("GET", "/xiuxian-admin/api/items"),
+                ("GET", "/xiuxian-admin/api/beast-realm/cards"),
+                ("GET", "/xiuxian-admin/api/mystic"),
+                ("GET", "/xiuxian-admin/api/equipment-rules"),
+            )
+            for method, known_api_path in known_api_routes:
+                self.assertLess(route_index(known_api_path, method), route_index(unknown_path, method))
+
             public_asset_path = "/xiuxian-admin/assets/{asset_path:path}"
-            runtime_asset_paths = {
+            runtime_asset_paths = (
                 "/xiuxian-admin/assets/item-icons/{icon_path:path}",
                 "/xiuxian-admin/assets/character-portraits/{portrait_name}",
                 "/xiuxian-admin/assets/beast-spell-icons/{icon_name}",
-            }
+            )
             for runtime_asset_path in runtime_asset_paths:
-                self.assertLess(paths.index(runtime_asset_path), paths.index(public_asset_path))
-            self.assertLess(paths.index(public_asset_path), paths.index(unknown_path))
-            self.assertLess(paths.index(unknown_path), paths.index("/xiuxian-admin/{asset_path:path}"))
+                self.assertLess(route_index(runtime_asset_path, "GET"), route_index(public_asset_path, "GET"))
+            self.assertLess(route_index(public_asset_path, "GET"), route_index(unknown_path, "GET"))
+            self.assertLess(route_index(unknown_path, "GET"), route_index("/xiuxian-admin/{asset_path:path}", "GET"))
 
-            unknown_route = driver.server_app.routes[paths.index(unknown_path)]
+            unknown_route = driver.server_app.routes[route_index(unknown_path, "GET")]
             self.assertEqual(set(unknown_route["methods"]), {"GET", "POST", "PUT"})
 
             unauthorized = asyncio.run(unknown_route["endpoint"](FakeRequest()))
@@ -227,7 +234,7 @@ class AdminRouteTests(unittest.TestCase):
             self.assertEqual(authorized.status_code, 404)
             self.assertEqual(authorized.data["error"], "not found")
 
-            dashboard_route = driver.server_app.routes[paths.index("/xiuxian-admin/api/dashboard")]
+            dashboard_route = driver.server_app.routes[route_index("/xiuxian-admin/api/dashboard", "GET")]
             dashboard = asyncio.run(dashboard_route["endpoint"](FakeRequest(token="secret")))
             self.assertEqual(dashboard.status_code, 200)
             self.assertEqual(dashboard.data["source"], "dashboard")
