@@ -192,8 +192,28 @@ class AdminRouteTests(unittest.TestCase):
             paths = [route["path"] for route in driver.server_app.routes]
             unknown_path = "/xiuxian-admin/api/{api_path:path}"
             self.assertIn(unknown_path, paths)
-            self.assertLess(paths.index("/xiuxian-admin/api/dashboard"), paths.index(unknown_path))
-            self.assertLess(paths.index("/xiuxian-admin/assets/{asset_path:path}"), paths.index(unknown_path))
+            known_api_paths = {
+                "/xiuxian-admin/api/dashboard",
+                "/xiuxian-admin/api/config",
+                "/xiuxian-admin/api/players",
+                "/xiuxian-admin/api/players/{user_id}",
+                "/xiuxian-admin/api/backup",
+                "/xiuxian-admin/api/items",
+                "/xiuxian-admin/api/beast-realm/cards",
+                "/xiuxian-admin/api/mystic",
+                "/xiuxian-admin/api/equipment-rules",
+            }
+            for known_api_path in known_api_paths:
+                self.assertLess(paths.index(known_api_path), paths.index(unknown_path))
+            public_asset_path = "/xiuxian-admin/assets/{asset_path:path}"
+            runtime_asset_paths = {
+                "/xiuxian-admin/assets/item-icons/{icon_path:path}",
+                "/xiuxian-admin/assets/character-portraits/{portrait_name}",
+                "/xiuxian-admin/assets/beast-spell-icons/{icon_name}",
+            }
+            for runtime_asset_path in runtime_asset_paths:
+                self.assertLess(paths.index(runtime_asset_path), paths.index(public_asset_path))
+            self.assertLess(paths.index(public_asset_path), paths.index(unknown_path))
             self.assertLess(paths.index(unknown_path), paths.index("/xiuxian-admin/{asset_path:path}"))
 
             unknown_route = driver.server_app.routes[paths.index(unknown_path)]
@@ -257,10 +277,15 @@ class AdminRouteTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertIn(b"console.log", body)
 
-                status, content_type, body = _http_request(port, "/xiuxian-admin/assets/item-icons/items/item_001.png")
-                self.assertEqual(status, 401)
-                self.assertIn("application/json", content_type)
-                self.assertEqual(_json_body(body)["error"], "unauthorized")
+                for asset_path in (
+                    "/xiuxian-admin/assets/item-icons/items/item_001.png",
+                    "/xiuxian-admin/assets/character-portraits/beast_001.png",
+                    "/xiuxian-admin/assets/beast-spell-icons/br_spell_001.png",
+                ):
+                    status, content_type, body = _http_request(port, asset_path)
+                    self.assertEqual(status, 401)
+                    self.assertIn("application/json", content_type)
+                    self.assertEqual(_json_body(body)["error"], "unauthorized")
             finally:
                 handle.stop()
                 admin.ADMIN_WEB_ROOT = old_root
