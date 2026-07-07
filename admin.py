@@ -533,7 +533,7 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
 
     try:
         from starlette.requests import Request
-        from starlette.responses import HTMLResponse, Response
+        from starlette.responses import Response
     except ModuleNotFoundError:
         return False
 
