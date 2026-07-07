@@ -29,6 +29,10 @@ group_members.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local agent workspaces
+.worktrees/
+.superpowers/
 # Generated artifacts
 /ui-sprite-runs/
 /assets/panel_previews/
