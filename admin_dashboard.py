@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
 from datetime import date, datetime
 from typing import Any
@@ -25,13 +26,19 @@ def parse_record_date(value: Any) -> date | None:
 
 def number_value(value: Any, default: float = 0.0) -> float:
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
         return default
+    if not math.isfinite(result):
+        return default
+    return result
 
 
 def int_value(value: Any, default: int = 0) -> int:
-    return int(number_value(value, float(default)))
+    try:
+        return int(number_value(value, float(default)))
+    except (OverflowError, ValueError, TypeError):
+        return default
 
 
 def player_display_name(record: dict[str, Any], fallback_user_id: str) -> str:

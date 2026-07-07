@@ -17,12 +17,12 @@ class AdminDashboardTests(unittest.TestCase):
     def test_dashboard_empty_users(self) -> None:
         payload = admin_dashboard.build_dashboard_payload({}, date(2026, 7, 8), {})
 
-        assert payload["ok"] is True
-        assert payload["mode"] == "snapshot"
-        assert payload["metrics"]["total_players"] == 0
-        assert payload["metrics"]["signed_today"] == 0
-        assert payload["realm_distribution"] == []
-        assert payload["health_flags"]["has_players"] is False
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["mode"], "snapshot")
+        self.assertEqual(payload["metrics"]["total_players"], 0)
+        self.assertEqual(payload["metrics"]["signed_today"], 0)
+        self.assertEqual(payload["realm_distribution"], [])
+        self.assertFalse(payload["health_flags"]["has_players"])
 
     def test_dashboard_mixed_activity(self) -> None:
         users = {
@@ -54,12 +54,39 @@ class AdminDashboardTests(unittest.TestCase):
             {3: "筑基", 5: "金丹"},
         )
 
-        assert payload["metrics"]["total_players"] == 3
-        assert payload["metrics"]["signed_today"] == 1
-        assert payload["metrics"]["recent_active"] == 1
-        assert payload["metrics"]["inactive_risk"] == 2
-        assert payload["metrics"]["total_spirit_stones"] == 1000
-        assert payload["top_battle_power"][0]["user_id"] == "1002"
-        assert payload["recent_signins"][0]["nickname"] == "云舟"
-        assert payload["inactive_players"][0]["user_id"] == "1003"
-        assert payload["capabilities"]["historical_trends"] is False
+        self.assertEqual(payload["metrics"]["total_players"], 3)
+        self.assertEqual(payload["metrics"]["signed_today"], 1)
+        self.assertEqual(payload["metrics"]["recent_active"], 1)
+        self.assertEqual(payload["metrics"]["inactive_risk"], 2)
+        self.assertEqual(payload["metrics"]["total_spirit_stones"], 1000)
+        self.assertEqual(payload["top_battle_power"][0]["user_id"], "1002")
+        self.assertEqual(payload["recent_signins"][0]["nickname"], "云舟")
+        self.assertEqual(payload["inactive_players"][0]["user_id"], "1003")
+        self.assertFalse(payload["capabilities"]["historical_trends"])
+
+    def test_dashboard_malformed_numeric_and_date_values(self) -> None:
+        users = {
+            "bad": {
+                "nickname": "破损记录",
+                "realm_index": float("inf"),
+                "battle_power": float("nan"),
+                "spirit_stones": "inf",
+                "last_sign_date": "not-a-date",
+            },
+            "overflow": {
+                "battle_power": "1e309",
+                "spirit_stones": "-inf",
+                "last_sign_date": "2026/07/08",
+            },
+        }
+
+        payload = admin_dashboard.build_dashboard_payload(users, date(2026, 7, 8), {})
+
+        self.assertEqual(payload["metrics"]["total_players"], 2)
+        self.assertEqual(payload["metrics"]["total_spirit_stones"], 0)
+        self.assertEqual(payload["metrics"]["average_battle_power"], 0)
+        self.assertEqual(payload["top_battle_power"][0]["battle_power"], 0)
+        self.assertEqual(payload["top_battle_power"][1]["battle_power"], 0)
+        self.assertEqual(payload["recent_signins"][0]["user_id"], "overflow")
+        self.assertEqual(payload["inactive_players"][0]["user_id"], "bad")
+        self.assertEqual(payload["inactive_players"][0]["last_sign_date"], "")
