@@ -3,20 +3,33 @@ from __future__ import annotations
 import json
 import shutil
 import threading
-from datetime import datetime
+from datetime import date, datetime
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from mimetypes import guess_type
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from . import beast_realm, domain
+from .admin_dashboard import build_dashboard_payload
 from .storage import JsonStore
 
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
 CHARACTER_PORTRAIT_ROOT = Path(__file__).parent / "assets" / "character_portraits" / "portraits"
 BEAST_SPELL_ICON_ROOT = Path(__file__).parent / "assets" / "beast_realm_spell_icons"
+ADMIN_WEB_ROOT = Path(__file__).parent / "assets" / "admin_web"
+ADMIN_WEB_INDEX = ADMIN_WEB_ROOT / "index.html"
+ADMIN_WEB_MISSING_HTML = """<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>修仙签到后台</title>
+<body style="font-family:system-ui,sans-serif;max-width:720px;margin:48px auto;line-height:1.7">
+<h1>后台前端尚未构建</h1>
+<p>请在仓库根目录执行 <code>npm --prefix webui install</code> 和 <code>npm --prefix webui run build</code>，然后重新访问后台。</p>
+</body>
+</html>"""
 _ITEM_ICON_RECORD_CACHE: list[dict[str, Any]] | None = None
 _ITEM_ICON_LOOKUP_CACHE: tuple[dict[str, str], dict[str, str], list[tuple[str, str]]] | None = None
 
@@ -283,6 +296,15 @@ class AdminManager:
             ],
         }
 
+    def dashboard_payload(self) -> dict[str, Any]:
+        users = self.store._read_json(self.store.user_file_path)
+        realm_names = {
+            int(item["index"]): str(item["name"])
+            for item in self.equipment_meta().get("realms", [])
+            if isinstance(item, dict) and "index" in item and "name" in item
+        }
+        return build_dashboard_payload(users, date.today(), realm_names)
+
     def item_meta(self, items: list[dict[str, Any]]) -> dict[str, Any]:
         categories = list(dict.fromkeys(list(domain.REWARD_CATEGORIES) + [domain.IMMORTAL_SEED_CATEGORY]))
         for item in items:
@@ -356,6 +378,22 @@ def authorized(manager: AdminManager, request: Any) -> bool:
 
 def unauthorized() -> Any:
     return json_response({"ok": False, "error": "unauthorized"}, 401)
+
+
+def admin_web_asset_path(path_text: str = "") -> Path | None:
+    if not ADMIN_WEB_INDEX.exists():
+        return None
+    requested = path_text.replace("\\", "/").strip("/")
+    target = ADMIN_WEB_INDEX if not requested else ADMIN_WEB_ROOT / requested
+    try:
+        resolved = target.resolve()
+        root = ADMIN_WEB_ROOT.resolve()
+        resolved.relative_to(root)
+    except (OSError, ValueError):
+        return ADMIN_WEB_INDEX
+    if resolved.is_file():
+        return resolved
+    return ADMIN_WEB_INDEX
 
 
 ADMIN_HTML = """<!doctype html>
@@ -500,12 +538,22 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         return False
 
     async def page(request: Request) -> Any:
-        if manager.token and not authorized(manager, request):
+        from starlette.responses import FileResponse, HTMLResponse
+
+        if not authorized(manager, request):
             return HTMLResponse(
                 "<html><body><form><h3>修仙签到后台</h3>"
-                "<input name='token' placeholder='管理 Token'><button>进入</button></form></body></html>"
+                "<label>管理 Token <input name='token'></label><button>进入</button></form></body></html>"
             )
-        return HTMLResponse(ADMIN_HTML)
+        asset = admin_web_asset_path(request.path_params.get("asset_path", ""))
+        if asset is None:
+            return HTMLResponse(ADMIN_WEB_MISSING_HTML, status_code=503)
+        return FileResponse(asset)
+
+    async def dashboard(request: Request) -> Any:
+        if not authorized(manager, request):
+            return unauthorized()
+        return json_response(manager.dashboard_payload())
 
     async def get_config(request: Request) -> Any:
         if not authorized(manager, request):
@@ -592,6 +640,14 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
             return unauthorized()
         return json_response(manager.beast_card_payload())
 
+    async def item_icon(request: Request) -> Any:
+        if not authorized(manager, request):
+            return unauthorized()
+        icon_path = safe_item_icon_path(str(request.path_params["icon_path"]))
+        if icon_path is None:
+            return json_response({"ok": False, "error": "icon not found"}, 404)
+        return Response(icon_path.read_bytes(), media_type="image/png")
+
     async def character_portrait(request: Request) -> Any:
         if not authorized(manager, request):
             return unauthorized()
@@ -621,6 +677,7 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
 
     for path, endpoint, methods in (
         (base_path, page, ["GET"]),
+        (base_path + "/api/dashboard", dashboard, ["GET"]),
         (base_path + "/api/config", get_config, ["GET"]),
         (base_path + "/api/config", put_config, ["PUT"]),
         (base_path + "/api/players", list_players, ["GET"]),
@@ -629,10 +686,12 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         (base_path + "/api/backup", backup, ["POST"]),
         (base_path + "/api/items", items, ["GET"]),
         (base_path + "/api/beast-realm/cards", beast_cards, ["GET"]),
+        (base_path + "/assets/item-icons/{icon_path:path}", item_icon, ["GET"]),
         (base_path + "/assets/character-portraits/{portrait_name}", character_portrait, ["GET"]),
         (base_path + "/assets/beast-spell-icons/{icon_name}", beast_spell_icon, ["GET"]),
         (base_path + "/api/mystic", mystic, ["GET"]),
         (base_path + "/api/equipment-rules", equipment_rules, ["GET"]),
+        (base_path + "/{asset_path:path}", page, ["GET"]),
     ):
         app.add_route(path, endpoint, methods=methods)
     manager.apply_config()
@@ -718,11 +777,17 @@ def start_admin_server(
                 if api_path.startswith("/assets/beast-spell-icons/") and method == "GET":
                     self._send_beast_spell_icon(api_path[len("/assets/beast-spell-icons/") :])
                     return
+                if method == "GET" and not api_path.startswith("/api/"):
+                    self._send_admin_web_asset(api_path)
+                    return
                 self._handle_api(method, api_path, query)
             except Exception as exc:
                 self._send_json({"ok": False, "error": str(exc) or exc.__class__.__name__}, 500)
 
         def _handle_api(self, method: str, api_path: str, query: dict[str, str]) -> None:
+            if api_path == "/api/dashboard" and method == "GET":
+                self._send_json(manager.dashboard_payload())
+                return
             if api_path == "/api/config" and method == "GET":
                 self._send_json({"ok": True, "config": manager.load_config()})
                 return
@@ -779,10 +844,18 @@ def start_admin_server(
             if manager.token and not self._authorized(query):
                 self._send_html(
                     "<html><body><form><h3>修仙签到后台</h3>"
-                    "<input name='token' placeholder='管理 Token'><button>进入</button></form></body></html>"
+                    "<label>管理 Token <input name='token'></label><button>进入</button></form></body></html>"
                 )
                 return
-            self._send_html(ADMIN_HTML)
+            if not ADMIN_WEB_INDEX.exists():
+                self._send_html(ADMIN_WEB_MISSING_HTML, 503)
+                return
+            body = ADMIN_WEB_INDEX.read_bytes()
+            self.send_response(200)
+            self._send_common_headers("text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def _read_json_body(self) -> Any:
             length = int(self.headers.get("Content-Length") or 0)
@@ -839,6 +912,23 @@ def start_admin_server(
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _send_admin_web_asset(self, api_path: str) -> None:
+            asset = admin_web_asset_path(unquote(api_path))
+            if asset is None:
+                self._send_html(ADMIN_WEB_MISSING_HTML, 503)
+                return
+            try:
+                body = asset.read_bytes()
+            except OSError:
+                self._send_json({"ok": False, "error": "asset not readable"}, 404)
+                return
+            self.send_response(200)
+            self._send_common_headers(guess_type(asset.name)[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def _send_common_headers(self, content_type: str) -> None:
             self.send_header("Content-Type", content_type + "; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")
