@@ -562,10 +562,6 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         from starlette.responses import FileResponse, HTMLResponse
 
         asset_path = str(request.path_params.get("asset_path", ""))
-        if asset_path.replace("\\", "/").lstrip("/").startswith("api/"):
-            if not authorized(manager, request):
-                return unauthorized()
-            return json_response({"ok": False, "error": "not found"}, 404)
         if not authorized(manager, request):
             return HTMLResponse(
                 "<html><body><form><h3>修仙签到后台</h3>"
@@ -575,6 +571,11 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         if asset is None:
             return HTMLResponse(ADMIN_WEB_MISSING_HTML, status_code=503)
         return FileResponse(asset)
+
+    async def unknown_api(request: Request) -> Any:
+        if not authorized(manager, request):
+            return unauthorized()
+        return json_response({"ok": False, "error": "not found"}, 404)
 
     async def admin_web_static_asset(request: Request) -> Any:
         from starlette.responses import FileResponse, Response
@@ -726,6 +727,7 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         (base_path + "/assets/{asset_path:path}", admin_web_static_asset, ["GET"]),
         (base_path + "/api/mystic", mystic, ["GET"]),
         (base_path + "/api/equipment-rules", equipment_rules, ["GET"]),
+        (base_path + "/api/{api_path:path}", unknown_api, ["GET", "POST", "PUT"]),
         (base_path + "/{asset_path:path}", page, ["GET"]),
     ):
         app.add_route(path, endpoint, methods=methods)
