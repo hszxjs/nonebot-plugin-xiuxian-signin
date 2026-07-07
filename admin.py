@@ -10,6 +10,7 @@ from mimetypes import guess_type
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
+from zoneinfo import ZoneInfo
 
 from . import beast_realm, domain
 from .admin_dashboard import build_dashboard_payload
@@ -174,11 +175,18 @@ def deep_update(target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any
 
 
 class AdminManager:
-    def __init__(self, store: JsonStore, data_dir: Path, token: str = "") -> None:
+    def __init__(self, store: JsonStore, data_dir: Path, token: str = "", timezone: str = "Asia/Shanghai") -> None:
         self.store = store
         self.data_dir = data_dir
         self.config_path = data_dir / "admin_config.json"
         self.token = token.strip()
+        self.timezone = str(timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+
+    def today(self) -> date:
+        try:
+            return datetime.now(ZoneInfo(self.timezone)).date()
+        except Exception:
+            return datetime.now().date()
 
     def load_config(self) -> dict[str, Any]:
         if not self.config_path.exists():
@@ -303,7 +311,7 @@ class AdminManager:
             for item in self.equipment_meta().get("realms", [])
             if isinstance(item, dict) and "index" in item and "name" in item
         }
-        return build_dashboard_payload(users, date.today(), realm_names)
+        return build_dashboard_payload(users, self.today(), realm_names)
 
     def item_meta(self, items: list[dict[str, Any]]) -> dict[str, Any]:
         categories = list(dict.fromkeys(list(domain.REWARD_CATEGORIES) + [domain.IMMORTAL_SEED_CATEGORY]))
@@ -394,6 +402,19 @@ def admin_web_asset_path(path_text: str = "") -> Path | None:
     if resolved.is_file():
         return resolved
     return ADMIN_WEB_INDEX
+
+
+def admin_web_static_asset_path(path_text: str) -> Path | None:
+    requested = path_text.replace("\\", "/").strip("/")
+    if not requested.startswith("assets/"):
+        return None
+    try:
+        resolved = (ADMIN_WEB_ROOT / requested).resolve()
+        asset_root = (ADMIN_WEB_ROOT / "assets").resolve()
+        resolved.relative_to(asset_root)
+    except (OSError, ValueError):
+        return None
+    return resolved if resolved.is_file() else None
 
 
 ADMIN_HTML = """<!doctype html>
@@ -550,6 +571,14 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
             return HTMLResponse(ADMIN_WEB_MISSING_HTML, status_code=503)
         return FileResponse(asset)
 
+    async def admin_web_static_asset(request: Request) -> Any:
+        from starlette.responses import FileResponse, Response
+
+        asset = admin_web_static_asset_path("assets/" + str(request.path_params["asset_path"]))
+        if asset is None:
+            return Response(status_code=404)
+        return FileResponse(asset)
+
     async def dashboard(request: Request) -> Any:
         if not authorized(manager, request):
             return unauthorized()
@@ -689,6 +718,7 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         (base_path + "/assets/item-icons/{icon_path:path}", item_icon, ["GET"]),
         (base_path + "/assets/character-portraits/{portrait_name}", character_portrait, ["GET"]),
         (base_path + "/assets/beast-spell-icons/{icon_name}", beast_spell_icon, ["GET"]),
+        (base_path + "/assets/{asset_path:path}", admin_web_static_asset, ["GET"]),
         (base_path + "/api/mystic", mystic, ["GET"]),
         (base_path + "/api/equipment-rules", equipment_rules, ["GET"]),
         (base_path + "/{asset_path:path}", page, ["GET"]),
@@ -765,6 +795,9 @@ def start_admin_server(
                     self._send_json({"ok": False, "error": "not found"}, 404)
                     return
                 api_path = request_path[len(normalized_base_path) :]
+                if method == "GET" and api_path.startswith("/assets/") and not self._is_runtime_asset_path(api_path):
+                    self._send_admin_web_static_asset(api_path)
+                    return
                 if not self._authorized(query):
                     self._send_json({"ok": False, "error": "unauthorized"}, 401)
                     return
@@ -839,6 +872,11 @@ def start_admin_server(
         def _authorized(self, query: dict[str, str]) -> bool:
             token = str(self.headers.get("X-Xiuxian-Token") or query.get("token") or "").strip()
             return not manager.token or token == manager.token
+
+        def _is_runtime_asset_path(self, api_path: str) -> bool:
+            return api_path.startswith(
+                ("/assets/item-icons/", "/assets/character-portraits/", "/assets/beast-spell-icons/")
+            )
 
         def _send_page(self, query: dict[str, str]) -> None:
             if manager.token and not self._authorized(query):
@@ -918,13 +956,23 @@ def start_admin_server(
             if asset is None:
                 self._send_html(ADMIN_WEB_MISSING_HTML, 503)
                 return
+            self._send_file(asset)
+
+        def _send_admin_web_static_asset(self, api_path: str) -> None:
+            asset = admin_web_static_asset_path(unquote(api_path))
+            if asset is None:
+                self._send_json({"ok": False, "error": "asset not found"}, 404)
+                return
+            self._send_file(asset)
+
+        def _send_file(self, path: Path) -> None:
             try:
-                body = asset.read_bytes()
+                body = path.read_bytes()
             except OSError:
                 self._send_json({"ok": False, "error": "asset not readable"}, 404)
                 return
             self.send_response(200)
-            self._send_common_headers(guess_type(asset.name)[0] or "application/octet-stream")
+            self._send_common_headers(guess_type(path.name)[0] or "application/octet-stream")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

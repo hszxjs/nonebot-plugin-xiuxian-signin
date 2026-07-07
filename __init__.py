@@ -538,7 +538,12 @@ def get_data_dir() -> Path:
 
 
 store = JsonStore(get_data_dir())
-admin_manager = AdminManager(store, get_data_dir(), config.xiuxian_signin_admin_token or "")
+admin_manager = AdminManager(
+    store,
+    get_data_dir(),
+    config.xiuxian_signin_admin_token or "",
+    config.xiuxian_signin_timezone,
+)
 
 
 def normalized_plain_text(event: MessageEvent) -> str:
