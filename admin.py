@@ -561,12 +561,17 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
     async def page(request: Request) -> Any:
         from starlette.responses import FileResponse, HTMLResponse
 
+        asset_path = str(request.path_params.get("asset_path", ""))
+        if asset_path.replace("\\", "/").lstrip("/").startswith("api/"):
+            if not authorized(manager, request):
+                return unauthorized()
+            return json_response({"ok": False, "error": "not found"}, 404)
         if not authorized(manager, request):
             return HTMLResponse(
                 "<html><body><form><h3>修仙签到后台</h3>"
                 "<label>管理 Token <input name='token'></label><button>进入</button></form></body></html>"
             )
-        asset = admin_web_asset_path(request.path_params.get("asset_path", ""))
+        asset = admin_web_asset_path(asset_path)
         if asset is None:
             return HTMLResponse(ADMIN_WEB_MISSING_HTML, status_code=503)
         return FileResponse(asset)
