@@ -90,3 +90,39 @@ export type ItemPayload = AdminOk<{
     attributes?: string[];
   };
 }>;
+export type BeastCard = {
+  id: string;
+  kind: "beast" | "spell";
+  name: string;
+  realm?: string;
+  faction?: string;
+  element?: string;
+  cost?: number;
+  attack?: number;
+  defense?: number;
+  pool_copies?: number;
+  portrait_id?: string;
+  icon?: string;
+  icon_id?: string;
+  effect?: string;
+  story?: string;
+  rules?: unknown;
+  customized?: boolean;
+  tier?: number;
+  category?: string;
+  target?: string;
+  source_realm?: string;
+  archetype?: string;
+};
+
+export type BeastCardPayload = AdminOk<{
+  cards: BeastCard[];
+  meta: {
+    default_pool_copies?: number;
+    factions?: string[];
+    realms?: Array<{ index: number; name: string }> | string[];
+    elements?: string[];
+    categories?: string[];
+    targets?: string[];
+  };
+}>;

@@ -5,6 +5,7 @@ import { Badge } from "./components/ui/badge";
 import { Card } from "./components/ui/card";
 import { initializeTokenFromUrl, setToken } from "./lib/api";
 import { DashboardPage } from "./pages/DashboardPage";
+import { BeastCardsPage } from "./pages/BeastCardsPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { PlayersPage } from "./pages/PlayersPage";
 
@@ -27,6 +28,9 @@ function CurrentPage({ page }: { page: PageKey }) {
   }
   if (page === "items") {
     return <ItemsPage />;
+  }
+  if (page === "beast") {
+    return <BeastCardsPage />;
   }
 
   return (
