@@ -64,3 +64,29 @@ export type PlayerMeta = {
   quality_titles?: string[];
   foundation_quality_titles?: string[];
 };
+export type AdminItem = {
+  name: string;
+  category?: string;
+  tiers?: string[];
+  grades?: string[];
+  required_realm?: string;
+  realm?: string;
+  required_attribute?: string;
+  usage?: string;
+  source?: string;
+  story?: string;
+  parameter_note?: string;
+  icon?: string;
+  customized?: boolean;
+};
+
+export type ItemPayload = AdminOk<{
+  items: AdminItem[];
+  meta: {
+    categories?: string[];
+    tiers?: string[];
+    grades?: string[];
+    realms?: string[];
+    attributes?: string[];
+  };
+}>;
