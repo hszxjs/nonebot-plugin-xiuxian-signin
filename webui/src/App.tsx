@@ -6,7 +6,9 @@ import { Card } from "./components/ui/card";
 import { initializeTokenFromUrl, setToken } from "./lib/api";
 import { DashboardPage } from "./pages/DashboardPage";
 import { BeastCardsPage } from "./pages/BeastCardsPage";
+import { EquipmentPage } from "./pages/EquipmentPage";
 import { ItemsPage } from "./pages/ItemsPage";
+import { MysticPage } from "./pages/MysticPage";
 import { PlayersPage } from "./pages/PlayersPage";
 
 const pageTitles: Record<PageKey, string> = {
@@ -31,6 +33,12 @@ function CurrentPage({ page }: { page: PageKey }) {
   }
   if (page === "beast") {
     return <BeastCardsPage />;
+  }
+  if (page === "equipment") {
+    return <EquipmentPage />;
+  }
+  if (page === "mystic") {
+    return <MysticPage />;
   }
 
   return (

@@ -126,3 +126,30 @@ export type BeastCardPayload = AdminOk<{
     targets?: string[];
   };
 }>;
+
+export type EquipmentPayload = AdminOk<{
+  rules: Record<string, unknown>;
+  meta: {
+    realms?: Array<{ index: number; name: string }>;
+    tiers?: string[];
+    grades?: string[];
+    attributes?: string[];
+    artifacts?: Array<{ name: string; realm_index: number }>;
+  };
+}>;
+
+export type MysticPayload = AdminOk<{
+  mystic: {
+    types?: string[];
+    high_risk_types?: string[];
+    enabled_types?: string[];
+    enabled_high_risk_types?: string[];
+    categories?: string[];
+    tiers?: string[];
+    grades?: string[];
+    category_weights?: Record<string, Array<Record<string, unknown>>>;
+    drop_overrides?: Record<string, Array<Record<string, unknown>>>;
+    fishing_option_rate?: number;
+    extra_fishing_chance_rate?: number;
+  };
+}>;
