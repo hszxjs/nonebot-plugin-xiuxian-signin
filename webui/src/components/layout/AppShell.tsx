@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { Input } from "../ui/input";
 
 export type PageKey = "dashboard" | "players" | "items" | "beast" | "equipment" | "mystic" | "config";
+export type DirtyPageMap = Partial<Record<PageKey, boolean>>;
 
 const nav = [
   { key: "dashboard", label: "总览", icon: ChartNoAxesCombined },
@@ -21,7 +22,7 @@ const nav = [
   { key: "beast", label: "御兽卡牌", icon: Shield },
   { key: "equipment", label: "灵器规则", icon: Activity },
   { key: "mystic", label: "秘境掉落", icon: ScrollText },
-  { key: "config", label: "原始配置", icon: Database },
+  { key: "config", label: "高级配置", icon: Database },
 ] as const;
 
 function NavButton({
@@ -29,11 +30,13 @@ function NavButton({
   selected,
   onClick,
   compact = false,
+  dirty = false,
 }: {
   item: (typeof nav)[number];
   selected: boolean;
   onClick: () => void;
   compact?: boolean;
+  dirty?: boolean;
 }) {
   const Icon = item.icon;
   return (
@@ -48,6 +51,7 @@ function NavButton({
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="truncate">{item.label}</span>
+      {dirty ? <span aria-label="有未保存修改" className="ml-auto h-2 w-2 shrink-0 rounded-full bg-destructive" /> : null}
     </button>
   );
 }
@@ -58,11 +62,13 @@ export function AppShell({
   token,
   onTokenChange,
   children,
+  dirtyPages,
 }: {
   page: PageKey;
   onPageChange: (page: PageKey) => void;
   token: string;
   onTokenChange: (token: string) => void;
+  dirtyPages?: DirtyPageMap;
   children: ReactNode;
 }) {
   return (
@@ -74,7 +80,13 @@ export function AppShell({
         </div>
         <nav className="grid gap-1 p-3" aria-label="后台导航">
           {nav.map((item) => (
-            <NavButton item={item} key={item.key} onClick={() => onPageChange(item.key)} selected={page === item.key} />
+            <NavButton
+              dirty={Boolean(dirtyPages?.[item.key])}
+              item={item}
+              key={item.key}
+              onClick={() => onPageChange(item.key)}
+              selected={page === item.key}
+            />
           ))}
         </nav>
       </aside>
@@ -108,6 +120,7 @@ export function AppShell({
             {nav.map((item) => (
               <NavButton
                 compact
+                dirty={Boolean(dirtyPages?.[item.key])}
                 item={item}
                 key={item.key}
                 onClick={() => onPageChange(item.key)}

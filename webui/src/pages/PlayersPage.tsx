@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { api } from "../lib/api";
 import { formatNumber } from "../lib/format";
 import type { PlayerDetailPayload, PlayerListPayload, PlayerMeta, PlayerSummary } from "../lib/types";
+import type { DirtyChangeHandler } from "./pageShared";
+import { useDirtyFlag } from "./pageShared";
 import { PlayerEditor } from "./playerEditor";
 import { sanitizeRecord, type JsonRecord } from "./playerMeta";
 
@@ -130,7 +132,7 @@ function EditorHeader({
   );
 }
 
-export function PlayersPage() {
+export function PlayersPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandler }) {
   const [query, setQuery] = useState("");
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -153,6 +155,7 @@ export function PlayersPage() {
   );
   const dirty = hasUnsavedChanges(record, originalRecord);
   const saving = saveState === "saving";
+  useDirtyFlag(dirty, onDirtyChange);
 
   async function loadPlayers(nextQuery = query, options: { keepSelection?: boolean } = {}) {
     setListLoading(true);

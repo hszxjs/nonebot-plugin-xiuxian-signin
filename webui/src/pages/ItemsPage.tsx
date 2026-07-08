@@ -8,6 +8,8 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { api, getToken } from "../lib/api";
 import type { AdminItem, ItemPayload } from "../lib/types";
+import type { DirtyChangeHandler } from "./pageShared";
+import { useDirtyFlag } from "./pageShared";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
@@ -388,7 +390,7 @@ function EditorHeader({
   );
 }
 
-export function ItemsPage() {
+export function ItemsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandler }) {
   const [items, setItems] = useState<AdminItem[]>([]);
   const [meta, setMeta] = useState<ItemMeta>({});
   const [query, setQuery] = useState("");
@@ -407,6 +409,7 @@ export function ItemsPage() {
 
   const dirty = hasUnsavedChanges(draft, originalDraft);
   const saving = saveState === "saving";
+  useDirtyFlag(dirty, onDirtyChange);
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {

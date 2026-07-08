@@ -8,6 +8,8 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { api, getToken } from "../lib/api";
 import type { BeastCard, BeastCardPayload } from "../lib/types";
+import type { DirtyChangeHandler } from "./pageShared";
+import { useDirtyFlag } from "./pageShared";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
@@ -385,7 +387,7 @@ function EditorHeader({ dirty, draft, onReload, onRestore, onSave, saveError, sa
   );
 }
 
-export function BeastCardsPage() {
+export function BeastCardsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandler }) {
   const [cards, setCards] = useState<BeastCard[]>([]);
   const [meta, setMeta] = useState<BeastMeta>({});
   const [query, setQuery] = useState("");
@@ -405,6 +407,7 @@ export function BeastCardsPage() {
 
   const dirty = hasUnsavedChanges(draft, originalDraft, rulesText);
   const saving = saveState === "saving";
+  useDirtyFlag(dirty, onDirtyChange);
   const factionOptions = useMemo(() => optionValues(meta.factions, "").concat(uniqueSorted(cards.map((card) => card.faction || card.category))).filter((value, index, values) => value && values.indexOf(value) === index), [cards, meta.factions]);
   const filteredCards = useMemo(
     () =>

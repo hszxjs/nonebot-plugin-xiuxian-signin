@@ -8,6 +8,8 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { api } from "../lib/api";
 import type { EquipmentPayload } from "../lib/types";
+import type { DirtyChangeHandler } from "./pageShared";
+import { useDirtyFlag } from "./pageShared";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
@@ -215,7 +217,7 @@ function RealmTable({
   );
 }
 
-export function EquipmentPage() {
+export function EquipmentPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandler }) {
   const [rules, setRules] = useState<Record<string, unknown>>({});
   const [originalRules, setOriginalRules] = useState<Record<string, unknown>>({});
   const [meta, setMeta] = useState<EquipmentMeta>({});
@@ -229,6 +231,7 @@ export function EquipmentPage() {
   const realms = meta.realms ?? [];
   const dirty = JSON.stringify(rules) !== JSON.stringify(originalRules);
   const saving = saveState === "saving";
+  useDirtyFlag(dirty, onDirtyChange);
 
   async function loadEquipment() {
     const requestId = loadRequestId.current + 1;
@@ -351,5 +354,3 @@ export function EquipmentPage() {
     </div>
   );
 }
-
-

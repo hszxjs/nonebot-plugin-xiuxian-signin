@@ -8,6 +8,8 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { api } from "../lib/api";
 import type { AdminItem, ItemPayload, MysticPayload } from "../lib/types";
+import type { DirtyChangeHandler } from "./pageShared";
+import { useDirtyFlag } from "./pageShared";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
@@ -403,7 +405,7 @@ function TypeSection({ disabled, itemNames, mystic, onChange, typeName }: { disa
   );
 }
 
-export function MysticPage() {
+export function MysticPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandler }) {
   const [mystic, setMystic] = useState<MysticState>({});
   const [originalMystic, setOriginalMystic] = useState<MysticState>({});
   const [items, setItems] = useState<AdminItem[]>([]);
@@ -416,6 +418,7 @@ export function MysticPage() {
 
   const dirty = JSON.stringify(mystic) !== JSON.stringify(originalMystic);
   const saving = saveState === "saving";
+  useDirtyFlag(dirty, onDirtyChange);
   const itemNames = useMemo(() => uniqueValues(items.map((item) => item.name)), [items]);
   const sections = sectionTypes(mystic);
 
@@ -559,4 +562,3 @@ export function MysticPage() {
     </div>
   );
 }
-
