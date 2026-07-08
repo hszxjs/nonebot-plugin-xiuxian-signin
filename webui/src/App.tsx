@@ -4,6 +4,7 @@ import { EmptyState } from "./components/state/LoadState";
 import { Badge } from "./components/ui/badge";
 import { Card } from "./components/ui/card";
 import { initializeTokenFromUrl, setToken } from "./lib/api";
+import { DashboardPage } from "./pages/DashboardPage";
 
 const pageTitles: Record<PageKey, string> = {
   dashboard: "总览",
@@ -16,6 +17,10 @@ const pageTitles: Record<PageKey, string> = {
 };
 
 function CurrentPage({ page }: { page: PageKey }) {
+  if (page === "dashboard") {
+    return <DashboardPage />;
+  }
+
   return (
     <Card className="grid gap-4 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
