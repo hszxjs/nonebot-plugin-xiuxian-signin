@@ -29,7 +29,17 @@ group_members.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local agent workspaces
+.worktrees/
+.superpowers/
+
+# Frontend
+webui/node_modules/
+webui/dist/
+
 # Generated artifacts
+/ui-sprite-runs/
 /assets/panel_previews/
 /assets/gpt_source/
 /assets/ui-sprite-runs/

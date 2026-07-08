@@ -23,7 +23,7 @@ from .domain import (
     array_proficiency_value,
     battle_power,
     battle_summary,
-    breakthrough_required_text,
+    breakthrough_priority_text,
     acquired_root_attribute_text,
     acquired_root_summary,
     normalize_acquired_roots,
@@ -69,7 +69,8 @@ TEXT_PANEL_BACKGROUND_FILES = {
     "breakthrough": "catalog_background.png",
     "mystic": "mystic_background.png",
     "divination": "mystic_background.png",
-    "fishing": "fishing_background.png",
+    "beast_realm": "beast_realm_background.png",
+    "fishing": "fishing_guide_background.png",
     "adventure": "adventure_background.png",
     "duel": "battle_background.png",
     "power": "battle_background.png",
@@ -449,14 +450,9 @@ def root_panel_summary(record: UserRecord) -> str:
     if record.root is None:
         return "\u672a\u89c9\u9192\u7075\u6839"
     if record.root.tier == "\u53d8\u5f02\u7075\u6839":
-        name = record.root.display_name
-        prefix = "\u53d8\u5f02\u7075\u6839"
-        if name.startswith(prefix):
-            name = name[len(prefix):]
-        lines = [prefix, name or record.root.display_name]
         sources = "+".join(record.root.sources or [])
-        lines.append(f"\u7531{sources}\u5148\u5929\u5f02\u53d8" if sources else "\u5148\u5929\u5f02\u7980")
-        return "\n".join(lines)
+        source_text = f"\u7531{sources}\u5148\u5929\u5f02\u53d8" if sources else "\u5148\u5929\u5f02\u7980"
+        return f"{record.root.display_name}\n{source_text}"
     roots = record.roots
     if not roots:
         return "\u672a\u89c9\u9192\u7075\u6839"
@@ -847,7 +843,7 @@ def render_signin_card(
     array_status = array_proficiency_text(record)
     bottleneck = is_breakthrough_bottleneck(record)
     power_label = "\u74f6\u9888" if bottleneck else "\u6218\u6597\u5c5e\u6027"
-    power_value = f"\u9700 {breakthrough_required_text(record)}" if bottleneck else f"\u6218\u529b{battle_power(record)} / \u7075\u529b{combat_max_mana(record)}"
+    power_value = breakthrough_priority_text(record, limit=3) if bottleneck else f"\u6218\u529b{battle_power(record)} / \u7075\u529b{combat_max_mana(record)}"
     grid_items = [
         ("\u7075\u5668", equipped_title(record.equipped_artifact, "\u672a\u88c5\u5907\u7075\u5668"), accent),
         ("\u529f\u6cd5", equipped_title(record.equipped_method, "\u672a\u53c2\u609f\u529f\u6cd5"), accent),
@@ -998,7 +994,7 @@ def _render_signin_card_legacy(
     array_status = array_proficiency_text(record)
     bottleneck = is_breakthrough_bottleneck(record)
     power_label = "\u74f6\u9888" if bottleneck else "\u6218\u6597\u5c5e\u6027"
-    power_value = f"\u9700 {breakthrough_required_text(record)}" if bottleneck else f"\u6218\u529b{battle_power(record)} / \u7075\u529b{combat_max_mana(record)}"
+    power_value = breakthrough_priority_text(record, limit=3) if bottleneck else f"\u6218\u529b{battle_power(record)} / \u7075\u529b{combat_max_mana(record)}"
     info_rows = [
         ("灵器", equipped_title(record.equipped_artifact, "未装备灵器"), row1_y),
         ("功法", equipped_title(record.equipped_method, "未参悟功法"), row1_y),
@@ -1527,6 +1523,11 @@ PANEL_ICON_ALIASES = {
     "\u9053\u5177": "bag",
     "\u7269\u54c1": "bag",
     "\u5956\u52b1": "bag",
+    "\u5fa1\u517d": "beast_realm",
+    "\u517d\u6f6e": "beast_realm",
+    "\u4efb\u52a1\u5802": "beast_realm",
+    "\u968f\u4ece": "beast_realm",
+    "\u5cf0\u4e3b": "beast_realm",
     "\u79d8\u5883": "mystic",
     "\u5165\u53e3": "mystic",
     "\u5386\u7ec3": "adventure",
@@ -1742,8 +1743,8 @@ def draw_panel_icon(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], i
         line([(x1 + int(0.66 * w), y1 + int(0.78 * h)), (x1 + int(0.74 * w), y1 + int(0.92 * h))], fill=dark)
         for xx in (0.40, 0.52, 0.64):
             draw.arc((x1 + int((xx - 0.08) * w), y1 + int(0.16 * h), x1 + int((xx + 0.06) * w), y1 + int(0.42 * h)), 250, 80, fill=accent, width=max(2, w // 24))
-    elif icon_key in {"mystic", "breakthrough", "adventure"}:
-        if icon_key == "mystic":
+    elif icon_key in {"mystic", "beast_realm", "breakthrough", "adventure"}:
+        if icon_key in {"mystic", "beast_realm"}:
             rect((0.24, 0.28, 0.76, 0.80), fill=(255, 255, 255, 80), radius=12)
             draw.arc((x1 + int(0.24 * w), y1 + int(0.12 * h), x1 + int(0.76 * w), y1 + int(0.58 * h)), 180, 360, fill=dark, width=max(4, w // 14))
             line([(cx, y1 + int(0.46 * h)), (cx, y1 + int(0.80 * h))], fill=accent)
@@ -2659,9 +2660,10 @@ def render_text_panel(
     else:
         image, themed_background = make_xiuxian_background(width, height, accent), False
     draw = ImageDraw.Draw(image)
-    if themed_background:
+    fishing_text_panel = str(icon or "") == "fishing"
+    if themed_background and not fishing_text_panel:
         draw.rounded_rectangle((58, 62, width - 58, height - 58), radius=28, fill=(255, 250, 238, 108), outline=(234, 218, 184, 150), width=2)
-    else:
+    elif not themed_background:
         draw_card(image, (58, 62, width - 58, height - 58))
 
     draw_panel_icon(draw, (104, 112, 208, 216), icon, accent)
@@ -2678,7 +2680,8 @@ def render_text_panel(
             y += block_h + gap
             continue
         if kind == "section":
-            draw.rounded_rectangle((left, y, right, y + block_h), radius=20, fill=(252, 247, 232, 232), outline="#eadfca", width=2)
+            if not fishing_text_panel:
+                draw.rounded_rectangle((left, y, right, y + block_h), radius=20, fill=(252, 247, 232, 232), outline="#eadfca", width=2)
             draw_panel_icon(draw, (left + 16, y + 10, left + 56, y + 50), row_icon, accent)
             text_y = y + 12
             for part in wrapped:
@@ -2687,7 +2690,8 @@ def render_text_panel(
             y += block_h + gap
             continue
         row_h = block_h
-        draw.rounded_rectangle((left, y, right, y + row_h), radius=18, fill=(255, 255, 255, 222), outline="#eee2ca", width=2)
+        if not fishing_text_panel:
+            draw.rounded_rectangle((left, y, right, y + row_h), radius=18, fill=(255, 255, 255, 222), outline="#eee2ca", width=2)
         draw_panel_icon(draw, (left + 16, y + 12, left + 58, y + 54), row_icon, accent)
         text_y = y + 14
         for part in wrapped:

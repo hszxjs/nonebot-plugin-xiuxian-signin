@@ -201,6 +201,15 @@ REALMS = [
     '半步超脱',
     '超脱境',
     '永恒境',
+    '归真境',
+    '太初境',
+    '鸿蒙境',
+    '玄黄境',
+    '无量境',
+    '造化境',
+    '太素境',
+    '太极境',
+    '无始境',
 ]
 
 
@@ -1009,12 +1018,12 @@ BREAKTHROUGH_REQUIREMENTS = {
     1: {"items": ['筑基丹', '地脉筑基液', '天道筑基露'], "target": '筑基期', "kind": 'foundation'},
     2: {"items": ['小还丹', '大还丹', '金液丹', '凝魄金丹', '造化金丹'], "target": '金丹期', "kind": 'pill'},
     3: {"items": ['元婴丹', '护婴丹', '九窍化婴丹'], "target": '元婴期', "kind": 'pill'},
-    4: {"items": ['化凡意境', '化神引', '斩尘化神丹', '问心丹'], "target": '化神期', "kind": 'insight'},
+    4: {"items": ['问心丹', '化神引', '斩尘化神丹', '化凡意境'], "target": '化神期', "kind": 'insight'},
     5: {"items": ['破虚灵引', '破虚丹', '虚空灵髓'], "target": '炼虚期', "kind": 'insight'},
     6: {"items": ['合道残章', '合体丹', '法身合契符'], "target": '合体期', "kind": 'insight'},
-    7: {"items": ['大乘道果', '合道紫金丹', '圆融道胎'], "target": '大乘期', "kind": 'insight'},
+    7: {"items": ['合道紫金丹', '圆融道胎', '大乘道果'], "target": '大乘期', "kind": 'insight'},
     8: {"items": ['渡劫令', '渡劫护命丹', '避劫雷木'], "target": '渡劫期', "kind": 'insight'},
-    9: {"items": ['仙门符诏', '真仙接引符', '仙元道砂'], "target": '真仙境', "kind": 'insight'},
+    9: {"items": ['仙元道砂', '仙门符诏', '真仙接引符'], "target": '真仙境', "kind": 'insight'},
     10: {"items": ['金性道果', '不朽金丹', '金仙法契'], "target": '金仙境', "kind": 'insight'},
     11: {"items": ['太乙玄光', '太乙道胎', '清光道箓'], "target": '太乙境', "kind": 'insight'},
     12: {"items": ['大罗天契', '大罗道种', '诸天印契'], "target": '大罗境', "kind": 'insight'},
@@ -1029,6 +1038,15 @@ BREAKTHROUGH_REQUIREMENTS = {
     21: {"items": ['超脱契机', '彼岸舟影', '命河钥印'], "target": '半步超脱', "kind": 'insight'},
     22: {"items": ['命河断契', '因果斩线', '彼岸真符'], "target": '超脱境', "kind": 'insight'},
     23: {"items": ['永恒真名', '不朽唯一印', '万劫真铭'], "target": '永恒境', "kind": 'insight'},
+    24: {"items": ['归真道契', '澄源真砂', '返本灵印'], "target": '归真境', "kind": 'insight'},
+    25: {"items": ['太初元符', '一炁道胚', '初源真露'], "target": '太初境', "kind": 'insight'},
+    26: {"items": ['鸿蒙紫箓', '未判元胎', '混茫道种'], "target": '鸿蒙境', "kind": 'insight'},
+    27: {"items": ['玄黄母气', '厚土天章', '乾坤定印'], "target": '玄黄境', "kind": 'insight'},
+    28: {"items": ['无量海印', '净界法螺', '万潮道珠'], "target": '无量境', "kind": 'insight'},
+    29: {"items": ['造化灵炉', '万形生箓', '天工元胎'], "target": '造化境', "kind": 'insight'},
+    30: {"items": ['太素清符', '无尘道衣', '素元灵魄'], "target": '太素境', "kind": 'insight'},
+    31: {"items": ['太极衡印', '两仪真图', '阴阳归元符'], "target": '太极境', "kind": 'insight'},
+    32: {"items": ['无始门钥', '归墟玄碑', '长明道烛'], "target": '无始境', "kind": 'insight'},
 }
 
 
@@ -4079,7 +4097,7 @@ BREAKTHROUGH_ITEM_QUALITY_CAPS = {
     "圆融道胎": 16,
     "大乘道果": 19,
     "渡劫令": 10,
-    "避劫雷木": 13,
+    "避劫雷木": 19,
     "渡劫护命丹": 16,
     "仙元道砂": 12,
     "仙门符诏": 14,
@@ -4143,6 +4161,15 @@ REALM_QUALITY_TITLES = {
     22: ["半步无上", "命河将断", "因果将尽", "彼岸初望"],
     23: ["彼岸超脱", "命河不系", "因果不染", "初证超脱"],
     24: ["永恒唯一", "万劫不磨", "无量不朽", "永恒初印"],
+    25: ["归真圆满", "归真澄照", "归真玄契", "归真初悟"],
+    26: ["太初一炁", "太初玄章", "太初清印", "太初微芒"],
+    27: ["鸿蒙无极", "鸿蒙道胎", "鸿蒙玄息", "鸿蒙初判"],
+    28: ["玄黄不朽", "玄黄厚德", "玄黄灵枢", "玄黄初成"],
+    29: ["无量真源", "无量净光", "无量法海", "无量初潮"],
+    30: ["造化天成", "造化元炉", "造化灵机", "造化初萌"],
+    31: ["太素无尘", "太素澄明", "太素玄形", "太素初凝"],
+    32: ["太极归圆", "太极两仪", "太极玄衡", "太极初分"],
+    33: ["无始归墟", "无始长明", "无始玄门", "无始初证"],
 }
 
 
@@ -4428,6 +4455,116 @@ def breakthrough_effective_quality_score(item: dict[str, Any], target_index: int
     return max(0, min(base, cap))
 
 
+def breakthrough_quality_label_from_score(score: int, target_index: int) -> str:
+    score = max(0, min(20, int(score)))
+    if int(target_index) == 2:
+        if score >= 18:
+            return "天道筑基"
+        if score >= 14:
+            return "无瑕道基"
+        if score >= 10:
+            return "优秀筑基"
+        if score >= 5:
+            return "良好筑基"
+        return "普通筑基"
+    titles = REALM_QUALITY_TITLES.get(realm_quality_title_index(target_index), [])
+    if not titles:
+        return "影响突破品相"
+    return quality_from_titles({"quality_cap_override": score}, titles)
+
+
+def _breakthrough_target_index_for_record(record: UserRecord) -> Optional[int]:
+    key = breakthrough_requirement_key_for_realm_index(record.realm_index)
+    if key is None:
+        return None
+    return breakthrough_target_realm_index(key)
+
+
+def _breakthrough_candidate_sort_key(entry: tuple[int, dict[str, Any], int, str], name_order: dict[str, int]) -> tuple[int, int, int, int, int]:
+    list_index, item, score, _quality = entry
+    name = reward_name(item)
+    return (
+        int(score),
+        breakthrough_item_quality_cap(name),
+        item_quality_score(item),
+        name_order.get(name, -1),
+        -int(list_index),
+    )
+
+
+def breakthrough_reward_candidates(
+    record: UserRecord,
+    names: Sequence[str],
+    target_index: int,
+) -> list[tuple[int, dict[str, Any], int, str]]:
+    wanted = {str(name) for name in names}
+    name_order = {str(name): index for index, name in enumerate(names)}
+    candidates: list[tuple[int, dict[str, Any], int, str]] = []
+    for list_index, raw in enumerate(record.rewards or []):
+        if reward_name(raw) not in wanted:
+            continue
+        item = normalize_reward(dict(raw), record)
+        score = breakthrough_effective_quality_score(item, target_index)
+        quality = breakthrough_quality_label_from_score(score, target_index)
+        candidates.append((list_index, item, score, quality))
+    candidates.sort(key=lambda entry: _breakthrough_candidate_sort_key(entry, name_order), reverse=True)
+    return candidates
+
+
+def consume_best_breakthrough_reward(
+    record: UserRecord,
+    names: Sequence[str],
+    target_index: int,
+) -> Optional[dict[str, Any]]:
+    candidates = breakthrough_reward_candidates(record, names, target_index)
+    if not candidates or record.rewards is None:
+        return None
+    list_index, _item, _score, _quality = candidates[0]
+    if list_index >= len(record.rewards):
+        return None
+    return normalize_reward(record.rewards.pop(list_index), record)
+
+
+def breakthrough_quality_order_entries(record: UserRecord, owned_only: bool = False) -> list[dict[str, Any]]:
+    requirement = current_breakthrough_requirement(record)
+    target_index = _breakthrough_target_index_for_record(record)
+    if not requirement or target_index is None:
+        return []
+    names = [str(name) for name in requirement.get("items", [])]
+    if owned_only:
+        return [
+            {"name": reward_name(item), "quality": quality, "score": score, "owned": True}
+            for _list_index, item, score, quality in breakthrough_reward_candidates(record, names, target_index)
+        ]
+    entries = []
+    for index, name in enumerate(names):
+        cap = breakthrough_item_quality_cap(name)
+        entries.append(
+            {
+                "name": name,
+                "quality": breakthrough_quality_label_from_score(cap, target_index),
+                "score": cap,
+                "order": index,
+                "owned": False,
+            }
+        )
+    entries.sort(key=lambda entry: (int(entry.get("score", 0)), int(entry.get("order", -1))), reverse=True)
+    return entries
+
+
+def breakthrough_priority_text(record: UserRecord, limit: int = 4) -> str:
+    owned_entries = breakthrough_quality_order_entries(record, owned_only=True)
+    entries = owned_entries or breakthrough_quality_order_entries(record, owned_only=False)
+    if not entries:
+        return f"需 {breakthrough_required_text(record)}"
+    shown = entries[:max(1, limit)]
+    parts = [f"{entry['name']}->{entry['quality']}" for entry in shown]
+    if len(entries) > len(shown):
+        parts.append("...")
+    prefix = "背包高→低" if owned_entries else "品相高→低"
+    return f"{prefix}：{' > '.join(parts)}"
+
+
 def breakthrough_item_name_weight(name: str, source: str = "") -> float:
     cap = breakthrough_item_quality_cap(name)
     if source == "fishing":
@@ -4709,13 +4846,8 @@ def breakthrough_item_story(name: str, category: str) -> str:
 
 
 def breakthrough_quality(item: dict[str, Any], target_index: int) -> str:
-    titles = REALM_QUALITY_TITLES.get(realm_quality_title_index(target_index), [])
-    if not titles:
-        return "道基未定"
     score = breakthrough_effective_quality_score(item, target_index)
-    fake_item = dict(item)
-    fake_item["quality_cap_override"] = score
-    return quality_from_titles(fake_item, titles)
+    return breakthrough_quality_label_from_score(score, target_index)
 
 def set_realm_mark(record: UserRecord, realm_index: int, mark: str) -> None:
     if record.realm_marks is None:
@@ -5215,16 +5347,19 @@ def breakthrough_status(record: UserRecord) -> str:
         for name in needed
     )
     five_text = f"\n{five_element_requirement_text(record)}" if needs_five_element_completion(record) else ""
+    priority_text = breakthrough_priority_text(record)
     if record.realm_exp < record.progress_required:
         return (
             f"当前{record.realm}进度 {record.realm_exp}/{record.progress_required}，"
             f"圆满后可凭 {breakthrough_required_text(record)} 突破至{target}。"
-            f"\n品相上限：{cap_text}{five_text}"
+            f"\n品相上限：{cap_text}"
+            f"\n品相排序：{priority_text}{five_text}"
         )
     return (
         f"当前已达{record.realm}，可突破至{target}。"
         f"所需道具：{breakthrough_required_text(record)}；背包：{count_text or '暂无'}。"
-        f"\n品相上限：{cap_text}{five_text}"
+        f"\n品相上限：{cap_text}"
+        f"\n品相排序：{priority_text}{five_text}"
     )
 
 BREAKTHROUGH_FLAVOR_BY_REALM = {
@@ -5317,7 +5452,9 @@ def breakthrough_realm(record: UserRecord) -> tuple[bool, str]:
         return False, breakthrough_status(record)
     if needs_five_element_completion(record) and missing_five_elements(record):
         return False, f"突破失败：{five_element_requirement_text(record)}"
-    item = consume_reward_by_names(record, list(requirement["items"]))
+    requirement_key = breakthrough_requirement_key_for_realm_index(record.realm_index)
+    target_index = breakthrough_target_realm_index(requirement_key if requirement_key is not None else record.realm_index)
+    item = consume_best_breakthrough_reward(record, list(requirement["items"]), target_index)
     if item is None:
         return (
             False,
