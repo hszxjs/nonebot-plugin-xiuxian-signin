@@ -257,13 +257,39 @@ class AdminManager:
         return raw if isinstance(raw, dict) else None
 
     def save_player_record(self, user_id: str, data: dict[str, Any]) -> dict[str, Any]:
-        data = dict(data)
-        data["user_id"] = str(user_id)
-        record = domain.UserRecord.from_dict(data)
+        saved = dict(data)
+        saved["user_id"] = str(user_id)
+        domain.UserRecord.from_dict(saved)
         users = self.store._read_json(self.store.user_file_path)
-        users[str(user_id)] = record.to_dict()
+        users[str(user_id)] = saved
         self.store._write_json(self.store.user_file_path, users)
         return users[str(user_id)]
+
+    def player_meta(self) -> dict[str, Any]:
+        realm_quality_titles = {str(key): list(value) for key, value in domain.REALM_QUALITY_TITLES.items()}
+        quality_titles = list(
+            dict.fromkeys(
+                list(domain.FOUNDATION_QUALITY_TITLES)
+                + [title for titles in domain.REALM_QUALITY_TITLES.values() for title in titles]
+            )
+        )
+        categories = list(dict.fromkeys(list(domain.REWARD_CATEGORIES) + [domain.IMMORTAL_SEED_CATEGORY]))
+        mystic_types = list(
+            dict.fromkeys(list(domain.MYSTIC_REALM_TYPES) + list(domain.HIGH_RISK_MYSTIC_REALM_TYPES))
+        )
+        return {
+            "realms": [{"index": index, "name": name} for index, name in enumerate(domain.REALMS)],
+            "attributes": list(domain.ROOT_ATTRIBUTES),
+            "attribute_labels": {attr: domain.root_attribute_label(attr) for attr in domain.ROOT_ATTRIBUTES},
+            "tiers": list(domain.TIER_ORDER),
+            "grades": list(domain.GRADE_ORDER),
+            "categories": categories,
+            "mystic_types": mystic_types,
+            "cultivation_routes": list(domain.CULTIVATION_ROUTES),
+            "foundation_quality_titles": list(domain.FOUNDATION_QUALITY_TITLES),
+            "realm_quality_titles": realm_quality_titles,
+            "quality_titles": quality_titles,
+        }
 
     def mystic_payload(self) -> dict[str, Any]:
         config = self.load_config()
@@ -647,10 +673,10 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         if not authorized(manager, request):
             return unauthorized()
         user_id = str(request.path_params["user_id"])
-        raw = manager.store._read_json(manager.store.user_file_path).get(user_id)
+        raw = manager.get_player_record(user_id)
         if not isinstance(raw, dict):
             return json_response({"ok": False, "error": "player not found"}, 404)
-        return json_response({"ok": True, "record": raw})
+        return json_response({"ok": True, "record": raw, "meta": manager.player_meta()})
 
     async def put_player(request: Request) -> Any:
         if not authorized(manager, request):
@@ -659,12 +685,7 @@ def install_admin_routes(driver: Any, manager: AdminManager, base_path: str = "/
         data = await request.json()
         if not isinstance(data, dict):
             return json_response({"ok": False, "error": "record must be an object"}, 400)
-        data["user_id"] = user_id
-        record = domain.UserRecord.from_dict(data)
-        users = manager.store._read_json(manager.store.user_file_path)
-        users[user_id] = record.to_dict()
-        manager.store._write_json(manager.store.user_file_path, users)
-        return json_response({"ok": True, "record": users[user_id]})
+        return json_response({"ok": True, "record": manager.save_player_record(user_id, data), "meta": manager.player_meta()})
 
     async def backup(request: Request) -> Any:
         if not authorized(manager, request):
@@ -856,14 +877,14 @@ def start_admin_server(
                     if raw is None:
                         self._send_json({"ok": False, "error": "player not found"}, 404)
                         return
-                    self._send_json({"ok": True, "record": raw})
+                    self._send_json({"ok": True, "record": raw, "meta": manager.player_meta()})
                     return
                 if method == "PUT":
                     data = self._read_json_body()
                     if not isinstance(data, dict):
                         self._send_json({"ok": False, "error": "record must be an object"}, 400)
                         return
-                    self._send_json({"ok": True, "record": manager.save_player_record(user_id, data)})
+                    self._send_json({"ok": True, "record": manager.save_player_record(user_id, data), "meta": manager.player_meta()})
                     return
             if api_path == "/api/backup" and method == "POST":
                 self._send_json(manager.backup_users())

@@ -5,6 +5,7 @@ import { Badge } from "./components/ui/badge";
 import { Card } from "./components/ui/card";
 import { initializeTokenFromUrl, setToken } from "./lib/api";
 import { DashboardPage } from "./pages/DashboardPage";
+import { PlayersPage } from "./pages/PlayersPage";
 
 const pageTitles: Record<PageKey, string> = {
   dashboard: "总览",
@@ -19,6 +20,9 @@ const pageTitles: Record<PageKey, string> = {
 function CurrentPage({ page }: { page: PageKey }) {
   if (page === "dashboard") {
     return <DashboardPage />;
+  }
+  if (page === "players") {
+    return <PlayersPage />;
   }
 
   return (

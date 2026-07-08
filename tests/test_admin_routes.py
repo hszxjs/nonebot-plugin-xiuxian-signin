@@ -40,6 +40,13 @@ class FakeManager:
     def __init__(self, token: str = "secret") -> None:
         self.token = token
         self.apply_config_calls = 0
+        self.players: dict[str, dict[str, Any]] = {
+            "42": {
+                "user_id": "42",
+                "realm_index": 0,
+                "root": {"attribute": "金", "tier": "凡品", "grade": "中品"},
+            }
+        }
 
     def apply_config(self) -> None:
         self.apply_config_calls += 1
@@ -55,6 +62,30 @@ class FakeManager:
 
     def list_players(self, query: str = "") -> list[dict[str, Any]]:
         return []
+
+    def get_player_record(self, user_id: str) -> dict[str, Any] | None:
+        return self.players.get(str(user_id))
+
+    def save_player_record(self, user_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        record = dict(data)
+        record["user_id"] = str(user_id)
+        self.players[str(user_id)] = record
+        return record
+
+    def player_meta(self) -> dict[str, Any]:
+        return {
+            "realms": [{"index": 0, "name": "炼气境"}, {"index": 1, "name": "筑基境"}],
+            "attributes": ["金", "木"],
+            "attribute_labels": {"金": "金灵根", "木": "木灵根"},
+            "tiers": ["凡品", "黄阶"],
+            "grades": ["下品", "中品"],
+            "categories": ["灵器"],
+            "mystic_types": ["上古宗门遗址"],
+            "cultivation_routes": ["剑修", "术修"],
+            "foundation_quality_titles": ["普通筑基", "天道筑基"],
+            "realm_quality_titles": {"1": ["凡品", "极品"]},
+            "quality_titles": ["普通筑基", "凡品", "极品"],
+        }
 
     def backup_users(self) -> dict[str, Any]:
         return {"ok": True, "path": "backup.json"}
@@ -86,11 +117,16 @@ class FakeRequest:
         *,
         token: str = "",
         query_token: str = "",
+        json_data: Any | None = None,
         path_params: dict[str, str] | None = None,
     ) -> None:
         self.headers = HeaderMap({"x-xiuxian-token": token} if token else {})
         self.query_params = {"token": query_token} if query_token else {}
+        self._json_data = json_data
         self.path_params = path_params or {}
+
+    async def json(self) -> Any:
+        return self._json_data if self._json_data is not None else {}
 
 
 class FakeJSONResponse:
@@ -239,6 +275,58 @@ class AdminRouteTests(unittest.TestCase):
             self.assertEqual(dashboard.status_code, 200)
             self.assertEqual(dashboard.data["source"], "dashboard")
 
+            player_get_route = driver.server_app.routes[route_index("/xiuxian-admin/api/players/{user_id}", "GET")]
+            player_get = asyncio.run(
+                player_get_route["endpoint"](FakeRequest(token="secret", path_params={"user_id": "42"}))
+            )
+            self.assertEqual(player_get.status_code, 200)
+            self.assertEqual(player_get.data["record"]["user_id"], "42")
+            self.assertEqual(player_get.data["meta"]["realms"][0]["name"], "炼气境")
+            self.assertIn("金", player_get.data["meta"]["attributes"])
+            self.assertIn("普通筑基", player_get.data["meta"]["foundation_quality_titles"])
+
+            player_put_route = driver.server_app.routes[route_index("/xiuxian-admin/api/players/{user_id}", "PUT")]
+            player_put = asyncio.run(
+                player_put_route["endpoint"](
+                    FakeRequest(
+                        token="secret",
+                        path_params={"user_id": "42"},
+                        json_data={"realm_index": 1, "root": {"attribute": "木"}},
+                    )
+                )
+            )
+            self.assertEqual(player_put.status_code, 200)
+            self.assertEqual(player_put.data["record"]["user_id"], "42")
+            self.assertEqual(player_put.data["record"]["realm_index"], 1)
+            self.assertIn("cultivation_routes", player_put.data["meta"])
+
+    def test_admin_manager_save_player_record_preserves_structured_editor_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+            saved = manager.save_player_record(
+                "42",
+                {
+                    "realm_index": 0,
+                    "root": {
+                        "tier": "凡品",
+                        "tier_rank": 0,
+                        "grade": "中品",
+                        "grade_rank": 1,
+                        "attribute": "金",
+                        "extra_label": "保留灵根备注",
+                    },
+                    "custom_note": "保留顶层备注",
+                },
+            )
+
+            self.assertEqual(saved["user_id"], "42")
+            self.assertEqual(saved["custom_note"], "保留顶层备注")
+            self.assertEqual(saved["root"]["extra_label"], "保留灵根备注")
+            self.assertNotIn("pending_fishing", saved)
+            self.assertEqual(manager.get_player_record("42"), saved)
+
+
     def test_fallback_server_matches_unknown_api_and_asset_auth_boundaries(self) -> None:
         manager = FakeManager()
         old_root = admin.ADMIN_WEB_ROOT
@@ -279,6 +367,30 @@ class AdminRouteTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertIn("application/json", content_type)
                 self.assertEqual(_json_body(body)["source"], "dashboard")
+
+                status, content_type, body = _http_request(
+                    port,
+                    "/xiuxian-admin/api/players/42",
+                    token="secret",
+                )
+                self.assertEqual(status, 200)
+                self.assertIn("application/json", content_type)
+                player_detail = _json_body(body)
+                self.assertEqual(player_detail["record"]["user_id"], "42")
+                self.assertIn("realms", player_detail["meta"])
+
+                request = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/xiuxian-admin/api/players/42",
+                    data=json.dumps({"realm_index": 1, "custom_note": "fallback"}, ensure_ascii=False).encode("utf-8"),
+                    method="PUT",
+                )
+                request.add_header("X-Xiuxian-Token", "secret")
+                request.add_header("Content-Type", "application/json")
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    player_saved = _json_body(response.read())
+                self.assertEqual(player_saved["record"]["custom_note"], "fallback")
+                self.assertIn("cultivation_routes", player_saved["meta"])
 
                 status, _, body = _http_request(port, "/xiuxian-admin/assets/app.js")
                 self.assertEqual(status, 200)

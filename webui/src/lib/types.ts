@@ -62,4 +62,5 @@ export type PlayerMeta = {
   cultivation_routes?: string[];
   realm_quality_titles?: Record<string, string[]>;
   quality_titles?: string[];
+  foundation_quality_titles?: string[];
 };
