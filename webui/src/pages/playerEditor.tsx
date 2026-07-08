@@ -106,7 +106,7 @@ function AddFieldControl({
   }
 
   return (
-    <div className="grid min-w-0 gap-2 rounded-md border border-dashed border-border p-3 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
+    <div className="grid min-w-0 gap-2 rounded-md border border-dashed border-border p-3">
       <Input
         aria-label="新增字段名"
         disabled={disabled}
@@ -132,7 +132,7 @@ function AddFieldControl({
           </option>
         ))}
       </Select>
-      <Button disabled={disabled || !normalizedName || exists} onClick={addField}>
+      <Button className="w-fit shrink-0" disabled={disabled || !normalizedName || exists} onClick={addField}>
         <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span>新增</span>
       </Button>
