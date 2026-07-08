@@ -10,7 +10,6 @@ import {
   Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
 export type PageKey = "dashboard" | "players" | "items" | "beast" | "equipment" | "mystic" | "config";
@@ -88,7 +87,7 @@ export function AppShell({
                 <Menu className="h-4 w-4 lg:hidden" aria-hidden="true" />
                 <span className="truncate">修仙签到后台</span>
               </div>
-              <div className="truncate text-xs text-muted-foreground">React WebUI</div>
+              <div className="truncate text-xs text-muted-foreground">运营控制台</div>
             </div>
             <div className="flex min-w-0 max-w-full items-center gap-2">
               <Input
@@ -99,10 +98,10 @@ export function AppShell({
                 type="password"
                 value={token}
               />
-              <Button aria-label="保存 Token" className="shrink-0 px-2 sm:px-3">
+              <div className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground shadow-sm">
                 <Settings className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">Token</span>
-              </Button>
+              </div>
             </div>
           </div>
           <nav className="flex gap-2 overflow-x-auto border-t border-border bg-card p-2 lg:hidden" aria-label="移动导航">
