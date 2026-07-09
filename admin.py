@@ -155,7 +155,9 @@ DEFAULT_ADMIN_CONFIG: dict[str, Any] = {
         "enabled_high_risk_types": list(domain.HIGH_RISK_MYSTIC_REALM_TYPES),
         "category_weights": domain.default_mystic_category_weights(),
         "drop_overrides": {},
+        "fishing_option_rate": 0.05,
     },
+    "signin": {"extra_fishing_chance_rate": 0.10},
     "item_overrides": {},
     "beast_realm": {"card_pool_copies": 10, "card_overrides": {}},
 }
@@ -294,6 +296,7 @@ class AdminManager:
     def mystic_payload(self) -> dict[str, Any]:
         config = self.load_config()
         mystic = config.get("mystic", {}) if isinstance(config.get("mystic"), dict) else {}
+        signin = config.get("signin", {}) if isinstance(config.get("signin"), dict) else {}
         return {
             "types": list(domain.MYSTIC_REALM_TYPES),
             "high_risk_types": list(domain.HIGH_RISK_MYSTIC_REALM_TYPES),
@@ -301,6 +304,8 @@ class AdminManager:
             "enabled_high_risk_types": mystic.get("enabled_high_risk_types", list(domain.HIGH_RISK_MYSTIC_REALM_TYPES)),
             "category_weights": mystic.get("category_weights", {}),
             "drop_overrides": mystic.get("drop_overrides", {}),
+            "fishing_option_rate": mystic.get("fishing_option_rate", 0.05),
+            "extra_fishing_chance_rate": signin.get("extra_fishing_chance_rate", 0.10),
             "categories": list(domain.REWARD_CATEGORIES) + [domain.IMMORTAL_SEED_CATEGORY],
             "tiers": list(domain.TIER_ORDER),
             "grades": list(domain.GRADE_ORDER),

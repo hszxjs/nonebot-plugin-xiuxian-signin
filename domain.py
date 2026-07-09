@@ -1760,6 +1760,8 @@ ARTIFACT_REALM_TIER_UNLOCKS = {
 ARTIFACT_DROP_POOLS: dict[int, list[dict[str, Any]]] = {}
 MYSTIC_ENABLED_TYPES: set[str] = set(MYSTIC_REALM_TYPES)
 MYSTIC_ENABLED_HIGH_RISK_TYPES: set[str] = set(HIGH_RISK_MYSTIC_REALM_TYPES)
+MYSTIC_FISHING_OPTION_RATE = 0.05
+SIGNIN_EXTRA_FISHING_CHANCE_RATE = 0.10
 MYSTIC_CATEGORY_WEIGHTS: dict[str, list[tuple[str, float]]] = {}
 MYSTIC_DROP_OVERRIDES: dict[str, list[dict[str, Any]]] = {}
 TALISMAN_DRAW_REALM_REQUIREMENT = {"\u51e1\u54c1": 0, "\u9ec4\u9636": 0, "\u7384\u9636": 3, "\u5730\u9636": 4, "\u5929\u9636": 5}
@@ -2191,11 +2193,18 @@ def apply_admin_config(config: dict[str, Any]) -> None:
                 if cleaned_rows:
                     ARTIFACT_DROP_POOLS[realm_index] = cleaned_rows
     mystic_config = config.get("mystic", {}) if isinstance(config, dict) else {}
+    signin_config = config.get("signin", {}) if isinstance(config, dict) else {}
     MYSTIC_CATEGORY_WEIGHTS.clear()
     MYSTIC_DROP_OVERRIDES.clear()
     MYSTIC_ENABLED_TYPES.clear()
     MYSTIC_ENABLED_HIGH_RISK_TYPES.clear()
+    globals()["MYSTIC_FISHING_OPTION_RATE"] = 0.05
+    globals()["SIGNIN_EXTRA_FISHING_CHANCE_RATE"] = 0.10
     if isinstance(mystic_config, dict):
+        try:
+            globals()["MYSTIC_FISHING_OPTION_RATE"] = max(0.0, min(1.0, float(mystic_config.get("fishing_option_rate", MYSTIC_FISHING_OPTION_RATE))))
+        except (TypeError, ValueError):
+            pass
         enabled_types = mystic_config.get("enabled_types", list(MYSTIC_REALM_TYPES))
         if isinstance(enabled_types, list):
             MYSTIC_ENABLED_TYPES.update(str(item) for item in enabled_types if str(item) in MYSTIC_REALM_TYPES)
@@ -2220,6 +2229,11 @@ def apply_admin_config(config: dict[str, Any]) -> None:
     else:
         MYSTIC_ENABLED_TYPES.update(MYSTIC_REALM_TYPES)
         MYSTIC_ENABLED_HIGH_RISK_TYPES.update(HIGH_RISK_MYSTIC_REALM_TYPES)
+    if isinstance(signin_config, dict):
+        try:
+            globals()["SIGNIN_EXTRA_FISHING_CHANCE_RATE"] = max(0.0, min(1.0, float(signin_config.get("extra_fishing_chance_rate", SIGNIN_EXTRA_FISHING_CHANCE_RATE))))
+        except (TypeError, ValueError):
+            pass
 DUEL_ACTIONS = {
     "金": "剑气横生，锋芒逼人",
     "木": "青藤绕阵，生机绵长",
@@ -2795,6 +2809,7 @@ class SigninResult:
     bottleneck_days: int = 0
     leveled_realms: int = 0
     gained_fishing_chance: bool = False
+    fishing_chances_gained: int = 0
     encounter: Optional[EncounterResult] = None
     breakthrough_reward: Optional[dict[str, Any]] = None
     lock_message: str = ""
@@ -3246,14 +3261,17 @@ def progress_fake_immortal_conversion(record: UserRecord, today: date) -> tuple[
         record.immortal_conversion_days = min(7, int(record.immortal_conversion_days or 0) + 1)
     if record.immortal_conversion_days >= 7:
         fake_index = fake_immortal_realm_index()
-        mark = (record.realm_marks or {}).pop(str(fake_index), None)
+        mark = (record.realm_marks or {}).get(str(fake_index))
         record.realm_index = true_immortal_realm_index()
         if mark:
             set_realm_mark(record, record.realm_index, mark)
         record.realm_exp = 0
         record.immortal_conversion_days = 0
         record.last_immortal_conversion_date = None
-        return True, "七日仙元力转化已成，灵力词条改为仙元力，正式踏入真仙境。"
+        message = "七日仙元力转化已成，灵力词条改为仙元力，正式踏入真仙境。"
+        if mark:
+            message += f"真仙境品相继承假仙境：{mark}。"
+        return True, message
     return True, f"仙元力转化中 {record.immortal_conversion_days}/7，此期间签到不增加修为。"
 
 def update_bottleneck_tracking(record: UserRecord, today: Optional[date] = None, overflow: int = 0) -> int:
@@ -4862,6 +4880,10 @@ def realm_quality_text(record: UserRecord) -> str:
     current = marks.get(str(record.realm_index))
     if current:
         return current
+    if record.realm_index == true_immortal_realm_index():
+        inherited = marks.get(str(fake_immortal_realm_index()))
+        if inherited:
+            return inherited
     if record.foundation_type and record.realm_index >= 2:
         return record.foundation_type
     return "\u672a\u5b9a\u9053\u57fa"
@@ -7027,6 +7049,51 @@ def batch_sell_rewards(record: UserRecord, category: str, limit: int = 999) -> t
     return True, f"\u6279\u91cf\u51fa\u552e{category} {len(sold)} \u4ef6\uff0c\u83b7\u5f97 {spirit_stone_text(total)}\uff0c\u5f53\u524d\u5171 {spirit_stone_text(record.spirit_stones)}\u3002"
 
 
+def batch_sell_low_realm_artifacts(record: UserRecord, limit: int = 999) -> tuple[bool, str]:
+    sold = []
+    kept = []
+    total = 0
+    try:
+        max_count = max(1, int(limit))
+    except (TypeError, ValueError):
+        max_count = 999
+    current_realm = max(0, int(record.realm_index))
+    equipped_items = list(artifact_slots(record).values())
+    equipped_uids = {reward_instance_uid(item) for item in equipped_items if reward_instance_uid(item)}
+    equipped_signatures: dict[str, int] = {}
+    for item in equipped_items:
+        if reward_instance_uid(item):
+            continue
+        signature = reward_signature(item)
+        if signature:
+            equipped_signatures[signature] = equipped_signatures.get(signature, 0) + 1
+    for reward in record.rewards or []:
+        if reward_category(reward) == ARTIFACT_CATEGORY and len(sold) < max_count:
+            normalized = normalize_reward(dict(reward), record)
+            uid = reward_instance_uid(normalized)
+            signature = reward_signature(normalized)
+            if uid and uid in equipped_uids:
+                kept.append(reward)
+                continue
+            if signature and equipped_signatures.get(signature, 0) > 0:
+                equipped_signatures[signature] -= 1
+                kept.append(reward)
+                continue
+            if is_unique_reward(normalized):
+                kept.append(reward)
+                continue
+            if item_required_realm_index(normalized) < current_realm:
+                sold.append(normalized)
+                total += recycle_price(normalized)
+                continue
+        kept.append(reward)
+    if not sold:
+        return False, "没有可批量出售的低阶灵器。只会出售背包内低于自身境界、且非唯一的灵器；已装备灵器会保留。"
+    record.rewards = kept
+    record.spirit_stones += total
+    return True, f"批量出售低阶灵器 {len(sold)} 件，获得 {spirit_stone_text(total)}，当前共有 {spirit_stone_text(record.spirit_stones)}。已装备灵器未受影响。"
+
+
 def emperor_artifact_catalog_text(owner_lookup: Optional[dict[str, str]] = None) -> str:
     owner_lookup = owner_lookup or {}
     lines = ["\u3010\u552f\u4e00\u88c5\u5907\u56fe\u9274\u3011", "\u552f\u4e00\u88c5\u5907\u5177\u6709\u5168\u5c40\u552f\u4e00\u6027\uff1b\u4ed9\u5e1d\u5175\u672c\u4f53\u5df2\u6709\u4e3b\u65f6\uff0c\u540e\u7eed\u53ea\u80fd\u83b7\u5f97\u4eff\u5236\u54c1\u3002"]
@@ -7141,7 +7208,10 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
     tasks = ensure_daily_tasks(record, today)
 
     gained_fishing_chance = True
-    record.fishing_chances += 1
+    fishing_gain = 1
+    if random.random() < SIGNIN_EXTRA_FISHING_CHANCE_RATE:
+        fishing_gain += 1
+    record.fishing_chances += fishing_gain
     record.pending_fishing = record.fishing_chances
 
     return SigninResult(
@@ -7157,6 +7227,7 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
         bottleneck_days=record.bottleneck_days,
         leveled_realms=leveled_realms,
         gained_fishing_chance=gained_fishing_chance,
+        fishing_chances_gained=fishing_gain,
         encounter=encounter,
         breakthrough_reward=breakthrough_reward,
         lock_message=conversion_message or (cultivation_lock_text(record, today) if locked else ""),
@@ -8376,6 +8447,21 @@ def build_high_risk_mystic_event_pool(realm_type: str) -> list[dict[str, Any]]:
     return events
 
 
+def maybe_add_mystic_fishing_option(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if random.random() < MYSTIC_FISHING_OPTION_RATE:
+        options.append(
+            {
+                "text": "循着灵河回响抛下一缕神识钓线",
+                "category": "奇物",
+                "reward_hint": "垂钓次数+1",
+                "fishing_chance": 1,
+                "success": "秘境水脉忽然回应，钓线牵回一枚灵河印记。",
+            }
+        )
+        random.shuffle(options)
+    return options
+
+
 def roll_mystic_options(realm_type: str) -> list[dict[str, Any]]:
     if is_high_risk_mystic_type(realm_type):
         pool = build_high_risk_mystic_event_pool(realm_type)
@@ -8383,9 +8469,9 @@ def roll_mystic_options(realm_type: str) -> list[dict[str, Any]]:
         bad = [item for item in pool if item.get("forced_bad")]
         options = random.sample(safe, k=min(2, len(safe))) + random.sample(bad, k=min(3, len(bad)))
         random.shuffle(options)
-        return [dict(item) for item in options]
+        return maybe_add_mystic_fishing_option([dict(item) for item in options])
     pool = MYSTIC_OPTION_POOLS.get(realm_type, MYSTIC_OPTION_POOLS["\u4e0a\u53e4\u5b97\u95e8\u9057\u5740"])
-    return [dict(item) for item in random.sample(pool, k=min(5, len(pool)))]
+    return maybe_add_mystic_fishing_option([dict(item) for item in random.sample(pool, k=min(5, len(pool)))])
 
 
 def mystic_realm_intro(realm: dict[str, Any]) -> str:
@@ -9176,6 +9262,23 @@ def explore_mystic_realm(record: UserRecord, option_index: int, today: Optional[
         return handle_mystic_boss_challenge(record, realm, today)
     realm["step"] = int(realm.get("step", 0)) + 1
     realm["steps_left"] = max(0, int(realm.get("steps_left", MYSTIC_REALM_MAX_STEPS)) - 1)
+    if int(event.get("fishing_chance", 0) or 0) > 0:
+        gained = max(1, int(event.get("fishing_chance", 1) or 1))
+        record.fishing_chances += gained
+        record.pending_fishing = record.fishing_chances
+        lines = [f"你选择：{choice_text}", f"{event.get('success') or '灵河印记落入掌心。'}垂钓次数 +{gained}，当前共有 {record.fishing_chances} 次。"]
+        if int(realm.get("steps_left", 0)) <= 0:
+            record.mystic_realm = None
+            lines.append("十次探索已尽，秘境门户在身后缓缓闭合。")
+            return True, "\n".join(lines)
+        realm["options"] = roll_mystic_options(realm_type)
+        if not is_high_risk_mystic_type(realm_type):
+            realm["options"].append({"text": f"挑战秘境首领：{realm.get('boss_realm')}·{realm.get('boss_name')}", "boss": True, "category": "灵材", "reward_hint": "首领妖丹"})
+        assign_mystic_bad_option(realm)
+        record.mystic_realm = realm
+        lines.append("")
+        lines.append(mystic_realm_options_text(record))
+        return True, "\n".join(lines)
     success_chance = mystic_success_chance(record, realm)
     bad_rate = 0.08 + int(realm.get("danger", 20)) / 500
     if realm.get("false_lure") and not record.evil_cultivator:

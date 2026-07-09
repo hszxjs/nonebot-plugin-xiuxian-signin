@@ -327,6 +327,23 @@ class AdminRouteTests(unittest.TestCase):
             self.assertEqual(manager.get_player_record("42"), saved)
 
 
+    def test_admin_manager_exposes_mystic_and_signin_probability_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+
+            config = manager.load_config()
+            self.assertEqual(config["mystic"]["fishing_option_rate"], 0.05)
+            self.assertEqual(config["signin"]["extra_fishing_chance_rate"], 0.10)
+
+            config["mystic"]["fishing_option_rate"] = 0.25
+            config["signin"]["extra_fishing_chance_rate"] = 0.35
+            manager.save_config(config)
+
+            payload = manager.mystic_payload()
+            self.assertEqual(payload["fishing_option_rate"], 0.25)
+            self.assertEqual(payload["extra_fishing_chance_rate"], 0.35)
+
     def test_fallback_server_matches_unknown_api_and_asset_auth_boundaries(self) -> None:
         manager = FakeManager()
         old_root = admin.ADMIN_WEB_ROOT

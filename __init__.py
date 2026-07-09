@@ -128,6 +128,7 @@ from .domain import (
 
     array_deduction_text,
     batch_sell_rewards,
+    batch_sell_low_realm_artifacts,
     deduce_array,
     divine_ability_catalog_text,
     emperor_artifact_catalog_text,
@@ -248,10 +249,10 @@ PICMENU_NEXT_FUNCS = [
     },
     {
         'func': '交易与商店',
-        'trigger_method': '商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20 / 万宝楼 / 交易 @对方 灵器 1 100',
+        'trigger_method': '商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20 / 批量出售低阶灵器 / 万宝楼 / 交易 @对方 灵器 1 100',
         'trigger_condition': '交易、万宝楼和排行榜主要在群聊使用',
         'brief_des': '购买、出售、公开寄售和玩家间交易',
-        'detail_des': '`商店` 每日刷新；`万宝楼挂售 类别 编号` 公开寄售；`交易 @对方 类别 编号 价格` 指定交易；唯一装备不会被批量出售。',
+        'detail_des': '`商店` 每日刷新；`批量出售低阶灵器` 会出售背包中低于自身境界的非唯一灵器，不影响已装备灵器；`万宝楼挂售 类别 编号` 公开寄售；`交易 @对方 类别 编号 价格` 指定交易；唯一装备不会被批量出售。',
     },
     {
         'func': '休闲与排行',
@@ -282,7 +283,7 @@ __plugin_meta__ = PluginMetadata(
         "神通：神通 / 神通图鉴 / 领悟神通 1，查看传承材料并在斗法中触发\n"
         "秘境：秘境 / 探索 1 / 天机秘境 / 秘境救援 1000，探索、挑战首领和处理反噬\n"
         "御兽秘境：御兽秘境开局 PVE / PVP，私聊任务堂招募随从，群聊播报战报\n"
-        "交易：商店 / 万宝楼 / 交易 @对方 灵器 1 100 / 批量出售 杂物 20\n"
+        "交易：商店 / 万宝楼 / 交易 @对方 灵器 1 100 / 批量出售 杂物 20 / 批量出售低阶灵器\n"
         "后台：浏览器访问 /xiuxian-admin，可查看玩家档案、物品属性、灵器规则和秘境掉落配置"
     ),
     type="application",
@@ -416,6 +417,7 @@ ARRAY_DEDUCTION_PREFIXES = ('阵法推演', '推演阵法')
 LIFE_ARTIFACT_PREFIXES = ('祭炼本命灵器', '本命灵器', '祭炼本命')
 IMMORTAL_SEED_EQUIP_PREFIXES = ('装备仙源', '纳入仙源', '装备仙种', '纳入仙种')
 BATCH_SELL_PREFIXES = ('批量出售', '批量卖出', '一键出售')
+LOW_REALM_ARTIFACT_BATCH_SELL_PREFIXES = ('批量出售低阶灵器', '批量卖出低阶灵器', '一键出售低阶灵器', '清理低阶灵器')
 TRADE_OFFER_PREFIXES = ('交易', '出售给')
 TRADE_ACCEPT_PREFIXES = ('接受交易', '购买交易')
 TRADE_CANCEL_PREFIXES = ('取消交易', '撤销交易')
@@ -805,7 +807,13 @@ def is_task_command_text(text: str) -> bool:
 
 
 def is_shop_command_text(text: str) -> bool:
-    return text in SHOP_TEXTS or parse_shop_buy_index(text) is not None or parse_sell_item(text) is not None or parse_batch_sell(text) is not None
+    return (
+        text in SHOP_TEXTS
+        or parse_shop_buy_index(text) is not None
+        or parse_sell_item(text) is not None
+        or parse_low_realm_artifact_batch_sell(text) is not None
+        or parse_batch_sell(text) is not None
+    )
 
 
 def is_alchemy_command_text(text: str) -> bool:
@@ -866,6 +874,20 @@ def parse_batch_sell(text: str) -> Optional[tuple[str, int]]:
         if len(parts) > 1 and parts[1].isdigit():
             limit = int(parts[1])
         return category, limit
+    return None
+
+
+def parse_low_realm_artifact_batch_sell(text: str) -> Optional[int]:
+    for prefix in LOW_REALM_ARTIFACT_BATCH_SELL_PREFIXES:
+        if text == prefix:
+            return 999
+        if not text.startswith(prefix):
+            continue
+        rest = text[len(prefix):].strip()
+        if not rest or rest in BATCH_USE_ALL_WORDS:
+            return 999
+        if rest.isdigit():
+            return int(rest)
     return None
 
 
@@ -2546,7 +2568,7 @@ def format_help_text() -> str:
             "御兽秘境：群聊发送 御兽秘境开局 PVE 或 御兽秘境开局 PVP；开始后私聊任务堂购买随从、施放法术、升堂并完成招募。",
             "",
             "【交易、休闲、后台】",
-            "商店：商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20。",
+            "商店：商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20 / 批量出售低阶灵器。",
             "万宝楼：万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1 / 万宝楼下架 1。",
             "休闲：天机占卜 / 坐堂 / 斗地主 / 斗地主帮助 / 御兽秘境 / 排行 / 战力榜。",
             "后台：服主可在浏览器访问 /xiuxian-admin，查看玩家档案、物品属性、灵器规则和秘境掉落配置。",
@@ -3737,6 +3759,12 @@ async def handle_shop(matcher: Matcher, event: MessageEvent) -> None:
         if success:
             await store.save_user(record)
         await finish_panel(matcher, "\u51fa\u552e\u7269\u54c1" if success else "\u51fa\u552e\u5931\u8d25", message, record, icon=item_icon_for_category(category) if success else "warning")
+    low_artifact_limit = parse_low_realm_artifact_batch_sell(text)
+    if low_artifact_limit is not None:
+        success, message = batch_sell_low_realm_artifacts(record, low_artifact_limit)
+        if success:
+            await store.save_user(record)
+        await finish_panel(matcher, "批量出售低阶灵器" if success else "出售失败", message, record, icon=item_icon_for_category("灵器") if success else "warning")
     batch_sale = parse_batch_sell(text)
     if batch_sale is not None:
         category, limit = batch_sale
