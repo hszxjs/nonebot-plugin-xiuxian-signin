@@ -1,23 +1,21 @@
-import { ImageIcon, PackageOpen, Plus, RefreshCcw, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { FileImageOutlined, ReloadOutlined, SaveOutlined, SearchOutlined, UndoOutlined } from "@ant-design/icons";
+import { Avatar, Button, Card, Drawer, Flex, Form, Image, Input, Popconfirm, Select, Space, Table, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../components/state/LoadState";
-import { Badge } from "../components/ui/badge";
-import { Button, PrimaryButton } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import { api, getToken } from "../lib/api";
 import type { AdminItem, ItemPayload } from "../lib/types";
 import type { DirtyChangeHandler } from "./pageShared";
 import { useDirtyFlag } from "./pageShared";
+
+const { Text, Title } = Typography;
+const { TextArea } = Input;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
 type ItemMeta = ItemPayload["meta"];
 type TextFieldKey = "category" | "required_realm" | "required_attribute" | "usage" | "source" | "story";
 type ListFieldKey = "tiers" | "grades";
-
-const MAX_VISIBLE_ITEMS = 600;
 
 const TEXT_FIELD_KEYS: TextFieldKey[] = ["category", "required_realm", "required_attribute", "usage", "source", "story"];
 const LIST_FIELD_KEYS: ListFieldKey[] = ["tiers", "grades"];
@@ -110,195 +108,46 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function StatusBadge({ dirty, saveState }: { dirty: boolean; saveState: SaveState }) {
-  const status = saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : dirty ? "未保存" : "同步";
-  return <Badge className="shrink-0">{status}</Badge>;
-}
-
-function FieldLabel({ label, hint }: { hint?: string; label: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="truncate text-sm font-medium">{label}</div>
-      {hint ? <div className="truncate text-xs text-muted-foreground">{hint}</div> : null}
-    </div>
-  );
-}
-
-function TextAreaField({
-  disabled,
-  label,
-  onChange,
-  readOnly,
-  value,
-}: {
-  disabled?: boolean;
-  label: string;
-  onChange?: (value: string) => void;
-  readOnly?: boolean;
-  value?: string;
-}) {
-  return (
-    <label className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-      <FieldLabel label={label} />
-      <textarea
-        className="min-h-24 w-full min-w-0 resize-y rounded-md border border-border bg-card px-3 py-2 text-sm text-card-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary disabled:cursor-not-allowed disabled:opacity-70"
-        disabled={disabled || readOnly}
-        onChange={(event) => onChange?.(event.target.value)}
-        value={value ?? ""}
-      />
-    </label>
-  );
-}
-
-function SelectOrInputField({
-  disabled,
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  disabled?: boolean;
-  label: string;
-  onChange: (value: string) => void;
-  options?: string[];
-  value?: string;
-}) {
-  const availableOptions = optionValues(options, value);
-
-  return (
-    <label className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-      <FieldLabel label={label} />
-      {availableOptions.length ? (
-        <Select disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value ?? ""}>
-          <option value="">未设置</option>
-          {availableOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </Select>
-      ) : (
-        <Input disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value ?? ""} />
-      )}
-    </label>
-  );
-}
-
-function RepeatableListField({
-  disabled,
-  label,
-  onChange,
-  options,
-  values,
-}: {
-  disabled?: boolean;
-  label: string;
-  onChange: (values: string[]) => void;
-  options?: string[];
-  values?: string[];
-}) {
-  const items = values ?? [];
-
-  function setItem(index: number, value: string) {
-    onChange(items.map((item, itemIndex) => (itemIndex === index ? value : item)));
+function statusLabel(dirty: boolean, saveState: SaveState) {
+  if (saveState === "saving") {
+    return "保存中";
   }
-
-  function addItem() {
-    const fallback = options?.find((option) => !items.includes(option)) ?? "";
-    onChange([...items, fallback]);
+  if (saveState === "saved") {
+    return "已保存";
   }
-
-  function removeItem(index: number) {
-    onChange(items.filter((_, itemIndex) => itemIndex !== index));
-  }
-
-  return (
-    <div className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <FieldLabel hint={`当前 ${items.length} 项`} label={label} />
-        <Button className="shrink-0" disabled={disabled} onClick={addItem}>
-          <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>新增</span>
-        </Button>
-      </div>
-      {items.length ? (
-        <div className="grid min-w-0 gap-2">
-          {items.map((item, index) => {
-            const availableOptions = optionValues(options, item);
-            return (
-              <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]" key={`${label}:${index}`}>
-                {availableOptions.length ? (
-                  <Select disabled={disabled} onChange={(event) => setItem(index, event.target.value)} value={item}>
-                    <option value="">未设置</option>
-                    {availableOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </Select>
-                ) : (
-                  <Input disabled={disabled} onChange={(event) => setItem(index, event.target.value)} value={item} />
-                )}
-                <Button aria-label={`删除${label}${index + 1}`} className="h-9 w-9 shrink-0 px-0" disabled={disabled} onClick={() => removeItem(index)}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">暂无项目</div>
-      )}
-    </div>
-  );
+  return dirty ? "未保存" : "同步";
 }
 
-function ItemRow({ disabled, item, onSelect, selected }: { disabled?: boolean; item: AdminItem; onSelect: () => void; selected: boolean }) {
+function statusColor(dirty: boolean, saveState: SaveState) {
+  if (saveState === "saving") {
+    return "processing";
+  }
+  if (saveState === "saved") {
+    return "success";
+  }
+  if (saveState === "error") {
+    return "error";
+  }
+  return dirty ? "warning" : "default";
+}
+
+function selectOptions(options?: string[], current?: string) {
+  return optionValues(options, current).map((value) => ({ label: value, value }));
+}
+
+function tagOptions(options?: string[]) {
+  return (options ?? []).map((value) => ({ label: value, value }));
+}
+
+function ItemIcon({ item, size = 40 }: { item: AdminItem; size?: number }) {
   const src = iconUrl(item.icon);
-  const tiers = compactList(item.tiers);
-  const grades = compactList(item.grades);
-
-  return (
-    <button
-      aria-disabled={disabled}
-      className={[
-        "grid min-w-0 grid-cols-[48px_minmax(0,1fr)] gap-3 rounded-md border border-border p-3 text-left transition",
-        selected ? "bg-muted" : "bg-card hover:bg-muted/70",
-        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-      ].join(" ")}
-      disabled={disabled}
-      onClick={onSelect}
-      type="button"
-    >
-      <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-background">
-        {src ? <img alt="" className="max-h-11 max-w-11 object-contain" src={src} /> : <ImageIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />}
-      </div>
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 truncate text-sm font-medium">{item.name}</div>
-          {item.customized ? <Badge className="shrink-0">已修改</Badge> : null}
-        </div>
-        <div className="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span className="max-w-full truncate">{item.category || "未分类"}</span>
-          {tiers.length ? <span className="max-w-full truncate">{tiers.join(" / ")}</span> : null}
-          {grades.length ? <span className="max-w-full truncate">{grades.join(" / ")}</span> : null}
-        </div>
-      </div>
-    </button>
-  );
+  if (!src) {
+    return <Avatar icon={<FileImageOutlined />} shape="square" size={size} />;
+  }
+  return <Image alt="" preview={false} src={src} width={size} />;
 }
 
-function ItemEditor({
-  disabled,
-  draft,
-  meta,
-  onChange,
-}: {
-  disabled?: boolean;
-  draft: AdminItem;
-  meta: ItemMeta;
-  onChange: (item: AdminItem) => void;
-}) {
+function ItemEditor({ disabled, draft, meta, onChange }: { disabled?: boolean; draft: AdminItem; meta: ItemMeta; onChange: (item: AdminItem) => void }) {
   function setField(key: TextFieldKey, value: string) {
     onChange({ ...draft, [key]: value });
   }
@@ -310,83 +159,46 @@ function ItemEditor({
   const requiredRealm = draft.required_realm ?? draft.realm ?? "";
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-medium">基础信息</h2>
-            <div className="mt-1 min-w-0 truncate text-xs text-muted-foreground">{draft.name}</div>
-          </div>
-          {draft.customized ? <Badge className="shrink-0">覆盖配置</Badge> : null}
+    <Form disabled={disabled} layout="vertical">
+      <Card size="small" title="基础信息">
+        <div className="form-grid">
+          <Form.Item label="类别">
+            <Select allowClear onChange={(value) => setField("category", value ?? "")} options={selectOptions(meta.categories, draft.category)} value={draft.category || undefined} />
+          </Form.Item>
+          <Form.Item label="需求境界">
+            <Select allowClear onChange={(value) => setField("required_realm", value ?? "")} options={selectOptions(meta.realms, requiredRealm)} value={requiredRealm || undefined} />
+          </Form.Item>
+          <Form.Item label="需求灵根">
+            <Select allowClear onChange={(value) => setField("required_attribute", value ?? "")} options={selectOptions(meta.attributes, draft.required_attribute)} value={draft.required_attribute || undefined} />
+          </Form.Item>
+          <Form.Item label="阶级">
+            <Select mode="tags" onChange={(values) => setListField("tiers", values)} options={tagOptions(meta.tiers)} value={draft.tiers ?? []} />
+          </Form.Item>
+          <Form.Item label="品质">
+            <Select mode="tags" onChange={(values) => setListField("grades", values)} options={tagOptions(meta.grades)} value={draft.grades ?? []} />
+          </Form.Item>
         </div>
-        <div className="grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          <SelectOrInputField disabled={disabled} label="类别" onChange={(value) => setField("category", value)} options={meta.categories} value={draft.category} />
-          <SelectOrInputField disabled={disabled} label="需求境界" onChange={(value) => setField("required_realm", value)} options={meta.realms} value={requiredRealm} />
-          <SelectOrInputField disabled={disabled} label="需求灵根" onChange={(value) => setField("required_attribute", value)} options={meta.attributes} value={draft.required_attribute} />
-          <RepeatableListField disabled={disabled} label="阶级" onChange={(values) => setListField("tiers", values)} options={meta.tiers} values={draft.tiers} />
-          <RepeatableListField disabled={disabled} label="品质" onChange={(values) => setListField("grades", values)} options={meta.grades} values={draft.grades} />
-        </div>
-      </section>
+      </Card>
 
-      <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-        <h2 className="truncate text-base font-medium">说明文本</h2>
-        <div className="grid min-w-0 gap-3 lg:grid-cols-3">
-          <TextAreaField disabled={disabled} label="用途" onChange={(value) => setField("usage", value)} value={draft.usage} />
-          <TextAreaField disabled={disabled} label="来源" onChange={(value) => setField("source", value)} value={draft.source} />
-          <TextAreaField disabled={disabled} label="故事" onChange={(value) => setField("story", value)} value={draft.story} />
+      <Card size="small" title="说明文本">
+        <div className="form-grid form-grid-three">
+          <Form.Item label="用途">
+            <TextArea autoSize={{ minRows: 4 }} onChange={(event) => setField("usage", event.target.value)} value={draft.usage ?? ""} />
+          </Form.Item>
+          <Form.Item label="来源">
+            <TextArea autoSize={{ minRows: 4 }} onChange={(event) => setField("source", event.target.value)} value={draft.source ?? ""} />
+          </Form.Item>
+          <Form.Item label="故事">
+            <TextArea autoSize={{ minRows: 4 }} onChange={(event) => setField("story", event.target.value)} value={draft.story ?? ""} />
+          </Form.Item>
         </div>
-        {draft.parameter_note ? <TextAreaField disabled={disabled} label="参数说明" readOnly value={draft.parameter_note} /> : null}
-      </section>
-    </div>
-  );
-}
-
-function EditorHeader({
-  dirty,
-  draft,
-  onReload,
-  onRestore,
-  onSave,
-  saveError,
-  saveState,
-}: {
-  dirty: boolean;
-  draft: AdminItem;
-  onReload: () => void;
-  onRestore: () => void;
-  onSave: () => void;
-  saveError: string;
-  saveState: SaveState;
-}) {
-  return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="min-w-0 truncate text-lg font-semibold">{draft.name}</h2>
-          <StatusBadge dirty={dirty} saveState={saveState} />
-        </div>
-        <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span className="truncate">{draft.category || "未分类"}</span>
-          {compactList(draft.tiers).length ? <span className="truncate">{compactList(draft.tiers).join(" / ")}</span> : null}
-          {compactList(draft.grades).length ? <span className="truncate">{compactList(draft.grades).join(" / ")}</span> : null}
-        </div>
-        {saveError ? <div className="mt-2 text-sm text-destructive">{saveError}</div> : null}
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button disabled={saveState === "saving"} onClick={onReload}>
-          <RefreshCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>重载</span>
-        </Button>
-        <Button disabled={saveState === "saving" || !draft.customized} onClick={onRestore}>
-          <RotateCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>恢复默认</span>
-        </Button>
-        <PrimaryButton disabled={!dirty || saveState === "saving"} onClick={onSave}>
-          <Save className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>保存</span>
-        </PrimaryButton>
-      </div>
-    </div>
+        {draft.parameter_note ? (
+          <Form.Item label="参数说明">
+            <TextArea autoSize={{ minRows: 3 }} readOnly value={draft.parameter_note} />
+          </Form.Item>
+        ) : null}
+      </Card>
+    </Form>
   );
 }
 
@@ -394,8 +206,8 @@ export function ItemsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandle
   const [items, setItems] = useState<AdminItem[]>([]);
   const [meta, setMeta] = useState<ItemMeta>({});
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
-  const [tier, setTier] = useState("");
+  const [category, setCategory] = useState<string | undefined>();
+  const [tier, setTier] = useState<string | undefined>();
   const [selectedName, setSelectedName] = useState("");
   const [draft, setDraft] = useState<AdminItem | null>(null);
   const [originalDraft, setOriginalDraft] = useState<AdminItem | null>(null);
@@ -410,6 +222,7 @@ export function ItemsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandle
   const dirty = hasUnsavedChanges(draft, originalDraft);
   const saving = saveState === "saving";
   useDirtyFlag(dirty, onDirtyChange);
+
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
@@ -426,7 +239,26 @@ export function ItemsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandle
       }),
     [category, items, query, tier],
   );
-  const visibleItems = filteredItems.slice(0, MAX_VISIBLE_ITEMS);
+
+  const columns: ColumnsType<AdminItem> = [
+    {
+      title: "物品",
+      dataIndex: "name",
+      render: (_value, item) => (
+        <Space>
+          <ItemIcon item={item} />
+          <Space direction="vertical" size={0}>
+            <Text strong>{item.name}</Text>
+            <Text type="secondary">{item.category || "未分类"}</Text>
+          </Space>
+        </Space>
+      ),
+    },
+    { title: "阶级", dataIndex: "tiers", render: (values?: string[]) => compactList(values).map((value) => <Tag key={value}>{value}</Tag>) },
+    { title: "品质", dataIndex: "grades", render: (values?: string[]) => compactList(values).map((value) => <Tag key={value}>{value}</Tag>) },
+    { title: "需求", render: (_value, item) => item.required_realm || item.realm || item.required_attribute || "未设置" },
+    { title: "状态", dataIndex: "customized", render: (value?: boolean) => (value ? <Tag color="blue">已修改</Tag> : <Tag>默认</Tag>) },
+  ];
 
   function selectItem(item: AdminItem, options: { skipDirtyCheck?: boolean } = {}) {
     if (saving) {
@@ -457,20 +289,16 @@ export function ItemsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandle
       const nextItems = payload.items ?? [];
       setItems(nextItems);
       setMeta(payload.meta ?? {});
-      if (!nextItems.length) {
+      const preferredName = options.keepSelectionName ?? selectedNameRef.current;
+      const nextSelected = preferredName ? nextItems.find((item) => item.name === preferredName) : undefined;
+      if (nextSelected) {
+        selectItem(nextSelected, { skipDirtyCheck: true });
+      } else if (!options.keepSelectionName) {
         selectedNameRef.current = "";
         setSelectedName("");
         setDraft(null);
         setOriginalDraft(null);
-        return true;
       }
-      const preferredName = options.keepSelectionName ?? selectedNameRef.current;
-      const nextSelected = nextItems.find((item) => item.name === preferredName) ?? nextItems[0];
-      const nextDraft = cloneItem(nextSelected);
-      selectedNameRef.current = nextSelected.name;
-      setSelectedName(nextSelected.name);
-      setDraft(nextDraft);
-      setOriginalDraft(cloneItem(nextSelected));
       return true;
     } catch (loadError) {
       if (loadRequestId.current === requestId) {
@@ -482,6 +310,20 @@ export function ItemsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandle
         setLoading(false);
       }
     }
+  }
+
+  async function closeDrawer() {
+    if (saving) {
+      return;
+    }
+    if (dirty && !confirmDiscard()) {
+      return;
+    }
+    selectedNameRef.current = "";
+    setSelectedName("");
+    setDraft(null);
+    setOriginalDraft(null);
+    setSaveError("");
   }
 
   async function reloadSelected() {
@@ -571,86 +413,83 @@ export function ItemsPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandle
   }, []);
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold tracking-normal">物品图鉴</h1>
-          <p className="mt-1 truncate text-sm text-muted-foreground">筛选物品并编辑结构化覆盖字段</p>
+    <div className="page-stack">
+      <div className="page-heading">
+        <div>
+          <Title level={2}>物品图鉴</Title>
+          <Text type="secondary">筛选物品并编辑结构化覆盖字段</Text>
         </div>
-        <Badge className="shrink-0">{items.length} 件</Badge>
+        <Tag>{items.length} 件</Tag>
       </div>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[440px_minmax(0,1fr)]">
-        <Card className="grid min-w-0 content-start gap-4 rounded-md p-4">
-          <div className="grid min-w-0 gap-2">
-            <div className="relative min-w-0">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <Input className="pl-9" disabled={saving} onChange={(event) => setQuery(event.target.value)} placeholder="物品名称、用途、来源" value={query} />
-            </div>
-            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-              <Select disabled={saving} onChange={(event) => setCategory(event.target.value)} value={category}>
-                <option value="">全部类别</option>
-                {(meta.categories ?? []).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </Select>
-              <Select disabled={saving} onChange={(event) => setTier(event.target.value)} value={tier}>
-                <option value="">全部阶级</option>
-                {(meta.tiers ?? []).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </Select>
-            </div>
+      <Card>
+        <Flex gap={8} wrap="wrap">
+          <Input allowClear className="search-input" onChange={(event) => setQuery(event.target.value)} placeholder="物品名称、用途、来源" prefix={<SearchOutlined />} value={query} />
+          <Select allowClear className="filter-select" onChange={setCategory} options={tagOptions(meta.categories)} placeholder="全部类别" value={category} />
+          <Select allowClear className="filter-select" onChange={setTier} options={tagOptions(meta.tiers)} placeholder="全部阶级" value={tier} />
+        </Flex>
+      </Card>
+
+      {error ? <ErrorState message={error} onRetry={() => void loadItems({ keepSelectionName: selectedName })} /> : null}
+
+      <Card>
+        <Table<AdminItem>
+          columns={columns}
+          dataSource={filteredItems}
+          loading={loading}
+          locale={{ emptyText: loading ? null : <EmptyState title="未找到物品" detail="换一个关键词、类别或阶级再试。" /> }}
+          onRow={(item) => ({ onClick: () => selectItem(item) })}
+          pagination={{ pageSize: 15, showSizeChanger: true }}
+          rowKey="name"
+          scroll={{ x: 920 }}
+        />
+      </Card>
+
+      <Drawer
+        destroyOnClose
+        extra={draft ? <Tag color={statusColor(dirty, saveState)}>{statusLabel(dirty, saveState)}</Tag> : null}
+        footer={
+          draft ? (
+            <Flex justify="space-between" wrap="wrap">
+              <Space>
+                <Button disabled={saving} icon={<ReloadOutlined />} onClick={() => void reloadSelected()}>
+                  重载
+                </Button>
+                <Popconfirm disabled={!draft.customized || saving} onConfirm={() => void restoreDefault()} title="确认恢复默认配置？">
+                  <Button disabled={!draft.customized || saving} icon={<UndoOutlined />}>
+                    恢复默认
+                  </Button>
+                </Popconfirm>
+              </Space>
+              <Button disabled={!dirty || saving} icon={<SaveOutlined />} loading={saving} onClick={() => void saveItem()} type="primary">
+                保存
+              </Button>
+            </Flex>
+          ) : null
+        }
+        onClose={() => void closeDrawer()}
+        open={Boolean(draft)}
+        title={draft?.name ?? "物品详情"}
+        width={900}
+      >
+        {draft ? (
+          <div className="page-stack">
+            <Card size="small">
+              <Space>
+                <ItemIcon item={draft} size={48} />
+                <Space direction="vertical" size={0}>
+                  <Text strong>{draft.name}</Text>
+                  <Text type="secondary">{draft.category || "未分类"}</Text>
+                </Space>
+              </Space>
+            </Card>
+            {saveError ? <ErrorState message={saveError} /> : null}
+            <ItemEditor disabled={saving} draft={draft} meta={meta} onChange={setDraft} />
           </div>
+        ) : null}
+      </Drawer>
 
-          {loading ? <LoadingState label="正在载入物品图鉴" /> : null}
-          {error ? <ErrorState message={error} onRetry={() => void loadItems({ keepSelectionName: selectedName })} /> : null}
-          {!loading && !error && visibleItems.length ? (
-            <div className="grid max-h-[calc(100vh-260px)] min-h-0 min-w-0 gap-2 overflow-y-auto pr-1">
-              {visibleItems.map((item) => (
-                <ItemRow disabled={saving} item={item} key={item.name} onSelect={() => selectItem(item)} selected={item.name === selectedName} />
-              ))}
-              {filteredItems.length > visibleItems.length ? (
-                <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-                  已显示前 {MAX_VISIBLE_ITEMS} 件，继续缩小筛选条件可查看更多结果。
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {!loading && !error && !visibleItems.length ? <EmptyState title="未找到物品" detail="换一个关键词、类别或阶级再试。" /> : null}
-        </Card>
-
-        <Card className="min-w-0 rounded-md p-4">
-          {!draft && !loading ? (
-            <div className="grid min-h-72 place-items-center rounded-md border border-dashed border-border p-6 text-center">
-              <div className="min-w-0">
-                <PackageOpen className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                <div className="mt-3 font-medium">选择物品</div>
-                <div className="mt-1 text-sm text-muted-foreground">从左侧列表选择一个物品后编辑图鉴字段。</div>
-              </div>
-            </div>
-          ) : null}
-
-          {draft ? (
-            <div className="grid min-w-0 gap-4">
-              <EditorHeader
-                dirty={dirty}
-                draft={draft}
-                onReload={() => void reloadSelected()}
-                onRestore={() => void restoreDefault()}
-                onSave={() => void saveItem()}
-                saveError={saveError}
-                saveState={saveState}
-              />
-              <ItemEditor disabled={saving} draft={draft} meta={meta} onChange={setDraft} />
-            </div>
-          ) : null}
-        </Card>
-      </div>
+      {loading && !items.length ? <LoadingState label="正在载入物品图鉴" /> : null}
     </div>
   );
 }

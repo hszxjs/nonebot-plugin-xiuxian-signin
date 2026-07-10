@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: "./",
   build: {
-    outDir: "../assets/admin_web",
+    outDir: "../nonebot_plugin_xiuxian_signin/assets/admin_web",
     emptyOutDir: true,
     rollupOptions: {
       output: {
@@ -26,11 +26,18 @@ export default defineConfig({
           ) {
             return "charts-vendor";
           }
-          if (id.includes("node_modules/lucide-react")) {
-            return "icons";
+          if (
+            id.includes("node_modules/antd") ||
+            id.includes("node_modules/@ant-design") ||
+            id.includes("node_modules/@rc-component") ||
+            id.includes("node_modules/rc-")
+          ) {
+            return "antd-vendor";
           }
         },
       },
     },
   },
 });
+
+

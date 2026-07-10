@@ -1,60 +1,30 @@
 import {
-  Activity,
-  Boxes,
-  ChartNoAxesCombined,
-  Database,
-  Menu,
-  ScrollText,
-  Settings,
-  Shield,
-  Users,
-} from "lucide-react";
+  AppstoreOutlined,
+  BarChartOutlined,
+  BookOutlined,
+  DatabaseOutlined,
+  KeyOutlined,
+  MenuOutlined,
+  SettingOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
+import { Badge, Grid, Input, Layout, Menu, Space, Typography } from "antd";
 import type { ReactNode } from "react";
-import { Input } from "../ui/input";
 
-export type PageKey = "dashboard" | "players" | "items" | "beast" | "equipment" | "mystic" | "config";
+export type PageKey = "dashboard" | "players" | "items" | "beast" | "rules" | "config";
 export type DirtyPageMap = Partial<Record<PageKey, boolean>>;
 
 const nav = [
-  { key: "dashboard", label: "总览", icon: ChartNoAxesCombined },
-  { key: "players", label: "玩家档案", icon: Users },
-  { key: "items", label: "物品图鉴", icon: Boxes },
-  { key: "beast", label: "御兽卡牌", icon: Shield },
-  { key: "equipment", label: "灵器规则", icon: Activity },
-  { key: "mystic", label: "秘境掉落", icon: ScrollText },
-  { key: "config", label: "高级配置", icon: Database },
+  { key: "dashboard", label: "总览", icon: <BarChartOutlined /> },
+  { key: "players", label: "玩家档案", icon: <UserOutlined /> },
+  { key: "items", label: "物品图鉴", icon: <AppstoreOutlined /> },
+  { key: "beast", label: "御兽卡牌", icon: <BookOutlined /> },
+  { key: "rules", label: "规则中心", icon: <SettingOutlined /> },
+  { key: "config", label: "系统配置", icon: <DatabaseOutlined /> },
 ] as const;
 
-function NavButton({
-  item,
-  selected,
-  onClick,
-  compact = false,
-  dirty = false,
-}: {
-  item: (typeof nav)[number];
-  selected: boolean;
-  onClick: () => void;
-  compact?: boolean;
-  dirty?: boolean;
-}) {
-  const Icon = item.icon;
-  return (
-    <button
-      className={[
-        "flex h-9 max-w-full items-center gap-2 overflow-hidden rounded-md px-3 text-left text-sm transition",
-        compact ? "shrink-0 border border-border" : "w-full",
-        selected ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      ].join(" ")}
-      onClick={onClick}
-      type="button"
-    >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{item.label}</span>
-      {dirty ? <span aria-label="有未保存修改" className="ml-auto h-2 w-2 shrink-0 rounded-full bg-destructive" /> : null}
-    </button>
-  );
-}
+const { Content, Header, Sider } = Layout;
+const { Text, Title } = Typography;
 
 export function AppShell({
   page,
@@ -71,66 +41,64 @@ export function AppShell({
   dirtyPages?: DirtyPageMap;
   children: ReactNode;
 }) {
-  return (
-    <div className="grid min-h-screen grid-cols-[240px_minmax(0,1fr)] bg-background text-foreground max-lg:grid-cols-1">
-      <aside className="border-r border-border bg-card max-lg:hidden">
-        <div className="border-b border-border p-4">
-          <div className="truncate text-base font-semibold">修仙签到后台</div>
-          <div className="mt-1 truncate text-xs text-muted-foreground">运营指挥台</div>
-        </div>
-        <nav className="grid gap-1 p-3" aria-label="后台导航">
-          {nav.map((item) => (
-            <NavButton
-              dirty={Boolean(dirtyPages?.[item.key])}
-              item={item}
-              key={item.key}
-              onClick={() => onPageChange(item.key)}
-              selected={page === item.key}
-            />
-          ))}
-        </nav>
-      </aside>
+  const screens = Grid.useBreakpoint();
+  const menuItems = nav.map((item) => ({
+    key: item.key,
+    icon: item.icon,
+    label: (
+      <Space size={8}>
+        <span>{item.label}</span>
+        {dirtyPages?.[item.key] ? <Badge color="red" /> : null}
+      </Space>
+    ),
+  }));
 
-      <div className="min-w-0">
-        <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
-          <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Menu className="h-4 w-4 lg:hidden" aria-hidden="true" />
-                <span className="truncate">修仙签到后台</span>
-              </div>
-              <div className="truncate text-xs text-muted-foreground">运营控制台</div>
-            </div>
-            <div className="flex min-w-0 max-w-full items-center gap-2">
-              <Input
-                aria-label="管理 Token"
-                className="w-40 sm:w-56"
-                onChange={(event) => onTokenChange(event.target.value)}
-                placeholder="管理 Token"
-                type="password"
-                value={token}
-              />
-              <div className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-muted-foreground shadow-sm">
-                <Settings className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Token</span>
-              </div>
-            </div>
+  return (
+    <Layout className="app-layout">
+      {screens.lg ? (
+        <Sider className="app-sider" theme="light" width={232}>
+          <div className="app-brand">
+            <Title level={5}>修仙签到后台</Title>
+            <Text type="secondary">运营控制台</Text>
           </div>
-          <nav className="flex gap-2 overflow-x-auto border-t border-border bg-card p-2 lg:hidden" aria-label="移动导航">
-            {nav.map((item) => (
-              <NavButton
-                compact
-                dirty={Boolean(dirtyPages?.[item.key])}
-                item={item}
-                key={item.key}
-                onClick={() => onPageChange(item.key)}
-                selected={page === item.key}
-              />
-            ))}
-          </nav>
-        </header>
-        <main className="mx-auto max-w-[1680px] p-4">{children}</main>
-      </div>
-    </div>
+          <Menu
+            items={menuItems}
+            mode="inline"
+            onClick={({ key }) => onPageChange(key as PageKey)}
+            selectedKeys={[page]}
+          />
+        </Sider>
+      ) : null}
+      <Layout>
+        <Header className="app-header">
+          <Space align="center" className="app-header-title" size={8}>
+            {!screens.lg ? <MenuOutlined /> : null}
+            <div>
+              <Text strong>修仙签到后台</Text>
+              <br />
+              <Text type="secondary">运营控制台</Text>
+            </div>
+          </Space>
+          <Input.Password
+            allowClear
+            aria-label="管理 Token"
+            onChange={(event) => onTokenChange(event.target.value)}
+            placeholder="管理 Token"
+            prefix={<KeyOutlined />}
+            value={token}
+          />
+        </Header>
+        {!screens.lg ? (
+          <Menu
+            className="mobile-nav"
+            items={menuItems}
+            mode="horizontal"
+            onClick={({ key }) => onPageChange(key as PageKey)}
+            selectedKeys={[page]}
+          />
+        ) : null}
+        <Content className="app-content">{children}</Content>
+      </Layout>
+    </Layout>
   );
 }

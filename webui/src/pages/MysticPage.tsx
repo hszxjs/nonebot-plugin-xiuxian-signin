@@ -1,15 +1,14 @@
-import { Plus, RefreshCcw, Save, Trash2 } from "lucide-react";
+import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { Button, Card, Checkbox, Flex, InputNumber, Popconfirm, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../components/state/LoadState";
-import { Badge } from "../components/ui/badge";
-import { Button, PrimaryButton } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import { api } from "../lib/api";
 import type { AdminItem, ItemPayload, MysticPayload } from "../lib/types";
 import type { DirtyChangeHandler } from "./pageShared";
 import { useDirtyFlag } from "./pageShared";
+
+const { Text, Title } = Typography;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
@@ -181,6 +180,19 @@ function statusLabel(dirty: boolean, saveState: SaveState) {
   return dirty ? "未保存" : "同步";
 }
 
+function statusColor(dirty: boolean, saveState: SaveState) {
+  if (saveState === "saving") {
+    return "processing";
+  }
+  if (saveState === "saved") {
+    return "success";
+  }
+  if (saveState === "error") {
+    return "error";
+  }
+  return dirty ? "warning" : "default";
+}
+
 function validateProbability(value: number | undefined, label: string) {
   if (value === undefined) {
     return `${label}不能为空。`;
@@ -206,101 +218,37 @@ function validateWeightMap(rowsByType: Record<string, Array<Record<string, unkno
   return "";
 }
 
-function SelectOrInput({ disabled, onChange, options, value }: { disabled?: boolean; onChange: (value: string) => void; options?: string[]; value?: string }) {
-  const availableOptions = optionValues(options, value);
-  if (!availableOptions.length) {
-    return <Input disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value ?? ""} />;
-  }
-  return (
-    <Select disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value ?? ""}>
-      <option value="">未设置</option>
-      {availableOptions.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </Select>
-  );
-}
-
-function NumberInput({
-  disabled,
-  max,
-  min,
-  onChange,
-  step,
-  value,
-}: {
-  disabled?: boolean;
-  max?: number;
-  min?: number;
-  onChange: (value: number | undefined) => void;
-  step?: number;
-  value?: number;
-}) {
-  function update(valueText: string) {
-    if (valueText === "") {
-      onChange(undefined);
-      return;
-    }
-    const nextValue = Number(valueText);
-    if (Number.isFinite(nextValue)) {
-      onChange(nextValue);
-    }
-  }
-
-  return <Input disabled={disabled} max={max} min={min} onChange={(event) => update(event.target.value)} step={step} type="number" value={value ?? ""} />;
-}
-
-function CheckboxGrid({ disabled, label, onChange, options, values }: { disabled?: boolean; label: string; onChange: (values: string[]) => void; options?: string[]; values?: string[] }) {
-  const selected = new Set(values ?? []);
-  function toggle(option: string) {
-    const next = new Set(selected);
-    if (next.has(option)) {
-      next.delete(option);
-    } else {
-      next.add(option);
-    }
-    onChange([...next]);
-  }
-
-  return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <div className="min-w-0">
-        <h2 className="truncate text-base font-medium">{label}</h2>
-        <div className="mt-1 truncate text-xs text-muted-foreground">已启用 {selected.size} 项</div>
-      </div>
-      {options?.length ? (
-        <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {options.map((option) => (
-            <label className="flex min-w-0 items-center gap-2 rounded-md border border-border p-3 text-sm" key={option}>
-              <input checked={selected.has(option)} disabled={disabled} onChange={() => toggle(option)} type="checkbox" />
-              <span className="min-w-0 truncate">{option}</span>
-            </label>
-          ))}
-        </div>
-      ) : (
-        <EmptyState title="暂无类型" detail="后端未返回可切换的类型列表。" />
-      )}
-    </section>
-  );
+function selectOptions(options?: string[], current?: string) {
+  return optionValues(options, current).map((value) => ({ label: value, value }));
 }
 
 function RateEditor({ disabled, mystic, onChange }: { disabled?: boolean; mystic: MysticState; onChange: (mystic: MysticState) => void }) {
   return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <h2 className="truncate text-base font-medium">概率设置</h2>
-      <div className="grid min-w-0 gap-3 md:grid-cols-2">
-        <label className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-          <span className="truncate text-sm font-medium">秘境选项概率</span>
-          <NumberInput disabled={disabled} max={1} min={0} onChange={(value) => onChange({ ...mystic, fishing_option_rate: value })} step={0.01} value={mystic.fishing_option_rate} />
-        </label>
-        <label className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-          <span className="truncate text-sm font-medium">额外钓鱼概率</span>
-          <NumberInput disabled={disabled} max={1} min={0} onChange={(value) => onChange({ ...mystic, extra_fishing_chance_rate: value })} step={0.01} value={mystic.extra_fishing_chance_rate} />
-        </label>
+    <Card size="small" title="概率设置">
+      <div className="form-grid form-grid-two">
+        <div>
+          <Text type="secondary">秘境选项概率</Text>
+          <InputNumber disabled={disabled} max={1} min={0} onChange={(value) => onChange({ ...mystic, fishing_option_rate: value ?? undefined })} step={0.01} value={mystic.fishing_option_rate} />
+        </div>
+        <div>
+          <Text type="secondary">额外钓鱼概率</Text>
+          <InputNumber disabled={disabled} max={1} min={0} onChange={(value) => onChange({ ...mystic, extra_fishing_chance_rate: value ?? undefined })} step={0.01} value={mystic.extra_fishing_chance_rate} />
+        </div>
       </div>
-    </section>
+    </Card>
+  );
+}
+
+function TypeToggles({ disabled, mystic, onChange }: { disabled?: boolean; mystic: MysticState; onChange: (mystic: MysticState) => void }) {
+  return (
+    <div className="form-grid form-grid-two">
+      <Card size="small" title={`普通秘境类型 · 已启用 ${(mystic.enabled_types ?? []).length} 项`}>
+        <Checkbox.Group disabled={disabled} onChange={(values) => onChange({ ...mystic, enabled_types: values.map(String) })} options={mystic.types ?? []} value={mystic.enabled_types ?? []} />
+      </Card>
+      <Card size="small" title={`高风险秘境类型 · 已启用 ${(mystic.enabled_high_risk_types ?? []).length} 项`}>
+        <Checkbox.Group disabled={disabled} onChange={(values) => onChange({ ...mystic, enabled_high_risk_types: values.map(String) })} options={mystic.high_risk_types ?? []} value={mystic.enabled_high_risk_types ?? []} />
+      </Card>
+    </div>
   );
 }
 
@@ -309,38 +257,16 @@ function WeightRowsEditor({ categories, disabled, onChange, rows }: { categories
     onChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
 
+  const columns: ColumnsType<WeightRow> = [
+    { title: "类别", render: (_value, row, index) => <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { category: value ?? "" })} options={selectOptions(categories, row.category)} value={row.category || undefined} /> },
+    { title: "权重", width: 140, render: (_value, row, index) => <InputNumber disabled={disabled} min={0} onChange={(value) => setRow(index, { weight: value ?? undefined })} value={finiteNumber(row.weight)} /> },
+    { title: "操作", width: 80, render: (_value, _row, index) => <Popconfirm disabled={disabled} onConfirm={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))} title="删除类别权重？"><Button disabled={disabled} icon={<DeleteOutlined />} /></Popconfirm> },
+  ];
+
   return (
-    <div className="grid min-w-0 gap-2">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <div className="truncate text-sm font-medium">类别权重</div>
-        <Button disabled={disabled} onClick={() => onChange([...rows, {}])}>
-          <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>新增</span>
-        </Button>
-      </div>
-      {rows.length ? (
-        <div className="min-w-0 overflow-x-auto">
-          <div className="grid min-w-[420px] gap-2">
-            <div className="grid grid-cols-[minmax(0,1fr)_120px_44px] gap-2 px-1 text-xs text-muted-foreground">
-              <span>类别</span>
-              <span>权重</span>
-              <span />
-            </div>
-            {rows.map((row, index) => (
-              <div className="grid grid-cols-[minmax(0,1fr)_120px_44px] gap-2" key={index}>
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { category: value })} options={categories} value={row.category} />
-                <NumberInput disabled={disabled} onChange={(value) => setRow(index, { weight: value })} value={finiteNumber(row.weight)} />
-                <Button aria-label={`删除类别权重${index + 1}`} className="h-9 w-9 px-0" disabled={disabled} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <EmptyState title="暂无类别权重" detail="点击新增配置该类型的掉落类别权重。" />
-      )}
-    </div>
+    <Card extra={<Button disabled={disabled} icon={<PlusOutlined />} onClick={() => onChange([...rows, {}])}>新增</Button>} size="small" title="类别权重">
+      <Table<WeightRow> columns={columns} dataSource={rows} pagination={false} rowKey={(_row, index) => `weight:${index}`} size="small" />
+    </Card>
   );
 }
 
@@ -349,44 +275,19 @@ function DropRowsEditor({ disabled, itemNames, mystic, onChange, rows }: { disab
     onChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
 
+  const columns: ColumnsType<DropRow> = [
+    { title: "类别", render: (_value, row, index) => <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { category: value ?? "" })} options={selectOptions(mystic.categories, row.category)} value={row.category || undefined} /> },
+    { title: "阶级", render: (_value, row, index) => <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { tier: value ?? "" })} options={selectOptions(mystic.tiers, row.tier)} value={row.tier || undefined} /> },
+    { title: "品质", render: (_value, row, index) => <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { grade: value ?? "" })} options={selectOptions(mystic.grades, row.grade)} value={row.grade || undefined} /> },
+    { title: "物品", render: (_value, row, index) => <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { name: value ?? "" })} options={selectOptions(itemNames, row.name)} showSearch value={row.name || undefined} /> },
+    { title: "权重", width: 140, render: (_value, row, index) => <InputNumber disabled={disabled} min={0} onChange={(value) => setRow(index, { weight: value ?? undefined })} value={finiteNumber(row.weight)} /> },
+    { title: "操作", width: 80, render: (_value, _row, index) => <Popconfirm disabled={disabled} onConfirm={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))} title="删除固定掉落？"><Button disabled={disabled} icon={<DeleteOutlined />} /></Popconfirm> },
+  ];
+
   return (
-    <div className="grid min-w-0 gap-2">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <div className="truncate text-sm font-medium">固定掉落</div>
-        <Button disabled={disabled} onClick={() => onChange([...rows, {}])}>
-          <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>新增</span>
-        </Button>
-      </div>
-      {rows.length ? (
-        <div className="min-w-0 overflow-x-auto">
-          <div className="grid min-w-[820px] gap-2">
-            <div className="grid grid-cols-[1fr_1fr_1fr_1.5fr_120px_44px] gap-2 px-1 text-xs text-muted-foreground">
-              <span>类别</span>
-              <span>阶级</span>
-              <span>品质</span>
-              <span>物品</span>
-              <span>权重</span>
-              <span />
-            </div>
-            {rows.map((row, index) => (
-              <div className="grid grid-cols-[1fr_1fr_1fr_1.5fr_120px_44px] gap-2" key={index}>
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { category: value })} options={mystic.categories} value={row.category} />
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { tier: value })} options={mystic.tiers} value={row.tier} />
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { grade: value })} options={mystic.grades} value={row.grade} />
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { name: value })} options={itemNames} value={row.name} />
-                <NumberInput disabled={disabled} onChange={(value) => setRow(index, { weight: value })} value={finiteNumber(row.weight)} />
-                <Button aria-label={`删除固定掉落${index + 1}`} className="h-9 w-9 px-0" disabled={disabled} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <EmptyState title="暂无固定掉落" detail="点击新增配置该类型的固定掉落池。" />
-      )}
-    </div>
+    <Card extra={<Button disabled={disabled} icon={<PlusOutlined />} onClick={() => onChange([...rows, {}])}>新增</Button>} size="small" title="固定掉落">
+      <Table<DropRow> columns={columns} dataSource={rows} pagination={false} rowKey={(_row, index) => `drop:${index}`} scroll={{ x: 860 }} size="small" />
+    </Card>
   );
 }
 
@@ -394,14 +295,11 @@ function TypeSection({ disabled, itemNames, mystic, onChange, typeName }: { disa
   const weights = weightRows(mystic, typeName);
   const drops = dropRows(mystic, typeName);
   return (
-    <section className="grid min-w-0 gap-4 rounded-md border border-border bg-card p-4">
-      <div className="min-w-0">
-        <h2 className="truncate text-base font-medium">{typeName}</h2>
-        <div className="mt-1 truncate text-xs text-muted-foreground">{weights.length} 条类别权重 · {drops.length} 条固定掉落</div>
-      </div>
+    <div className="page-stack">
+      <Text type="secondary">{weights.length} 条类别权重 · {drops.length} 条固定掉落</Text>
       <WeightRowsEditor categories={mystic.categories} disabled={disabled} onChange={(rows) => onChange(setWeightRows(mystic, typeName, rows))} rows={weights} />
       <DropRowsEditor disabled={disabled} itemNames={itemNames} mystic={mystic} onChange={(rows) => onChange(setDropRows(mystic, typeName, rows))} rows={drops} />
-    </section>
+    </div>
   );
 }
 
@@ -518,42 +416,37 @@ export function MysticPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandl
   }, []);
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold tracking-normal">秘境掉落</h1>
-          <p className="mt-1 truncate text-sm text-muted-foreground">配置秘境类型、概率、类别权重与固定掉落</p>
+    <div className="page-stack">
+      <div className="page-heading">
+        <div>
+          <Title level={3}>秘境掉落</Title>
+          <Text type="secondary">配置秘境类型、概率、类别权重与固定掉落</Text>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge className="shrink-0">{statusLabel(dirty, saveState)}</Badge>
-          <Button disabled={saving} onClick={() => void reloadMystic()}>
-            <RefreshCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>重载</span>
+        <Space wrap>
+          <Tag color={statusColor(dirty, saveState)}>{statusLabel(dirty, saveState)}</Tag>
+          <Button disabled={saving} icon={<ReloadOutlined />} onClick={() => void reloadMystic()}>
+            重载
           </Button>
-          <PrimaryButton disabled={!dirty || saving} onClick={() => void saveMystic()}>
-            <Save className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>保存</span>
-          </PrimaryButton>
-        </div>
+          <Button disabled={!dirty || saving} icon={<SaveOutlined />} loading={saving} onClick={() => void saveMystic()} type="primary">
+            保存
+          </Button>
+        </Space>
       </div>
-      {saveError ? <div className="text-sm text-destructive">{saveError}</div> : null}
+      {saveError ? <ErrorState message={saveError} /> : null}
       {loading ? <LoadingState label="正在载入秘境掉落" /> : null}
       {error ? <ErrorState message={error} onRetry={() => void loadMystic()} /> : null}
       {!loading && !error ? (
-        <div className="grid min-w-0 gap-4">
-          <Card className="grid min-w-0 gap-4 rounded-md p-4">
-            <RateEditor disabled={saving} mystic={mystic} onChange={updateMystic} />
-            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-              <CheckboxGrid disabled={saving} label="普通秘境类型" onChange={(values) => updateMystic({ ...mystic, enabled_types: values })} options={mystic.types} values={mystic.enabled_types} />
-              <CheckboxGrid disabled={saving} label="高风险秘境类型" onChange={(values) => updateMystic({ ...mystic, enabled_high_risk_types: values })} options={mystic.high_risk_types} values={mystic.enabled_high_risk_types} />
-            </div>
-          </Card>
+        <div className="page-stack">
+          <RateEditor disabled={saving} mystic={mystic} onChange={updateMystic} />
+          <TypeToggles disabled={saving} mystic={mystic} onChange={updateMystic} />
           {sections.length ? (
-            <Card className="grid min-w-0 gap-4 rounded-md p-4">
-              {sections.map((typeName) => (
-                <TypeSection disabled={saving} itemNames={itemNames} key={typeName} mystic={mystic} onChange={updateMystic} typeName={typeName} />
-              ))}
-            </Card>
+            <Tabs
+              items={sections.map((typeName) => ({
+                key: typeName,
+                label: typeName,
+                children: <TypeSection disabled={saving} itemNames={itemNames} mystic={mystic} onChange={updateMystic} typeName={typeName} />,
+              }))}
+            />
           ) : (
             <EmptyState title="暂无秘境规则" detail="启用类型或保留已有规则后可编辑掉落配置。" />
           )}

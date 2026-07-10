@@ -1,9 +1,7 @@
-import { Plus, Trash2 } from "lucide-react";
+import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Card, Empty, Input, InputNumber, Select, Space, Switch, Tabs, Typography } from "antd";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import type { PlayerMeta } from "../lib/types";
 import {
   PLAYER_SECTIONS,
@@ -22,6 +20,8 @@ import {
   type JsonValue,
   type ValueKind,
 } from "./playerMeta";
+
+const { Text } = Typography;
 
 type PlayerEditorProps = {
   disabled?: boolean;
@@ -106,66 +106,48 @@ function AddFieldControl({
   }
 
   return (
-    <div className="grid min-w-0 gap-2 rounded-md border border-dashed border-border p-3">
+    <Space.Compact block>
       <Input
         aria-label="新增字段名"
         disabled={disabled}
         onChange={(event) => setName(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            addField();
-          }
-        }}
+        onPressEnter={addField}
         placeholder="新增字段名"
+        status={exists ? "error" : undefined}
         value={name}
       />
-      <Select
+      <Select<ValueKind>
         aria-label="新增字段类型"
         disabled={disabled}
-        onChange={(event) => setKind(event.target.value as ValueKind)}
+        onChange={setKind}
+        options={VALUE_KINDS}
         value={kind}
-      >
-        {VALUE_KINDS.map((item) => (
-          <option key={item.value} value={item.value}>
-            {item.label}
-          </option>
-        ))}
-      </Select>
-      <Button className="w-fit shrink-0" disabled={disabled || !normalizedName || exists} onClick={addField}>
-        <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span>新增</span>
+      />
+      <Button disabled={disabled || !normalizedName || exists} icon={<PlusOutlined />} onClick={addField} type="primary">
+        新增
       </Button>
-    </div>
+    </Space.Compact>
   );
 }
 
-function FieldShell({
-  children,
-  fieldKey,
-  onDelete,
-  disabled,
-}: {
-  children: ReactNode;
-  disabled?: boolean;
-  fieldKey: string;
-  onDelete?: () => void;
-}) {
+function FieldShell({ children, fieldKey, onDelete, disabled }: { children: ReactNode; disabled?: boolean; fieldKey: string; onDelete?: () => void }) {
   return (
-    <div className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{fieldLabel(fieldKey)}</div>
-          <div className="truncate text-xs text-muted-foreground">{fieldKey}</div>
-        </div>
-        {onDelete ? (
-          <Button aria-label={`删除 ${fieldLabel(fieldKey)}`} className="h-8 w-8 shrink-0 px-0" disabled={disabled} onClick={onDelete}>
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        ) : null}
-      </div>
+    <Card
+      extra={
+        onDelete ? (
+          <Button aria-label={`删除 ${fieldLabel(fieldKey)}`} disabled={disabled} icon={<DeleteOutlined />} onClick={onDelete} size="small" />
+        ) : null
+      }
+      size="small"
+      title={
+        <Space direction="vertical" size={0}>
+          <Text strong>{fieldLabel(fieldKey)}</Text>
+          <Text type="secondary">{fieldKey}</Text>
+        </Space>
+      }
+    >
       {children}
-    </div>
+    </Card>
   );
 }
 
@@ -173,62 +155,38 @@ function ScalarEditor({ disabled, fieldKey, meta, onChange, path, value }: Edito
   const options = ensureCurrentOption(optionsForField(fieldKey, path, meta), value);
 
   if (typeof value === "boolean" || isBooleanField(fieldKey)) {
-    return (
-      <label className="inline-flex min-w-0 items-center gap-2 text-sm">
-        <input
-          checked={Boolean(value)}
-          className="h-4 w-4 shrink-0 accent-primary"
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.checked)}
-          type="checkbox"
-        />
-        <span className="truncate">{Boolean(value) ? "开启" : "关闭"}</span>
-      </label>
-    );
+    return <Switch checked={Boolean(value)} checkedChildren="开启" disabled={disabled} onChange={onChange} unCheckedChildren="关闭" />;
   }
 
   if (options.length) {
     return (
-      <Select disabled={disabled} onChange={(event) => onChange(parseFieldValue(fieldKey, value, event.target.value))} value={safeInputValue(value)}>
-        <option value="">未设置</option>
-        {options.map((option) => (
-          <option key={`${option.value}:${option.label}`} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
+      <Select
+        allowClear
+        disabled={disabled}
+        onChange={(nextValue) => onChange(parseFieldValue(fieldKey, value, nextValue ?? ""))}
+        options={options.map((option) => ({ label: option.label, value: option.value }))}
+        placeholder="未设置"
+        value={safeInputValue(value) || undefined}
+      />
     );
   }
 
   if (typeof value === "number" || isNumberField(fieldKey)) {
+    const numberValue = Number(safeInputValue(value));
     return (
-      <Input
+      <InputNumber
         disabled={disabled}
-        onChange={(event) => onChange(parseFieldValue(fieldKey, value, event.target.value))}
-        type="number"
-        value={safeInputValue(value)}
+        onChange={(nextValue) => onChange(parseFieldValue(fieldKey, value, String(nextValue ?? "")))}
+        value={Number.isFinite(numberValue) ? numberValue : undefined}
       />
     );
   }
 
   if (isDateField(fieldKey)) {
-    return (
-      <Input
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value || null)}
-        type="date"
-        value={normalizeDateValue(value)}
-      />
-    );
+    return <Input disabled={disabled} onChange={(event) => onChange(event.target.value || null)} type="date" value={normalizeDateValue(value)} />;
   }
 
-  return (
-    <Input
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.value)}
-      value={safeInputValue(value)}
-    />
-  );
+  return <Input disabled={disabled} onChange={(event) => onChange(event.target.value)} value={safeInputValue(value)} />;
 }
 
 function ObjectEditor({ disabled, fieldKey, meta, onChange, path, value }: EditorNodeProps) {
@@ -236,32 +194,25 @@ function ObjectEditor({ disabled, fieldKey, meta, onChange, path, value }: Edito
   const keys = orderedKeys(record);
 
   return (
-    <div className="grid min-w-0 gap-3">
+    <Space className="field-stack" direction="vertical" size={12}>
       {keys.length ? (
-        <div className="grid min-w-0 gap-3">
-          {keys.map((key) => (
-            <EditorNode
-              disabled={disabled}
-              fieldKey={key}
-              key={key}
-              meta={meta}
-              onChange={(nextValue) => onChange(setObjectValue(record, key, nextValue))}
-              onDelete={() => onChange(removeObjectKey(record, key))}
-              path={[...path, key]}
-              value={record[key]}
-            />
-          ))}
-        </div>
+        keys.map((key) => (
+          <EditorNode
+            disabled={disabled}
+            fieldKey={key}
+            key={key}
+            meta={meta}
+            onChange={(nextValue) => onChange(setObjectValue(record, key, nextValue))}
+            onDelete={() => onChange(removeObjectKey(record, key))}
+            path={[...path, key]}
+            value={record[key]}
+          />
+        ))
       ) : (
-        <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">暂无字段</div>
+        <Empty description="暂无字段" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       )}
-      <AddFieldControl
-        disabled={disabled}
-        existingKeys={keys}
-        onAdd={(key, nextValue) => onChange(setObjectValue(record, key, nextValue))}
-        path={path}
-      />
-    </div>
+      <AddFieldControl disabled={disabled} existingKeys={keys} onAdd={(key, nextValue) => onChange(setObjectValue(record, key, nextValue))} path={path} />
+    </Space>
   );
 }
 
@@ -273,30 +224,27 @@ function ArrayEditor({ disabled, fieldKey, meta, onChange, path, value }: Editor
   }
 
   return (
-    <div className="grid min-w-0 gap-3">
+    <Space className="field-stack" direction="vertical" size={12}>
       {items.length ? (
-        <div className="grid min-w-0 gap-3">
-          {items.map((item, index) => (
-            <EditorNode
-              disabled={disabled}
-              fieldKey={`${fieldKey} ${index + 1}`}
-              key={index}
-              meta={meta}
-              onChange={(nextValue) => onChange(setArrayValue(items, index, nextValue))}
-              onDelete={() => onChange(removeArrayItem(items, index))}
-              path={[...path, String(index)]}
-              value={item}
-            />
-          ))}
-        </div>
+        items.map((item, index) => (
+          <EditorNode
+            disabled={disabled}
+            fieldKey={`${fieldKey} ${index + 1}`}
+            key={index}
+            meta={meta}
+            onChange={(nextValue) => onChange(setArrayValue(items, index, nextValue))}
+            onDelete={() => onChange(removeArrayItem(items, index))}
+            path={[...path, String(index)]}
+            value={item}
+          />
+        ))
       ) : (
-        <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">暂无项目</div>
+        <Empty description="暂无项目" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       )}
-      <Button className="w-fit" disabled={disabled} onClick={addItem}>
-        <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span>新增项目</span>
+      <Button disabled={disabled} icon={<PlusOutlined />} onClick={addItem}>
+        新增项目
       </Button>
-    </div>
+    </Space>
   );
 }
 
@@ -332,39 +280,34 @@ function SectionEditor({
   meta,
   onChange,
   record,
-  title,
 }: {
   disabled?: boolean;
   keys: string[];
   meta?: PlayerMeta;
   onChange: (record: JsonRecord) => void;
   record: JsonRecord;
-  title: string;
 }) {
   const presentKeys = keys.filter((key) => key in record);
 
   if (!presentKeys.length) {
-    return null;
+    return <Empty description="当前分组暂无字段" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
 
   return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <h2 className="truncate text-base font-medium">{title}</h2>
-      <div className="grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-        {presentKeys.map((key) => (
-          <EditorNode
-            disabled={disabled}
-            fieldKey={key}
-            key={key}
-            meta={meta}
-            onChange={(nextValue) => onChange(setObjectValue(record, key, nextValue))}
-            onDelete={key === "user_id" ? undefined : () => onChange(removeObjectKey(record, key))}
-            path={[key]}
-            value={record[key]}
-          />
-        ))}
-      </div>
-    </section>
+    <div className="editor-grid">
+      {presentKeys.map((key) => (
+        <EditorNode
+          disabled={disabled}
+          fieldKey={key}
+          key={key}
+          meta={meta}
+          onChange={(nextValue) => onChange(setObjectValue(record, key, nextValue))}
+          onDelete={key === "user_id" ? undefined : () => onChange(removeObjectKey(record, key))}
+          path={[key]}
+          value={record[key]}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -372,58 +315,51 @@ export function PlayerEditor({ disabled, meta, onChange, record }: PlayerEditorP
   const sectionKeys = useMemo<Set<string>>(() => new Set(PLAYER_SECTIONS.flatMap((section) => [...section.keys])), []);
   const remainingKeys = orderedKeys(record).filter((key) => !sectionKeys.has(key));
 
-  return (
-    <div className="grid min-w-0 gap-4">
-      <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <h2 className="truncate text-base font-medium">字段管理</h2>
-          <span className="truncate text-xs text-muted-foreground">当前 {Object.keys(record).length} 个字段</span>
+  const items = [
+    {
+      key: "fields",
+      label: "字段管理",
+      children: (
+        <Space className="field-stack" direction="vertical" size={12}>
+          <Text type="secondary">当前 {Object.keys(record).length} 个字段</Text>
+          <AddFieldControl disabled={disabled} existingKeys={Object.keys(record)} onAdd={(key, value) => onChange(setObjectValue(record, key, value))} path={[]} />
+        </Space>
+      ),
+    },
+    ...PLAYER_SECTIONS.map((section) => ({
+      key: section.title,
+      label: section.title,
+      children: (
+        <SectionEditor disabled={disabled} keys={[...section.keys]} meta={meta} onChange={onChange} record={record} />
+      ),
+    })),
+    {
+      key: "other",
+      label: "其他字段",
+      children: remainingKeys.length ? (
+        <div className="editor-grid">
+          {remainingKeys.map((key) => (
+            <EditorNode
+              disabled={disabled}
+              fieldKey={key}
+              key={key}
+              meta={meta}
+              onChange={(nextValue) => onChange(setObjectValue(record, key, nextValue))}
+              onDelete={() => onChange(removeObjectKey(record, key))}
+              path={[key]}
+              value={record[key]}
+            />
+          ))}
         </div>
-        <AddFieldControl
-          disabled={disabled}
-          existingKeys={Object.keys(record)}
-          onAdd={(key, value) => onChange(setObjectValue(record, key, value))}
-          path={[]}
-        />
-      </section>
+      ) : (
+        <Empty description="暂无其他字段" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ),
+    },
+  ];
 
-      {PLAYER_SECTIONS.map((section) => (
-        <SectionEditor
-          disabled={disabled}
-          keys={[...section.keys]}
-          key={section.title}
-          meta={meta}
-          onChange={onChange}
-          record={record}
-          title={section.title}
-        />
-      ))}
+  if (Object.keys(record).length === 0) {
+    return <Empty description="当前玩家档案没有字段，可以从字段管理新增。" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
 
-      {remainingKeys.length ? (
-        <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-          <h2 className="truncate text-base font-medium">其他字段</h2>
-          <div className="grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            {remainingKeys.map((key) => (
-              <EditorNode
-                disabled={disabled}
-                fieldKey={key}
-                key={key}
-                meta={meta}
-                onChange={(nextValue) => onChange(setObjectValue(record, key, nextValue))}
-                onDelete={() => onChange(removeObjectKey(record, key))}
-                path={[key]}
-                value={record[key]}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {Object.keys(record).length === 0 ? (
-        <section className="rounded-md border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
-          当前玩家档案没有字段，可以从上方新增。
-        </section>
-      ) : null}
-    </div>
-  );
+  return <Tabs items={items} />;
 }

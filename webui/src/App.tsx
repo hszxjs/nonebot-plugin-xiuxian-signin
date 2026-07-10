@@ -1,16 +1,14 @@
 import { useCallback, useState } from "react";
+import { App as AntApp, ConfigProvider, Empty } from "antd";
+import zhCN from "antd/locale/zh_CN";
 import { AppShell, type DirtyPageMap, type PageKey } from "./components/layout/AppShell";
-import { EmptyState } from "./components/state/LoadState";
-import { Badge } from "./components/ui/badge";
-import { Card } from "./components/ui/card";
 import { initializeTokenFromUrl, setToken } from "./lib/api";
 import { ConfigPage } from "./pages/ConfigPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { BeastCardsPage } from "./pages/BeastCardsPage";
-import { EquipmentPage } from "./pages/EquipmentPage";
 import { ItemsPage } from "./pages/ItemsPage";
-import { MysticPage } from "./pages/MysticPage";
 import { PlayersPage } from "./pages/PlayersPage";
+import { RulesPage } from "./pages/RulesPage";
 import { confirmDiscard, type DirtyChangeHandler } from "./pages/pageShared";
 
 const pageTitles: Record<PageKey, string> = {
@@ -18,9 +16,8 @@ const pageTitles: Record<PageKey, string> = {
   players: "玩家档案",
   items: "物品图鉴",
   beast: "御兽卡牌",
-  equipment: "灵器规则",
-  mystic: "秘境掉落",
-  config: "高级配置",
+  rules: "规则中心",
+  config: "系统配置",
 };
 
 function CurrentPage({ onDirtyChange, page }: { onDirtyChange: DirtyChangeHandler; page: PageKey }) {
@@ -36,29 +33,14 @@ function CurrentPage({ onDirtyChange, page }: { onDirtyChange: DirtyChangeHandle
   if (page === "beast") {
     return <BeastCardsPage onDirtyChange={onDirtyChange} />;
   }
-  if (page === "equipment") {
-    return <EquipmentPage onDirtyChange={onDirtyChange} />;
+  if (page === "rules") {
+    return <RulesPage onDirtyChange={onDirtyChange} />;
   }
-  if (page === "mystic") {
-    return <MysticPage onDirtyChange={onDirtyChange} />;
-  }
-
   if (page === "config") {
     return <ConfigPage onDirtyChange={onDirtyChange} />;
   }
 
-  return (
-    <Card className="grid gap-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">{pageTitles[page]}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">待配置</p>
-        </div>
-        <Badge>暂无数据</Badge>
-      </div>
-      <EmptyState title="暂无数据" detail="当前模块暂无数据。" />
-    </Card>
-  );
+  return <Empty description={`${pageTitles[page]}暂无数据`} />;
 }
 
 export default function App() {
@@ -86,8 +68,27 @@ export default function App() {
   }
 
   return (
-    <AppShell dirtyPages={dirtyPages} page={page} onPageChange={changePage} onTokenChange={updateToken} token={token}>
-      <CurrentPage onDirtyChange={(dirty) => updatePageDirty(page, dirty)} page={page} />
-    </AppShell>
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        token: {
+          borderRadius: 6,
+          colorPrimary: "#1677ff",
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif",
+        },
+        components: {
+          Card: { borderRadiusLG: 6 },
+          Layout: { bodyBg: "#f5f7fb", headerBg: "#ffffff", siderBg: "#ffffff" },
+          Menu: { itemBorderRadius: 6 },
+        },
+      }}
+    >
+      <AntApp>
+        <AppShell dirtyPages={dirtyPages} page={page} onPageChange={changePage} onTokenChange={updateToken} token={token}>
+          <CurrentPage onDirtyChange={(dirty) => updatePageDirty(page, dirty)} page={page} />
+        </AppShell>
+      </AntApp>
+    </ConfigProvider>
   );
 }

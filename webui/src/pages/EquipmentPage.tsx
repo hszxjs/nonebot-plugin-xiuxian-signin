@@ -1,15 +1,14 @@
-import { Plus, RefreshCcw, Save, Trash2 } from "lucide-react";
+import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { Button, Card, Flex, Input, InputNumber, Popconfirm, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../components/state/LoadState";
-import { Badge } from "../components/ui/badge";
-import { Button, PrimaryButton } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import { api } from "../lib/api";
 import type { EquipmentPayload } from "../lib/types";
 import type { DirtyChangeHandler } from "./pageShared";
 import { useDirtyFlag } from "./pageShared";
+
+const { Text, Title } = Typography;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
@@ -117,36 +116,29 @@ function statusLabel(dirty: boolean, saveState: SaveState) {
   return dirty ? "未保存" : "同步";
 }
 
-function SelectOrInput({ disabled, onChange, options, value }: { disabled?: boolean; onChange: (value: string) => void; options?: string[]; value?: string }) {
-  const availableOptions = optionValues(options, value);
+function statusColor(dirty: boolean, saveState: SaveState) {
+  if (saveState === "saving") {
+    return "processing";
+  }
+  if (saveState === "saved") {
+    return "success";
+  }
+  if (saveState === "error") {
+    return "error";
+  }
+  return dirty ? "warning" : "default";
+}
+
+function selectOptions(options?: string[], current?: string) {
+  return optionValues(options, current).map((value) => ({ label: value, value }));
+}
+
+function EditableSelect({ disabled, onChange, options, value }: { disabled?: boolean; onChange: (value: string) => void; options?: string[]; value?: string }) {
+  const availableOptions = selectOptions(options, value);
   if (!availableOptions.length) {
     return <Input disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value ?? ""} />;
   }
-  return (
-    <Select disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value ?? ""}>
-      <option value="">未设置</option>
-      {availableOptions.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </Select>
-  );
-}
-
-function NumberInput({ disabled, onChange, value }: { disabled?: boolean; onChange: (value: number | undefined) => void; value?: number }) {
-  function update(valueText: string) {
-    if (valueText === "") {
-      onChange(undefined);
-      return;
-    }
-    const nextValue = Number(valueText);
-    if (Number.isFinite(nextValue)) {
-      onChange(nextValue);
-    }
-  }
-
-  return <Input disabled={disabled} onChange={(event) => update(event.target.value)} type="number" value={value ?? ""} />;
+  return <Select allowClear disabled={disabled} onChange={(next) => onChange(next ?? "")} options={availableOptions} value={value || undefined} />;
 }
 
 function RealmTable({
@@ -171,49 +163,52 @@ function RealmTable({
     onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
 
+  function deleteRow(index: number) {
+    onRowsChange(rows.filter((_, rowIndex) => rowIndex !== index));
+  }
+
+  const columns: ColumnsType<EquipmentRow> = [
+    { title: "最低阶级", render: (_value, row, index) => <EditableSelect disabled={disabled} onChange={(value) => setRow(index, { tier_min: value })} options={meta.tiers} value={row.tier_min} /> },
+    { title: "最高阶级", render: (_value, row, index) => <EditableSelect disabled={disabled} onChange={(value) => setRow(index, { tier_max: value })} options={meta.tiers} value={row.tier_max} /> },
+    { title: "品质", render: (_value, row, index) => <EditableSelect disabled={disabled} onChange={(value) => setRow(index, { grade: value })} options={meta.grades} value={row.grade} /> },
+    { title: "灵根", render: (_value, row, index) => <EditableSelect disabled={disabled} onChange={(value) => setRow(index, { attribute: value })} options={meta.attributes} value={row.attribute} /> },
+    { title: "灵器", render: (_value, row, index) => <EditableSelect disabled={disabled} onChange={(value) => setRow(index, { name: value })} options={artifactOptions} value={row.name} /> },
+    { title: "权重", width: 140, render: (_value, row, index) => <InputNumber disabled={disabled} min={0} onChange={(value) => setRow(index, { weight: value ?? undefined })} value={finiteNumber(row.weight)} /> },
+    {
+      title: "操作",
+      width: 80,
+      render: (_value, _row, index) => (
+        <Popconfirm disabled={disabled} onConfirm={() => deleteRow(index)} title="删除该规则？">
+          <Button disabled={disabled} icon={<DeleteOutlined />} />
+        </Popconfirm>
+      ),
+    },
+  ];
+
   return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-medium">{realm.name}</h2>
-          <div className="mt-1 truncate text-xs text-muted-foreground">境界序号 {realm.index} · {rows.length} 条规则</div>
-        </div>
-        <Button disabled={disabled} onClick={() => onRowsChange([...rows, {}])}>
-          <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>新增</span>
+    <Card
+      extra={
+        <Button disabled={disabled} icon={<PlusOutlined />} onClick={() => onRowsChange([...rows, {}])} type="primary">
+          新增
         </Button>
-      </div>
-      {rows.length ? (
-        <div className="min-w-0 overflow-x-auto">
-          <div className="grid min-w-[900px] gap-2">
-            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1.4fr_120px_44px] gap-2 px-1 text-xs text-muted-foreground">
-              <span>最低阶级</span>
-              <span>最高阶级</span>
-              <span>品质</span>
-              <span>灵根</span>
-              <span>灵器</span>
-              <span>权重</span>
-              <span />
-            </div>
-            {rows.map((row, index) => (
-              <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1.4fr_120px_44px] gap-2" key={`${realm.index}:${index}`}>
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { tier_min: value })} options={meta.tiers} value={row.tier_min} />
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { tier_max: value })} options={meta.tiers} value={row.tier_max} />
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { grade: value })} options={meta.grades} value={row.grade} />
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { attribute: value })} options={meta.attributes} value={row.attribute} />
-                <SelectOrInput disabled={disabled} onChange={(value) => setRow(index, { name: value })} options={artifactOptions} value={row.name} />
-                <NumberInput disabled={disabled} onChange={(value) => setRow(index, { weight: value })} value={finiteNumber(row.weight)} />
-                <Button aria-label={`删除${realm.name}规则${index + 1}`} className="h-9 w-9 px-0" disabled={disabled} onClick={() => onRowsChange(rows.filter((_, rowIndex) => rowIndex !== index))}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <EmptyState title="暂无规则" detail="点击新增为该境界配置灵器掉落池。" />
-      )}
-    </section>
+      }
+      title={
+        <Space direction="vertical" size={0}>
+          <Text strong>{realm.name}</Text>
+          <Text type="secondary">境界序号 {realm.index} · {rows.length} 条规则</Text>
+        </Space>
+      }
+    >
+      <Table<EquipmentRow>
+        columns={columns}
+        dataSource={rows}
+        locale={{ emptyText: <EmptyState title="暂无规则" detail="点击新增为该境界配置灵器掉落池。" /> }}
+        pagination={false}
+        rowKey={(_row, index) => `${realm.index}:${index}`}
+        scroll={{ x: 980 }}
+        size="small"
+      />
+    </Card>
   );
 }
 
@@ -311,46 +306,48 @@ export function EquipmentPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHa
   }, []);
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold tracking-normal">灵器规则</h1>
-          <p className="mt-1 truncate text-sm text-muted-foreground">按境界编辑灵器掉落池</p>
+    <div className="page-stack">
+      <div className="page-heading">
+        <div>
+          <Title level={3}>灵器掉落</Title>
+          <Text type="secondary">按境界编辑灵器掉落池</Text>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge className="shrink-0">{statusLabel(dirty, saveState)}</Badge>
-          <Button disabled={saving} onClick={() => void reloadEquipment()}>
-            <RefreshCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>重载</span>
+        <Space wrap>
+          <Tag color={statusColor(dirty, saveState)}>{statusLabel(dirty, saveState)}</Tag>
+          <Button disabled={saving} icon={<ReloadOutlined />} onClick={() => void reloadEquipment()}>
+            重载
           </Button>
-          <PrimaryButton disabled={!dirty || saving} onClick={() => void saveEquipment()}>
-            <Save className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>保存</span>
-          </PrimaryButton>
-        </div>
+          <Button disabled={!dirty || saving} icon={<SaveOutlined />} loading={saving} onClick={() => void saveEquipment()} type="primary">
+            保存
+          </Button>
+        </Space>
       </div>
-      {saveError ? <div className="text-sm text-destructive">{saveError}</div> : null}
+      {saveError ? <ErrorState message={saveError} /> : null}
       {loading ? <LoadingState label="正在载入灵器规则" /> : null}
       {error ? <ErrorState message={error} onRetry={() => void loadEquipment()} /> : null}
       {!loading && !error && !realms.length ? <EmptyState title="暂无境界" detail="后端未返回可编辑的境界列表。" /> : null}
       {!loading && !error && realms.length ? (
-        <Card className="grid min-w-0 gap-4 rounded-md p-4">
-          {realms.map((realm) => (
-            <RealmTable
-              disabled={saving}
-              key={realm.index}
-              meta={meta}
-              onRowsChange={(rows) => {
-                setRules(writeRowsToRules(rules, realm.index, rows));
-                setSaveState("idle");
-                setSaveError("");
-              }}
-              realm={realm}
-              rows={rowsFromRules(rules, realm.index)}
-            />
-          ))}
-        </Card>
+        <Tabs
+          items={realms.map((realm) => ({
+            key: String(realm.index),
+            label: realm.name,
+            children: (
+              <RealmTable
+                disabled={saving}
+                meta={meta}
+                onRowsChange={(rows) => {
+                  setRules(writeRowsToRules(rules, realm.index, rows));
+                  setSaveState("idle");
+                  setSaveError("");
+                }}
+                realm={realm}
+                rows={rowsFromRules(rules, realm.index)}
+              />
+            ),
+          }))}
+        />
       ) : null}
     </div>
   );
 }
+

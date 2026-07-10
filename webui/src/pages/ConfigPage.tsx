@@ -1,11 +1,8 @@
-import { Plus, RefreshCcw, Save, Trash2 } from "lucide-react";
+import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Checkbox, Input, InputNumber, Popconfirm, Select, Space, Table, Tabs, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../components/state/LoadState";
-import { Badge } from "../components/ui/badge";
-import { Button, PrimaryButton } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import { api } from "../lib/api";
 import type { EquipmentPayload } from "../lib/types";
 import {
@@ -18,6 +15,9 @@ import {
   type SaveState,
   useDirtyFlag,
 } from "./pageShared";
+
+const { Text, Title } = Typography;
+const { TextArea } = Input;
 
 type ConfigPayload = { ok: boolean; config: Record<string, unknown> };
 type EquipmentMeta = EquipmentPayload["meta"];
@@ -85,37 +85,21 @@ function mapKeys(value: unknown) {
   return Object.keys(asRecord(value));
 }
 
-function realmOptions(meta: EquipmentMeta) {
-  return (meta.realms ?? []).map((realm) => ({ label: realm.name, value: String(realm.index) }));
+function statusColor(dirty: boolean, saveState: SaveState) {
+  if (saveState === "saving") {
+    return "processing";
+  }
+  if (saveState === "saved") {
+    return "success";
+  }
+  if (saveState === "error") {
+    return "error";
+  }
+  return dirty ? "warning" : "default";
 }
 
-function NumberInput({
-  disabled,
-  max,
-  min,
-  onChange,
-  step,
-  value,
-}: {
-  disabled?: boolean;
-  max?: number;
-  min?: number;
-  onChange: (value: number | undefined) => void;
-  step?: number;
-  value?: number;
-}) {
-  function update(valueText: string) {
-    if (valueText === "") {
-      onChange(undefined);
-      return;
-    }
-    const nextValue = Number(valueText);
-    if (Number.isFinite(nextValue)) {
-      onChange(nextValue);
-    }
-  }
-
-  return <Input disabled={disabled} max={max} min={min} onChange={(event) => update(event.target.value)} step={step} type="number" value={value ?? ""} />;
+function selectOptions(options?: string[], current?: string) {
+  return optionValues(options, current).map((value) => ({ label: value, value }));
 }
 
 function NumberField({
@@ -138,40 +122,11 @@ function NumberField({
   value?: number;
 }) {
   return (
-    <label className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium">{label}</div>
-        {hint ? <div className="truncate text-xs text-muted-foreground">{hint}</div> : null}
-      </div>
-      <NumberInput disabled={disabled} max={max} min={min} onChange={onChange} step={step} value={value} />
-    </label>
-  );
-}
-
-function KeyField({
-  disabled,
-  onChange,
-  options,
-  value,
-}: {
-  disabled?: boolean;
-  onChange: (value: string) => void;
-  options?: string[];
-  value: string;
-}) {
-  const availableOptions = optionValues(options, value);
-  if (!availableOptions.length) {
-    return <Input disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value} />;
-  }
-  return (
-    <Select disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value}>
-      <option value="">未设置</option>
-      {availableOptions.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </Select>
+    <div>
+      <Text type="secondary">{label}</Text>
+      {hint ? <Text className="field-hint" type="secondary">{hint}</Text> : null}
+      <InputNumber disabled={disabled} max={max} min={min} onChange={(next) => onChange(next ?? undefined)} step={step} value={value} />
+    </div>
   );
 }
 
@@ -198,94 +153,57 @@ function NumberMapEditor({
     onChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
 
+  const columns: ColumnsType<NumberRow> = [
+    {
+      title: keyLabel,
+      render: (_value, row, index) =>
+        keyOptions?.length ? (
+          <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { key: value ?? "" })} options={selectOptions(keyOptions, row.key)} value={row.key || undefined} />
+        ) : (
+          <Input disabled={disabled} onChange={(event) => setRow(index, { key: event.target.value })} value={row.key} />
+        ),
+    },
+    {
+      title: valueLabel,
+      width: 180,
+      render: (_value, row, index) => <InputNumber disabled={disabled} min={0} onChange={(value) => setRow(index, { value: value ?? undefined })} step={0.01} value={row.value} />,
+    },
+    {
+      title: "操作",
+      width: 80,
+      render: (_value, _row, index) => (
+        <Popconfirm disabled={disabled} onConfirm={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))} title="删除该配置？">
+          <Button disabled={disabled} icon={<DeleteOutlined />} />
+        </Popconfirm>
+      ),
+    },
+  ];
+
   return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-medium">{title}</h2>
-          <div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
-        </div>
-        <Button disabled={disabled} onClick={() => onChange([...rows, { key: "", value: undefined }])}>
-          <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>新增</span>
-        </Button>
-      </div>
-      {rows.length ? (
-        <div className="grid min-w-0 gap-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_160px_44px] gap-2 px-1 text-xs text-muted-foreground">
-            <span>{keyLabel}</span>
-            <span>{valueLabel}</span>
-            <span />
-          </div>
-          {rows.map((row, index) => (
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_160px_44px] gap-2" key={`${title}:${index}`}>
-              <KeyField disabled={disabled} onChange={(value) => setRow(index, { key: value })} options={keyOptions} value={row.key} />
-              <NumberInput disabled={disabled} min={0} onChange={(value) => setRow(index, { value })} step={0.01} value={row.value} />
-              <Button aria-label={`删除${title}${index + 1}`} className="h-9 w-9 px-0" disabled={disabled} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}>
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState title="暂无配置" detail="点击新增添加一条数值映射。" />
-      )}
-    </section>
+    <Card extra={<Button disabled={disabled} icon={<PlusOutlined />} onClick={() => onChange([...rows, { key: "", value: undefined }])}>新增</Button>} size="small" title={title}>
+      <Text type="secondary">{detail}</Text>
+      <Table<NumberRow> columns={columns} dataSource={rows} pagination={false} rowKey={(_row, index) => `${title}:${index}`} size="small" />
+    </Card>
   );
 }
 
-function TierRealmEditor({
-  disabled,
-  meta,
-  onChange,
-  rows,
-}: {
-  disabled?: boolean;
-  meta: EquipmentMeta;
-  onChange: (rows: NumberRow[]) => void;
-  rows: NumberRow[];
-}) {
-  const realms = realmOptions(meta);
+function TierRealmEditor({ disabled, meta, onChange, rows }: { disabled?: boolean; meta: EquipmentMeta; onChange: (rows: NumberRow[]) => void; rows: NumberRow[] }) {
+  const realms = (meta.realms ?? []).map((realm) => ({ label: realm.name, value: String(realm.index) }));
   function setRow(index: number, patch: Partial<NumberRow>) {
     onChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
 
+  const columns: ColumnsType<NumberRow> = [
+    { title: "阶级", render: (_value, row, index) => <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { key: value ?? "" })} options={selectOptions(DEFAULT_TIERS, row.key)} value={row.key || undefined} /> },
+    { title: "默认境界", render: (_value, row, index) => <Select allowClear disabled={disabled} onChange={(value) => setRow(index, { value: value === undefined ? undefined : Number(value) })} options={realms} value={row.value === undefined ? undefined : String(row.value)} /> },
+    { title: "操作", width: 80, render: (_value, _row, index) => <Popconfirm disabled={disabled} onConfirm={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))} title="删除默认境界？"><Button disabled={disabled} icon={<DeleteOutlined />} /></Popconfirm> },
+  ];
+
   return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-medium">阶级默认境界</h2>
-          <div className="mt-1 truncate text-xs text-muted-foreground">用于缺省灵器境界推断</div>
-        </div>
-        <Button disabled={disabled} onClick={() => onChange([...rows, { key: "", value: undefined }])}>
-          <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>新增</span>
-        </Button>
-      </div>
-      <div className="grid min-w-0 gap-2">
-        {rows.map((row, index) => (
-          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_220px_44px]" key={`tier-realm:${index}`}>
-            <KeyField disabled={disabled} onChange={(value) => setRow(index, { key: value })} options={DEFAULT_TIERS} value={row.key} />
-            <Select
-              disabled={disabled}
-              onChange={(event) => setRow(index, { value: event.target.value === "" ? undefined : Number(event.target.value) })}
-              value={row.value === undefined ? "" : String(row.value)}
-            >
-              <option value="">未设置</option>
-              {realms.map((realm) => (
-                <option key={realm.value} value={realm.value}>
-                  {realm.label}
-                </option>
-              ))}
-            </Select>
-            <Button aria-label={`删除阶级默认境界${index + 1}`} className="h-9 w-9 px-0" disabled={disabled} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}>
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
-        ))}
-        {!rows.length ? <EmptyState title="暂无默认境界" detail="点击新增设置阶级与境界的默认对应关系。" /> : null}
-      </div>
-    </section>
+    <Card extra={<Button disabled={disabled} icon={<PlusOutlined />} onClick={() => onChange([...rows, { key: "", value: undefined }])}>新增</Button>} size="small" title="阶级默认境界">
+      <Text type="secondary">用于缺省灵器境界推断</Text>
+      <Table<NumberRow> columns={columns} dataSource={rows} locale={{ emptyText: <EmptyState title="暂无默认境界" detail="点击新增设置阶级与境界的默认对应关系。" /> }} pagination={false} rowKey={(_row, index) => `tier-realm:${index}`} size="small" />
+    </Card>
   );
 }
 
@@ -300,60 +218,27 @@ function RealmTierUnlockEditor({
   onChange: (unlocks: Record<string, string[]>) => void;
   unlocks: Record<string, unknown>;
 }) {
-  const normalizedUnlocks = Object.fromEntries(
-    Object.entries(unlocks).map(([key, value]) => [key, Array.isArray(value) ? value.map(String) : []]),
-  );
+  const normalizedUnlocks = Object.fromEntries(Object.entries(unlocks).map(([key, value]) => [key, Array.isArray(value) ? value.map(String) : []]));
   const tierOptions = uniqueValues([...(meta.tiers ?? []), ...DEFAULT_TIERS, ...Object.values(normalizedUnlocks).flatMap((value) => value)]);
   const realms = meta.realms?.length
     ? meta.realms
     : Object.keys(normalizedUnlocks).map((key) => ({ index: Number(key), name: `境界 ${key}` })).filter((realm) => Number.isFinite(realm.index));
 
-  function selectedTiers(realmIndex: number) {
-    return normalizedUnlocks[String(realmIndex)] ?? [];
-  }
-
-  function toggleTier(realmIndex: number, tier: string) {
-    const current = new Set(selectedTiers(realmIndex));
-    if (current.has(tier)) {
-      current.delete(tier);
-    } else {
-      current.add(tier);
-    }
-    onChange({ ...normalizedUnlocks, [String(realmIndex)]: [...current] });
-  }
-
   return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <div className="min-w-0">
-        <h2 className="truncate text-base font-medium">境界阶级解锁</h2>
-        <div className="mt-1 truncate text-xs text-muted-foreground">控制每个境界可自然产出的灵器阶级</div>
+    <Card size="small" title="境界阶级解锁">
+      <div className="unlock-grid">
+        {realms.map((realm) => (
+          <Card key={realm.index} size="small" title={realm.name}>
+            <Checkbox.Group
+              disabled={disabled}
+              onChange={(values) => onChange({ ...normalizedUnlocks, [String(realm.index)]: values.map(String) })}
+              options={tierOptions}
+              value={normalizedUnlocks[String(realm.index)] ?? []}
+            />
+          </Card>
+        ))}
       </div>
-      {realms.length ? (
-        <div className="grid min-w-0 gap-3 xl:grid-cols-2">
-          {realms.map((realm) => {
-            const selected = new Set(selectedTiers(realm.index));
-            return (
-              <div className="grid min-w-0 gap-2 rounded-md border border-border p-3" key={realm.index}>
-                <div className="flex min-w-0 items-center justify-between gap-2">
-                  <div className="truncate text-sm font-medium">{realm.name}</div>
-                  <Badge className="shrink-0">{selected.size} 项</Badge>
-                </div>
-                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-                  {tierOptions.map((tier) => (
-                    <label className="flex min-w-0 items-center gap-2 rounded-md border border-border p-2 text-sm" key={`${realm.index}:${tier}`}>
-                      <input checked={selected.has(tier)} disabled={disabled} onChange={() => toggleTier(realm.index, tier)} type="checkbox" />
-                      <span className="min-w-0 truncate">{tier}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <EmptyState title="暂无境界" detail="后端未返回境界信息，暂无法编辑解锁表。" />
-      )}
-    </section>
+    </Card>
   );
 }
 
@@ -363,7 +248,6 @@ function ManagedSummary({ config }: { config: Record<string, unknown> }) {
   const mystic = asRecord(config.mystic);
   const knownKeys = new Set(["version", "equipment_rules", "mystic", "signin", "item_overrides", "beast_realm"]);
   const extraKeys = Object.keys(config).filter((key) => !knownKeys.has(key));
-
   const summaries = [
     { label: "物品覆盖", value: recordSize(config.item_overrides), detail: "物品图鉴专页管理" },
     { label: "御兽卡牌覆盖", value: recordSize(beastRealm.card_overrides), detail: "御兽卡牌专页管理" },
@@ -373,30 +257,24 @@ function ManagedSummary({ config }: { config: Record<string, unknown> }) {
   ];
 
   return (
-    <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-      <div className="min-w-0">
-        <h2 className="truncate text-base font-medium">专页配置概览</h2>
-        <div className="mt-1 truncate text-xs text-muted-foreground">这些内容会随保存原样保留</div>
-      </div>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-5">
+    <Card title="专页配置概览">
+      <div className="summary-grid">
         {summaries.map((item) => (
-          <div className="grid min-w-0 gap-1 rounded-md border border-border p-3" key={item.label}>
-            <div className="truncate text-xs text-muted-foreground">{item.label}</div>
-            <div className="text-xl font-semibold">{item.value}</div>
-            <div className="truncate text-xs text-muted-foreground">{item.detail}</div>
-          </div>
+          <Card key={item.label} size="small">
+            <Text type="secondary">{item.label}</Text>
+            <Title level={3}>{item.value}</Title>
+            <Text type="secondary">{item.detail}</Text>
+          </Card>
         ))}
       </div>
       {extraKeys.length ? (
-        <div className="flex min-w-0 flex-wrap gap-2">
+        <Space wrap>
           {extraKeys.map((key) => (
-            <Badge className="max-w-full truncate" key={key}>
-              {key}
-            </Badge>
+            <Tag key={key}>{key}</Tag>
           ))}
-        </div>
+        </Space>
       ) : null}
-    </section>
+    </Card>
   );
 }
 
@@ -413,6 +291,19 @@ function validateRows(rows: NumberRow[], label: string) {
     seen.add(key);
     if (row.value === undefined || !Number.isFinite(row.value) || row.value < 0) {
       return `${label}第 ${index + 1} 行数值必须是非负数字。`;
+    }
+  }
+  return "";
+}
+
+function validateRealmIndexes(rows: NumberRow[], meta: EquipmentMeta) {
+  const validIndexes = new Set((meta.realms ?? []).map((realm) => realm.index));
+  if (!validIndexes.size) {
+    return "";
+  }
+  for (const row of rows) {
+    if (row.value !== undefined && !validIndexes.has(row.value)) {
+      return `${row.key} 默认境界不存在：${row.value}`;
     }
   }
   return "";
@@ -455,22 +346,11 @@ function validateConfig(config: Record<string, unknown>, meta: EquipmentMeta) {
   );
 }
 
-function validateRealmIndexes(rows: NumberRow[], meta: EquipmentMeta) {
-  const validIndexes = new Set((meta.realms ?? []).map((realm) => realm.index));
-  if (!validIndexes.size) {
-    return "";
-  }
-  for (const row of rows) {
-    if (row.value !== undefined && !validIndexes.has(row.value)) {
-      return `${row.key} 默认境界不存在：${row.value}`;
-    }
-  }
-  return "";
-}
-
 export function ConfigPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandler }) {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [originalConfig, setOriginalConfig] = useState<Record<string, unknown>>({});
+  const [rawConfigText, setRawConfigText] = useState("{}");
+  const [rawConfigError, setRawConfigError] = useState("");
   const [meta, setMeta] = useState<EquipmentMeta>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -493,14 +373,18 @@ export function ConfigPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandl
   }, [equipmentRules.artifact_realm_power_base, meta.realms]);
   useDirtyFlag(dirty, onDirtyChange);
 
-  function updateConfig(updater: (draft: Record<string, unknown>) => void) {
-    setConfig((current) => {
-      const next = cloneJson(current);
-      updater(next);
-      return next;
-    });
+  function setNextConfig(next: Record<string, unknown>) {
+    setConfig(next);
+    setRawConfigText(JSON.stringify(next, null, 2));
+    setRawConfigError("");
     setSaveState("idle");
     setSaveError("");
+  }
+
+  function updateConfig(updater: (draft: Record<string, unknown>) => void) {
+    const next = cloneJson(config);
+    updater(next);
+    setNextConfig(next);
   }
 
   function setNested(path: string[], value: unknown) {
@@ -512,6 +396,19 @@ export function ConfigPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandl
       }
       target[path[path.length - 1]] = value;
     });
+  }
+
+  function applyRawConfig() {
+    try {
+      const parsed = JSON.parse(rawConfigText) as unknown;
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        setRawConfigError("原始配置必须是 JSON 对象。");
+        return;
+      }
+      setNextConfig(normalizeConfig(parsed as Record<string, unknown>));
+    } catch (parseError) {
+      setRawConfigError(parseError instanceof SyntaxError ? parseError.message : "JSON 解析失败");
+    }
   }
 
   async function loadConfig() {
@@ -527,6 +424,8 @@ export function ConfigPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandl
       const normalized = normalizeConfig(asRecord(configPayload.config));
       setConfig(cloneJson(normalized));
       setOriginalConfig(cloneJson(normalized));
+      setRawConfigText(JSON.stringify(normalized, null, 2));
+      setRawConfigError("");
       setMeta(equipmentPayload.meta ?? {});
       return true;
     } catch (loadError) {
@@ -587,148 +486,67 @@ export function ConfigPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandl
     void loadConfig();
   }, []);
 
+  const globalTab = (
+    <div className="page-stack">
+      <Card size="small" title="全局参数">
+        <div className="form-grid">
+          <NumberField disabled={saving} label="配置版本" min={0} onChange={(value) => setNested(["version"], value)} step={1} value={finiteNumber(config.version)} />
+          <NumberField disabled={saving} hint="影响新牌池默认复制数" label="御兽默认卡池数量" min={0} onChange={(value) => setNested(["beast_realm", "card_pool_copies"], value)} step={1} value={finiteNumber(beastRealm.card_pool_copies)} />
+          <NumberField disabled={saving} hint="灵器掉落时升级为仙阶的概率" label="仙阶升级概率" max={1} min={0} onChange={(value) => setNested(["equipment_rules", "artifact_immortal_upgrade_rate"], value)} step={0.01} value={finiteNumber(equipmentRules.artifact_immortal_upgrade_rate)} />
+          <NumberField disabled={saving} hint="秘境中刷新增加一次垂钓次数选项" label="秘境垂钓选项概率" max={1} min={0} onChange={(value) => setNested(["mystic", "fishing_option_rate"], value)} step={0.01} value={finiteNumber(mystic.fishing_option_rate)} />
+          <NumberField disabled={saving} hint="每日签到额外增加一次垂钓次数" label="签到额外垂钓概率" max={1} min={0} onChange={(value) => setNested(["signin", "extra_fishing_chance_rate"], value)} step={0.01} value={finiteNumber(signin.extra_fishing_chance_rate)} />
+        </div>
+      </Card>
+    </div>
+  );
+
+  const powerTab = (
+    <div className="page-stack">
+      <TierRealmEditor disabled={saving} meta={meta} onChange={(rows) => setNested(["equipment_rules", "tier_default_realm"], rowsToRecord(rows))} rows={numberRows(equipmentRules.tier_default_realm)} />
+      <RealmTierUnlockEditor disabled={saving} meta={meta} onChange={(nextUnlocks) => setNested(["equipment_rules", "realm_tier_unlocks"], nextUnlocks)} unlocks={asRecord(equipmentRules.realm_tier_unlocks)} />
+      <NumberMapEditor detail="不同灵器类别的基础战力" disabled={saving} keyLabel="类别" onChange={(rows) => setNested(["equipment_rules", "artifact_power_base"], rowsToRecord(rows))} rows={numberRows(equipmentRules.artifact_power_base)} title="灵器类别基础战力" valueLabel="基础值" />
+      <NumberMapEditor detail="不同境界灵器的基础战力" disabled={saving} keyLabel="境界序号" keyOptions={realmIndexOptions} onChange={(rows) => setNested(["equipment_rules", "artifact_realm_power_base"], rowsToRecord(rows))} rows={numberRows(equipmentRules.artifact_realm_power_base)} title="灵器境界基础战力" valueLabel="基础值" />
+      <NumberMapEditor detail="不同阶级对战力的倍率" disabled={saving} keyLabel="阶级" keyOptions={tierOptions} onChange={(rows) => setNested(["equipment_rules", "artifact_tier_power_ratio"], rowsToRecord(rows))} rows={numberRows(equipmentRules.artifact_tier_power_ratio)} title="灵器阶级倍率" valueLabel="倍率" />
+      <NumberMapEditor detail="不同品相对战力的倍率" disabled={saving} keyLabel="品相" keyOptions={gradeOptions} onChange={(rows) => setNested(["equipment_rules", "artifact_grade_ratio"], rowsToRecord(rows))} rows={numberRows(equipmentRules.artifact_grade_ratio)} title="灵器品相倍率" valueLabel="倍率" />
+    </div>
+  );
+
+  const rawTab = (
+    <div className="page-stack">
+      <Alert message="原始配置是高级恢复入口。修改后需先应用 JSON，再点击页面右上角保存。" showIcon type="warning" />
+      {rawConfigError ? <Alert message={rawConfigError} showIcon type="error" /> : null}
+      <TextArea autoSize={{ minRows: 18 }} onChange={(event) => setRawConfigText(event.target.value)} value={rawConfigText} />
+      <Button onClick={applyRawConfig} type="primary">应用 JSON</Button>
+    </div>
+  );
+
   return (
-    <div className="grid min-w-0 gap-4">
-      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold tracking-normal">高级配置</h1>
-          <p className="mt-1 truncate text-sm text-muted-foreground">结构化编辑全局概率、战力倍率与解锁规则</p>
+    <div className="page-stack">
+      <div className="page-heading">
+        <div>
+          <Title level={2}>系统配置</Title>
+          <Text type="secondary">结构化编辑全局概率、战力倍率与解锁规则</Text>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge className="shrink-0">{statusLabel(dirty, saveState)}</Badge>
-          <Button disabled={saving} onClick={() => void reloadConfig()}>
-            <RefreshCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>重载</span>
-          </Button>
-          <PrimaryButton disabled={!dirty || saving} onClick={() => void saveConfig()}>
-            <Save className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>保存</span>
-          </PrimaryButton>
-        </div>
+        <Space wrap>
+          <Tag color={statusColor(dirty, saveState)}>{statusLabel(dirty, saveState)}</Tag>
+          <Button disabled={saving} icon={<ReloadOutlined />} onClick={() => void reloadConfig()}>重载</Button>
+          <Button disabled={!dirty || saving} icon={<SaveOutlined />} loading={saving} onClick={() => void saveConfig()} type="primary">保存</Button>
+        </Space>
       </div>
 
-      {saveError ? <div className="text-sm text-destructive">{saveError}</div> : null}
+      {saveError ? <ErrorState message={saveError} /> : null}
       {loading ? <LoadingState label="正在载入高级配置" /> : null}
       {error ? <ErrorState message={error} onRetry={() => void loadConfig()} /> : null}
       {!loading && !error ? (
-        <div className="grid min-w-0 gap-4">
-          <Card className="grid min-w-0 gap-4 rounded-md p-4">
-            <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-              <h2 className="truncate text-base font-medium">全局参数</h2>
-              <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <NumberField disabled={saving} label="配置版本" min={0} onChange={(value) => setNested(["version"], value)} step={1} value={finiteNumber(config.version)} />
-                <NumberField
-                  disabled={saving}
-                  hint="影响新牌池默认复制数"
-                  label="御兽默认卡池数量"
-                  min={0}
-                  onChange={(value) => setNested(["beast_realm", "card_pool_copies"], value)}
-                  step={1}
-                  value={finiteNumber(beastRealm.card_pool_copies)}
-                />
-                <NumberField
-                  disabled={saving}
-                  hint="灵器掉落时升级为仙阶的概率"
-                  label="仙阶升级概率"
-                  max={1}
-                  min={0}
-                  onChange={(value) => setNested(["equipment_rules", "artifact_immortal_upgrade_rate"], value)}
-                  step={0.01}
-                  value={finiteNumber(equipmentRules.artifact_immortal_upgrade_rate)}
-                />
-              </div>
-            </section>
-
-            <section className="grid min-w-0 gap-3 rounded-md border border-border bg-card p-4">
-              <h2 className="truncate text-base font-medium">概率设置</h2>
-              <div className="grid min-w-0 gap-3 md:grid-cols-2">
-                <NumberField
-                  disabled={saving}
-                  hint="秘境中刷新增加一次垂钓次数选项"
-                  label="秘境垂钓选项概率"
-                  max={1}
-                  min={0}
-                  onChange={(value) => setNested(["mystic", "fishing_option_rate"], value)}
-                  step={0.01}
-                  value={finiteNumber(mystic.fishing_option_rate)}
-                />
-                <NumberField
-                  disabled={saving}
-                  hint="每日签到额外增加一次垂钓次数"
-                  label="签到额外垂钓概率"
-                  max={1}
-                  min={0}
-                  onChange={(value) => setNested(["signin", "extra_fishing_chance_rate"], value)}
-                  step={0.01}
-                  value={finiteNumber(signin.extra_fishing_chance_rate)}
-                />
-              </div>
-            </section>
-          </Card>
-
-          <Card className="grid min-w-0 gap-4 rounded-md p-4">
-            <TierRealmEditor
-              disabled={saving}
-              meta={meta}
-              onChange={(rows) => setNested(["equipment_rules", "tier_default_realm"], rowsToRecord(rows))}
-              rows={numberRows(equipmentRules.tier_default_realm)}
-            />
-            <RealmTierUnlockEditor
-              disabled={saving}
-              meta={meta}
-              onChange={(nextUnlocks) => setNested(["equipment_rules", "realm_tier_unlocks"], nextUnlocks)}
-              unlocks={asRecord(equipmentRules.realm_tier_unlocks)}
-            />
-          </Card>
-
-          <Card className="grid min-w-0 gap-4 rounded-md p-4">
-            <NumberMapEditor
-              detail="不同灵器类别的基础战力"
-              disabled={saving}
-              keyLabel="类别"
-              onChange={(rows) => setNested(["equipment_rules", "artifact_power_base"], rowsToRecord(rows))}
-              rows={numberRows(equipmentRules.artifact_power_base)}
-              title="灵器类别基础战力"
-              valueLabel="基础值"
-            />
-            <NumberMapEditor
-              detail="不同境界灵器的基础战力"
-              disabled={saving}
-              keyLabel="境界序号"
-              keyOptions={realmIndexOptions}
-              onChange={(rows) => setNested(["equipment_rules", "artifact_realm_power_base"], rowsToRecord(rows))}
-              rows={numberRows(equipmentRules.artifact_realm_power_base)}
-              title="灵器境界基础战力"
-              valueLabel="基础值"
-            />
-            <NumberMapEditor
-              detail="不同阶级对战力的倍率"
-              disabled={saving}
-              keyLabel="阶级"
-              keyOptions={tierOptions}
-              onChange={(rows) => setNested(["equipment_rules", "artifact_tier_power_ratio"], rowsToRecord(rows))}
-              rows={numberRows(equipmentRules.artifact_tier_power_ratio)}
-              title="灵器阶级倍率"
-              valueLabel="倍率"
-            />
-            <NumberMapEditor
-              detail="不同品相对战力的倍率"
-              disabled={saving}
-              keyLabel="品相"
-              keyOptions={gradeOptions}
-              onChange={(rows) => setNested(["equipment_rules", "artifact_grade_ratio"], rowsToRecord(rows))}
-              rows={numberRows(equipmentRules.artifact_grade_ratio)}
-              title="灵器品相倍率"
-              valueLabel="倍率"
-            />
-          </Card>
-
-          <ManagedSummary config={config} />
-        </div>
+        <Tabs
+          items={[
+            { key: "global", label: "全局参数", children: globalTab },
+            { key: "power", label: "灵器战力模型", children: powerTab },
+            { key: "summary", label: "配置概览", children: <ManagedSummary config={config} /> },
+            { key: "raw", label: "原始配置", children: rawTab },
+          ]}
+        />
       ) : null}
     </div>
   );
 }
-
-
-

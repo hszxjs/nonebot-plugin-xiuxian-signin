@@ -1,12 +1,9 @@
-import { RefreshCcw, Save, Search, UserRound } from "lucide-react";
+import { ReloadOutlined, SaveOutlined, SearchOutlined, UserOutlined } from "@ant-design/icons";
+import { Button, Card, Drawer, Flex, Form, Input, Space, Table, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../components/state/LoadState";
-import { Badge } from "../components/ui/badge";
-import { Button, PrimaryButton } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { api } from "../lib/api";
 import { formatNumber } from "../lib/format";
 import type { PlayerDetailPayload, PlayerListPayload, PlayerMeta, PlayerSummary } from "../lib/types";
@@ -14,6 +11,8 @@ import type { DirtyChangeHandler } from "./pageShared";
 import { useDirtyFlag } from "./pageShared";
 import { PlayerEditor } from "./playerEditor";
 import { sanitizeRecord, type JsonRecord } from "./playerMeta";
+
+const { Text, Title } = Typography;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -35,101 +34,27 @@ function confirmDiscard() {
   return window.confirm("当前玩家档案有未保存修改，确认切换吗？");
 }
 
-function PlayerList({
-  disabled,
-  players,
-  selectedId,
-  onSelect,
-}: {
-  disabled?: boolean;
-  onSelect: (player: PlayerSummary) => void;
-  players: PlayerSummary[];
-  selectedId: string;
-}) {
-  return (
-    <div className="min-w-0 overflow-x-auto rounded-md border border-border">
-      <Table className="min-w-[560px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead>玩家</TableHead>
-            <TableHead>境界</TableHead>
-            <TableHead className="text-right">战力</TableHead>
-            <TableHead className="text-right">灵石</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {players.map((player) => {
-            const selected = player.user_id === selectedId;
-            return (
-              <TableRow
-                aria-disabled={disabled}
-                className={selected ? "bg-muted hover:bg-muted" : disabled ? "opacity-60" : "cursor-pointer"}
-                key={player.user_id}
-                onClick={() => {
-                  if (!disabled) {
-                    onSelect(player);
-                  }
-                }}
-              >
-                <TableCell className="max-w-48">
-                  <div className="truncate font-medium">{playerName(player)}</div>
-                  <div className="truncate text-xs text-muted-foreground">{player.user_id}</div>
-                </TableCell>
-                <TableCell className="max-w-40 truncate">{player.realm}</TableCell>
-                <TableCell className="text-right font-medium">{formatNumber(player.battle_power)}</TableCell>
-                <TableCell className="text-right">{formatNumber(player.spirit_stones)}</TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
+function statusColor(dirty: boolean, saveState: SaveState) {
+  if (saveState === "saving") {
+    return "processing";
+  }
+  if (saveState === "saved") {
+    return "success";
+  }
+  if (saveState === "error") {
+    return "error";
+  }
+  return dirty ? "warning" : "default";
 }
 
-function EditorHeader({
-  dirty,
-  onReload,
-  onSave,
-  player,
-  saveError,
-  saveState,
-}: {
-  dirty: boolean;
-  onReload: () => void;
-  onSave: () => void;
-  player: PlayerSummary;
-  saveError: string;
-  saveState: SaveState;
-}) {
-  const status = saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : dirty ? "未保存" : "同步";
-
-  return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="truncate text-lg font-semibold">{playerName(player)}</h2>
-          <Badge className="shrink-0">{status}</Badge>
-        </div>
-        <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span className="truncate">ID {player.user_id}</span>
-          <span className="truncate">{player.realm}</span>
-          <span className="truncate">战力 {formatNumber(player.battle_power)}</span>
-        </div>
-        {saveError ? <div className="mt-2 text-sm text-destructive">{saveError}</div> : null}
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button disabled={saveState === "saving"} onClick={onReload}>
-          <RefreshCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>重载</span>
-        </Button>
-        <PrimaryButton disabled={!dirty || saveState === "saving"} onClick={onSave}>
-          <Save className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>保存</span>
-        </PrimaryButton>
-      </div>
-    </div>
-  );
+function statusLabel(dirty: boolean, saveState: SaveState) {
+  if (saveState === "saving") {
+    return "保存中";
+  }
+  if (saveState === "saved") {
+    return "已保存";
+  }
+  return dirty ? "未保存" : "同步";
 }
 
 export function PlayersPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHandler }) {
@@ -149,13 +74,26 @@ export function PlayersPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHand
   const saveRequestId = useRef(0);
   const selectedIdRef = useRef("");
 
-  const selectedPlayer = useMemo(
-    () => players.find((player) => player.user_id === selectedId) ?? null,
-    [players, selectedId],
-  );
+  const selectedPlayer = useMemo(() => players.find((player) => player.user_id === selectedId) ?? null, [players, selectedId]);
   const dirty = hasUnsavedChanges(record, originalRecord);
   const saving = saveState === "saving";
   useDirtyFlag(dirty, onDirtyChange);
+
+  const columns: ColumnsType<PlayerSummary> = [
+    {
+      title: "玩家",
+      dataIndex: "nickname",
+      render: (_value, player) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{playerName(player)}</Text>
+          <Text type="secondary">{player.user_id}</Text>
+        </Space>
+      ),
+    },
+    { title: "境界", dataIndex: "realm" },
+    { title: "战力", dataIndex: "battle_power", align: "right", render: formatNumber },
+    { title: "灵石", dataIndex: "spirit_stones", align: "right", render: formatNumber },
+  ];
 
   async function loadPlayers(nextQuery = query, options: { keepSelection?: boolean } = {}) {
     setListLoading(true);
@@ -168,8 +106,11 @@ export function PlayersPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHand
       const queryString = params.toString();
       const payload = await api<PlayerListPayload>(`/api/players${queryString ? `?${queryString}` : ""}`);
       setPlayers(payload.players);
-      if (!options.keepSelection && payload.players.length) {
-        void selectPlayer(payload.players[0], { skipDirtyCheck: true });
+      if (!options.keepSelection) {
+        selectedIdRef.current = "";
+        setSelectedId("");
+        setRecord(null);
+        setOriginalRecord(null);
       }
       if (!payload.players.length) {
         selectedIdRef.current = "";
@@ -213,14 +154,28 @@ export function PlayersPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHand
     }
   }
 
-  async function selectPlayer(player: PlayerSummary, options: { skipDirtyCheck?: boolean } = {}) {
+  async function selectPlayer(player: PlayerSummary) {
     if (saving) {
       return;
     }
-    if (!options.skipDirtyCheck && dirty && !confirmDiscard()) {
+    if (dirty && !confirmDiscard()) {
       return;
     }
     await loadPlayerDetail(player.user_id);
+  }
+
+  async function closeDrawer() {
+    if (saving) {
+      return;
+    }
+    if (dirty && !confirmDiscard()) {
+      return;
+    }
+    selectedIdRef.current = "";
+    setSelectedId("");
+    setRecord(null);
+    setOriginalRecord(null);
+    setDetailError("");
   }
 
   async function reloadSelected() {
@@ -280,72 +235,97 @@ export function PlayersPage({ onDirtyChange }: { onDirtyChange?: DirtyChangeHand
   }
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold tracking-normal">玩家档案</h1>
-          <p className="mt-1 truncate text-sm text-muted-foreground">搜索玩家并编辑结构化档案字段</p>
+    <div className="page-stack">
+      <div className="page-heading">
+        <div>
+          <Title level={2}>玩家档案</Title>
+          <Text type="secondary">搜索玩家并编辑结构化档案字段</Text>
         </div>
-        <Badge className="shrink-0">{formatNumber(players.length)} 人</Badge>
+        <Tag>{formatNumber(players.length)} 人</Tag>
       </div>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <Card className="grid min-w-0 content-start gap-4 rounded-md p-4">
-          <form className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={submitSearch}>
-            <div className="relative min-w-0">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <Input
-                className="pl-9"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="玩家 ID 或昵称"
-                value={query}
-              />
-            </div>
-            <Button disabled={listLoading || saving} type="submit">
+      <Card>
+        <form onSubmit={submitSearch}>
+          <Flex gap={8} wrap="wrap">
+            <Input
+              allowClear
+              className="search-input"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="玩家 ID 或昵称"
+              prefix={<SearchOutlined />}
+              value={query}
+            />
+            <Button disabled={listLoading || saving} htmlType="submit" type="primary">
               搜索
             </Button>
-          </form>
+          </Flex>
+        </form>
+      </Card>
 
-          {listLoading ? <LoadingState label="正在载入玩家" /> : null}
-          {listError ? <ErrorState message={listError} onRetry={() => loadPlayers(query, { keepSelection: true })} /> : null}
-          {!listLoading && !listError && players.length ? (
-            <PlayerList disabled={saving} onSelect={(player) => void selectPlayer(player)} players={players} selectedId={selectedId} />
-          ) : null}
-          {!listLoading && !listError && !players.length ? (
-            <EmptyState title="未找到玩家" detail="换一个玩家 ID 或昵称再试。" />
-          ) : null}
-        </Card>
+      {listError ? <ErrorState message={listError} onRetry={() => loadPlayers(query, { keepSelection: true })} /> : null}
 
-        <Card className="min-w-0 rounded-md p-4">
-          {!selectedPlayer && !detailLoading ? (
-            <div className="grid min-h-72 place-items-center rounded-md border border-dashed border-border p-6 text-center">
-              <div className="min-w-0">
-                <UserRound className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                <div className="mt-3 font-medium">选择玩家</div>
-                <div className="mt-1 text-sm text-muted-foreground">从左侧列表选择一位玩家后编辑档案。</div>
-              </div>
-            </div>
-          ) : null}
+      <Card>
+        <Table<PlayerSummary>
+          columns={columns}
+          dataSource={players}
+          loading={listLoading}
+          locale={{ emptyText: <EmptyState title="未找到玩家" detail="换一个玩家 ID 或昵称再试。" /> }}
+          onRow={(player) => ({
+            onClick: () => void selectPlayer(player),
+          })}
+          pagination={{ pageSize: 15, showSizeChanger: true }}
+          rowKey="user_id"
+          rowSelection={undefined}
+          scroll={{ x: 720 }}
+          size="middle"
+        />
+      </Card>
 
-          {selectedPlayer ? (
-            <div className="grid min-w-0 gap-4">
-              <EditorHeader
-                dirty={dirty}
-                onReload={() => void reloadSelected()}
-                onSave={() => void savePlayer()}
-                player={selectedPlayer}
-                saveError={saveError}
-                saveState={saveState}
-              />
-              {detailLoading ? <LoadingState label="正在载入玩家档案" /> : null}
-              {detailError ? <ErrorState message={detailError} onRetry={() => loadPlayerDetail(selectedPlayer.user_id)} /> : null}
-              {!detailLoading && !detailError && record ? (
+      <Drawer
+        destroyOnClose
+        extra={selectedPlayer ? <Tag color={statusColor(dirty, saveState)}>{statusLabel(dirty, saveState)}</Tag> : null}
+        footer={
+          selectedPlayer ? (
+            <Flex justify="space-between" wrap="wrap">
+              <Space>
+                <Button disabled={saving} icon={<ReloadOutlined />} onClick={() => void reloadSelected()}>
+                  重载
+                </Button>
+              </Space>
+              <Button disabled={!dirty || saving} icon={<SaveOutlined />} loading={saving} onClick={() => void savePlayer()} type="primary">
+                保存
+              </Button>
+            </Flex>
+          ) : null
+        }
+        onClose={() => void closeDrawer()}
+        open={Boolean(selectedPlayer)}
+        title={selectedPlayer ? playerName(selectedPlayer) : "玩家档案"}
+        width={980}
+      >
+        {selectedPlayer ? (
+          <div className="page-stack">
+            <Card size="small">
+              <Space direction="vertical" size={2}>
+                <Text type="secondary">ID {selectedPlayer.user_id}</Text>
+                <Text>
+                  {selectedPlayer.realm} · 战力 {formatNumber(selectedPlayer.battle_power)} · 灵石 {formatNumber(selectedPlayer.spirit_stones)}
+                </Text>
+              </Space>
+            </Card>
+            {saveError ? <ErrorState message={saveError} /> : null}
+            {detailLoading ? <LoadingState label="正在载入玩家档案" /> : null}
+            {detailError ? <ErrorState message={detailError} onRetry={() => loadPlayerDetail(selectedPlayer.user_id)} /> : null}
+            {!detailLoading && !detailError && record ? (
+              <Form layout="vertical">
                 <PlayerEditor disabled={saveState === "saving"} meta={meta} onChange={setRecord} record={record} />
-              ) : null}
-            </div>
-          ) : null}
-        </Card>
-      </div>
+              </Form>
+            ) : null}
+          </div>
+        ) : (
+          <EmptyState title="选择玩家" detail="从列表选择一位玩家后编辑档案。" />
+        )}
+      </Drawer>
     </div>
   );
 }
