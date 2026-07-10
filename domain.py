@@ -3591,6 +3591,129 @@ def reward_name(reward: Optional[dict[str, Any]]) -> str:
     return canonical_item_name(str((reward or {}).get("name", "")))
 
 
+_REWARD_NAME_INFERENCE_CACHE: list[str] | None = None
+
+
+def known_reward_names_for_inference() -> list[str]:
+    global _REWARD_NAME_INFERENCE_CACHE
+    if _REWARD_NAME_INFERENCE_CACHE is not None:
+        return _REWARD_NAME_INFERENCE_CACHE
+    names: set[str] = set()
+    for _tier, _grade, _category, name, _description, _weight in FISHING_REWARDS:
+        if name:
+            names.add(canonical_item_name(str(name)))
+    for item in ARTIFACT_REALM_CATALOG:
+        name = canonical_item_name(str(item.get("name") or ""))
+        if name:
+            names.add(name)
+    names.update(canonical_item_name(str(name)) for name in EMPEROR_ARTIFACT_INFOS if name)
+    names.update(canonical_item_name(str(name)) for name in IMMORTAL_SEED_INFOS if name)
+    names.update(canonical_item_name(str(name)) for name in ARTIFACT_REFINING_RECIPES if name)
+    names.update(canonical_item_name(str(name)) for name in ITEM_ATTRIBUTE_BY_NAME if name)
+    _REWARD_NAME_INFERENCE_CACHE = sorted((name for name in names if name), key=len, reverse=True)
+    return _REWARD_NAME_INFERENCE_CACHE
+
+
+def infer_reward_name_from_description(reward: dict[str, Any]) -> str:
+    description = str(reward.get("description") or "").strip()
+    if not description:
+        return ""
+    for name in known_reward_names_for_inference():
+        if description.startswith(name):
+            return name
+    category = reward_category(reward)
+    template = REWARD_DESCRIPTIONS.get(category)
+    if template and "{name}" in template:
+        prefix, suffix = template.split("{name}", 1)
+        if prefix and suffix and description.startswith(prefix):
+            end = description.find(suffix, len(prefix))
+            if end > len(prefix):
+                return canonical_item_name(description[len(prefix) : end])
+        if suffix:
+            end = description.find(suffix)
+            if end > 0:
+                return canonical_item_name(description[:end])
+    for marker in (
+        "出自",
+        "灵光内敛",
+        "玄妙难言",
+        "药香沉稳",
+        "阵纹流转",
+        "灵性充盈",
+        "朱纹未散",
+        "机关精巧",
+        "生机盎然",
+        "灵气充足",
+        "来历不明",
+        "气息古怪",
+        "入口温和",
+        "中藏着",
+        "妖力凝成",
+    ):
+        index = description.find(marker)
+        if index > 0:
+            return canonical_item_name(description[:index])
+    return ""
+
+
+def default_reward_name_for_category(category: str) -> str:
+    if category == ARTIFACT_CATEGORY:
+        return "无名灵器"
+    return "无名灵物"
+
+
+def _needs_empty_reward_name_repair(value: dict[str, Any]) -> bool:
+    if reward_name(value):
+        return False
+    return any(str(value.get(key) or "").strip() for key in ("category", "description", "tier", "grade"))
+
+
+def _repair_empty_reward_name(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    if not _needs_empty_reward_name_repair(value):
+        return value
+    repaired = dict(value)
+    name = infer_reward_name_from_description(repaired)
+    repaired["name"] = canonical_item_name(name or default_reward_name_for_category(reward_category(repaired)))
+    return repaired
+
+
+def sanitize_user_record_data(data: dict[str, Any]) -> dict[str, Any]:
+    UserRecord.from_dict(data)
+    rewards = data.get("rewards")
+    if isinstance(rewards, list):
+        data["rewards"] = [
+            _repair_empty_reward_name(item) if isinstance(item, dict) else item
+            for item in rewards
+        ]
+    for key in (
+        "equipped_artifact",
+        "equipped_talisman",
+        "equipped_method",
+        "equipped_array",
+        "equipped_puppet",
+        "planted_spirit_plant",
+        "life_artifact",
+        "equipped_immortal_seed",
+    ):
+        if isinstance(data.get(key), dict):
+            data[key] = _repair_empty_reward_name(data[key])
+    equipped_artifacts = data.get("equipped_artifacts")
+    if isinstance(equipped_artifacts, dict):
+        data["equipped_artifacts"] = {
+            str(slot): _repair_empty_reward_name(item) if isinstance(item, dict) else item
+            for slot, item in equipped_artifacts.items()
+        }
+    immortal_seeds = data.get("immortal_seeds")
+    if isinstance(immortal_seeds, list):
+        data["immortal_seeds"] = [
+            _repair_empty_reward_name(item) if isinstance(item, dict) else item
+            for item in immortal_seeds
+        ]
+    return data
+
+
 
 def is_emperor_artifact_name(name: str) -> bool:
     return str(name or "") in EMPEROR_ARTIFACT_INFOS
@@ -3678,8 +3801,8 @@ def normalize_reward(reward: dict[str, Any], record: Optional[UserRecord] = None
     reward.setdefault("grade", "中品")
     reward.setdefault("category", "杂物")
     reward["category"] = reward_category(reward)
-    reward.setdefault("name", "无名灵物")
-    reward["name"] = canonical_item_name(reward_name(reward))
+    name = reward_name(reward) or infer_reward_name_from_description(reward)
+    reward["name"] = canonical_item_name(name or default_reward_name_for_category(reward_category(reward)))
     reward.setdefault(
         "description",
         REWARD_DESCRIPTIONS.get(reward_category(reward), "{name}气息不明。").format(name=reward_name(reward)),

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .domain import UserRecord
+from .domain import UserRecord, sanitize_user_record_data
 
 
 class JsonStore:
@@ -31,7 +31,7 @@ class JsonStore:
     async def save_user(self, record: UserRecord) -> None:
         async with self._lock:
             data = self._read_json(self.user_file_path)
-            data[record.user_id] = record.to_dict()
+            data[record.user_id] = sanitize_user_record_data(record.to_dict())
             self._write_json(self.user_file_path, data)
 
     async def touch_group_member(
@@ -238,7 +238,7 @@ class JsonStore:
                 else UserRecord(user_id=user_id)
             )
             updater(record)
-            data[user_id] = record.to_dict()
+            data[user_id] = sanitize_user_record_data(record.to_dict())
             self._write_json(self.user_file_path, data)
             return record
 

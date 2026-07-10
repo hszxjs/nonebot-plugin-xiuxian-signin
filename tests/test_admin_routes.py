@@ -326,6 +326,38 @@ class AdminRouteTests(unittest.TestCase):
             self.assertNotIn("pending_fishing", saved)
             self.assertEqual(manager.get_player_record("42"), saved)
 
+    def test_admin_manager_save_player_record_repairs_empty_reward_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+            saved = manager.save_player_record(
+                "42",
+                {
+                    "realm_index": 0,
+                    "rewards": [
+                        {
+                            "tier": "仙阶",
+                            "grade": "极品",
+                            "category": "功法",
+                            "name": "",
+                            "description": "离火炼界篇玄妙难言，参悟后可增添斗法底蕴。",
+                        }
+                    ],
+                },
+            )
+
+            self.assertEqual(saved["rewards"][0]["name"], "离火炼界篇")
+            self.assertEqual(manager.get_player_record("42"), saved)
+
+    def test_admin_entrypoint_uses_scoped_asset_paths(self) -> None:
+        html = admin.scoped_admin_index_html(
+            b'<script src="./assets/app.js"></script><link href="./assets/app.css">',
+            "/xiuxian-admin",
+        )
+
+        self.assertIn("/xiuxian-admin/assets/", html)
+        self.assertNotIn("./assets/", html)
+
 
     def test_admin_manager_exposes_mystic_and_signin_probability_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

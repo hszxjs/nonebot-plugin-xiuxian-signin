@@ -118,6 +118,47 @@ class DomainFeatureTests(unittest.TestCase):
             ["equipped", "same", "unique"],
         )
 
+    def test_normalize_reward_recovers_empty_name_from_description(self) -> None:
+        reward = domain.normalize_reward(
+            {
+                "tier": "凡品",
+                "grade": "下品",
+                "category": domain.ARTIFACT_CATEGORY,
+                "name": "",
+                "description": "锻骨素纹沧澜初成珠出自月照泉。相传炼体守炉弟子拾得水系灵胚。",
+                "realm_index": 0,
+            }
+        )
+
+        self.assertEqual(reward["name"], "锻骨素纹沧澜初成珠")
+        self.assertNotIn("无名", reward["name"])
+
+    def test_sanitize_user_record_data_only_repairs_empty_names(self) -> None:
+        data = domain.UserRecord(user_id="42", root=root()).to_dict()
+        data["equipped_artifact"] = {
+            "tier": "凡品",
+            "grade": "下品",
+            "category": domain.ARTIFACT_CATEGORY,
+            "name": "",
+            "description": "锻骨素纹沧澜初成珠出自月照泉。相传炼体守炉弟子拾得水系灵胚。",
+            "compatible": True,
+        }
+        data["rewards"] = [
+            {
+                "tier": "天阶",
+                "grade": "极品",
+                "category": domain.ARTIFACT_CATEGORY,
+                "name": "太虚斩星剑",
+                "description": "太虚斩星剑灵光内敛，装备后可计入战力。",
+            }
+        ]
+
+        cleaned = domain.sanitize_user_record_data(data)
+
+        self.assertEqual(cleaned["equipped_artifact"]["name"], "锻骨素纹沧澜初成珠")
+        self.assertIs(cleaned["equipped_artifact"]["compatible"], True)
+        self.assertEqual(cleaned["rewards"][0]["name"], "太虚斩星剑")
+
     def test_true_immortal_quality_inherits_fake_immortal_mark(self) -> None:
         fake_index = domain.fake_immortal_realm_index()
         true_index = domain.true_immortal_realm_index()

@@ -262,6 +262,7 @@ class AdminManager:
         saved = dict(data)
         saved["user_id"] = str(user_id)
         domain.UserRecord.from_dict(saved)
+        domain.sanitize_user_record_data(saved)
         users = self.store._read_json(self.store.user_file_path)
         users[str(user_id)] = saved
         self.store._write_json(self.store.user_file_path, users)
@@ -785,6 +786,17 @@ def _normalize_base_path(base_path: str) -> str:
     return "/" + str(base_path or "xiuxian-admin").strip("/")
 
 
+def normalize_admin_request_path(request_path: str, normalized_base_path: str) -> str:
+    if request_path.startswith(("/assets/", "/api/")):
+        return normalized_base_path + request_path
+    return request_path
+
+
+def scoped_admin_index_html(index_bytes: bytes, base_path: str) -> str:
+    asset_prefix = _normalize_base_path(base_path) + "/assets/"
+    return index_bytes.decode("utf-8").replace("./assets/", asset_prefix)
+
+
 def start_admin_server(
     manager: AdminManager,
     host: str = "0.0.0.0",
@@ -827,6 +839,7 @@ def start_admin_server(
                 if request_path == "/":
                     self._send_redirect(normalized_base_path)
                     return
+                request_path = normalize_admin_request_path(request_path, normalized_base_path)
                 if request_path == normalized_base_path:
                     self._send_page(query)
                     return
@@ -927,7 +940,10 @@ def start_admin_server(
             if not ADMIN_WEB_INDEX.exists():
                 self._send_html(ADMIN_WEB_MISSING_HTML, 503)
                 return
-            body = ADMIN_WEB_INDEX.read_bytes()
+            body = scoped_admin_index_html(
+                ADMIN_WEB_INDEX.read_bytes(),
+                normalized_base_path,
+            ).encode("utf-8")
             self.send_response(200)
             self._send_common_headers("text/html")
             self.send_header("Content-Length", str(len(body)))
