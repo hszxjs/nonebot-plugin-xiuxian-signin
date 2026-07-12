@@ -1,94 +1,253 @@
-import { useCallback, useState } from "react";
-import { App as AntApp, ConfigProvider, Empty } from "antd";
-import zhCN from "antd/locale/zh_CN";
-import { AppShell, type DirtyPageMap, type PageKey } from "./components/layout/AppShell";
-import { initializeTokenFromUrl, setToken } from "./lib/api";
-import { ConfigPage } from "./pages/ConfigPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { BeastCardsPage } from "./pages/BeastCardsPage";
-import { ItemsPage } from "./pages/ItemsPage";
-import { PlayersPage } from "./pages/PlayersPage";
-import { RulesPage } from "./pages/RulesPage";
-import { confirmDiscard, type DirtyChangeHandler } from "./pages/pageShared";
+import { useState } from "react"
+import {
+  IconAdjustments,
+  IconBackpack,
+  IconCards,
+  IconChartBar,
+  IconDatabase,
+  IconMap,
+  IconShieldHalf,
+  IconUsers,
+} from "@tabler/icons-react"
+import { NavLink, Route, Routes } from "react-router-dom"
+import { toast } from "sonner"
 
-const pageTitles: Record<PageKey, string> = {
-  dashboard: "总览",
-  players: "玩家档案",
-  items: "物品图鉴",
-  beast: "御兽卡牌",
-  rules: "规则中心",
-  config: "系统配置",
-};
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+} from "@/components/ui/sidebar"
+import { BeastRealmWorkspace } from "@/features/beast/beast-workspace"
+import { ConfigWorkspace } from "@/features/config/config-workspace"
+import { DashboardWorkspace } from "@/features/dashboard/dashboard-workspace"
+import { EquipmentWorkspace } from "@/features/equipment/equipment-workspace"
+import { ItemsWorkspace } from "@/features/items/items-workspace"
+import { MysticWorkspace } from "@/features/mystic/mystic-workspace"
+import { PlayersWorkspace } from "@/features/players/players-workspace"
+import { EmptyPanel, ErrorPanel, LoadingPanel } from "@/features/shared/ui"
+import {
+  createBackup,
+  saveConfig,
+  savePlayer,
+  useBeastCards,
+  useConfig,
+  useDashboard,
+  useEquipmentRules,
+  useItems,
+  useMystic,
+  usePlayer,
+  usePlayers,
+} from "@/lib/api"
+import type { JsonRecord } from "@/lib/types"
 
-function CurrentPage({ onDirtyChange, page }: { onDirtyChange: DirtyChangeHandler; page: PageKey }) {
-  if (page === "dashboard") {
-    return <DashboardPage />;
-  }
-  if (page === "players") {
-    return <PlayersPage onDirtyChange={onDirtyChange} />;
-  }
-  if (page === "items") {
-    return <ItemsPage onDirtyChange={onDirtyChange} />;
-  }
-  if (page === "beast") {
-    return <BeastCardsPage onDirtyChange={onDirtyChange} />;
-  }
-  if (page === "rules") {
-    return <RulesPage onDirtyChange={onDirtyChange} />;
-  }
-  if (page === "config") {
-    return <ConfigPage onDirtyChange={onDirtyChange} />;
-  }
+const navItems = [
+  { to: "/", label: "运维控制台", icon: IconChartBar, end: true },
+  { to: "/players", label: "玩家", icon: IconUsers },
+  { to: "/items", label: "物品", icon: IconBackpack },
+  { to: "/equipment", label: "装备", icon: IconShieldHalf },
+  { to: "/mystic", label: "秘境", icon: IconMap },
+  { to: "/beast", label: "兽域", icon: IconCards },
+  { to: "/config", label: "配置", icon: IconAdjustments },
+]
 
-  return <Empty description={`${pageTitles[page]}暂无数据`} />;
-}
-
-export default function App() {
-  const [page, setPage] = useState<PageKey>("dashboard");
-  const [dirtyPages, setDirtyPages] = useState<DirtyPageMap>({});
-  const [token, setTokenState] = useState(initializeTokenFromUrl);
-
-  function updateToken(value: string) {
-    setTokenState(value);
-    setToken(value);
-  }
-
-  const updatePageDirty = useCallback((pageKey: PageKey, dirty: boolean) => {
-    setDirtyPages((current) => ({ ...current, [pageKey]: dirty }));
-  }, []);
-
-  function changePage(nextPage: PageKey) {
-    if (nextPage === page) {
-      return;
-    }
-    if (dirtyPages[page] && !confirmDiscard()) {
-      return;
-    }
-    setPage(nextPage);
-  }
-
+function AppSidebar() {
   return (
-    <ConfigProvider
-      locale={zhCN}
-      theme={{
-        token: {
-          borderRadius: 6,
-          colorPrimary: "#1677ff",
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif",
-        },
-        components: {
-          Card: { borderRadiusLG: 6 },
-          Layout: { bodyBg: "#f5f7fb", headerBg: "#ffffff", siderBg: "#ffffff" },
-          Menu: { itemBorderRadius: 6 },
-        },
-      }}
-    >
-      <AntApp>
-        <AppShell dirtyPages={dirtyPages} page={page} onPageChange={changePage} onTokenChange={updateToken} token={token}>
-          <CurrentPage onDirtyChange={(dirty) => updatePageDirty(page, dirty)} page={page} />
-        </AppShell>
-      </AntApp>
-    </ConfigProvider>
-  );
+    <Sidebar>
+      <SidebarHeader>修仙签到后台</SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Admin</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map((item) => (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.to} end={item.end}>
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  )
 }
+
+function DashboardPage() {
+  const { data, error, isLoading, mutate } = useDashboard()
+  if (isLoading) {
+    return <LoadingPanel />
+  }
+  if (error) {
+    return <ErrorPanel title="无法读取运维快照" error={error} />
+  }
+  if (!data) {
+    return <EmptyPanel title="暂无运维数据" description="等待后台生成 dashboard payload。" />
+  }
+  return (
+    <DashboardWorkspace
+      dashboard={data}
+      onBackup={() => {
+        createBackup()
+          .then((result) => {
+            toast.success(`备份已创建：${result.path}`)
+            return mutate()
+          })
+          .catch((backupError: unknown) => toast.error(String(backupError)))
+      }}
+    />
+  )
+}
+
+function PlayersPage() {
+  const [query, setQuery] = useState("")
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { data, error, isLoading } = usePlayers(query)
+  const activeSelectedId = selectedId ?? data?.players[0]?.user_id ?? null
+  const detail = usePlayer(activeSelectedId)
+
+  if (isLoading) {
+    return <LoadingPanel />
+  }
+  if (error) {
+    return <ErrorPanel title="无法读取玩家列表" error={error} />
+  }
+  return (
+    <PlayersWorkspace
+      players={data?.players ?? []}
+      selectedPlayer={detail.data}
+      query={query}
+      onQueryChange={setQuery}
+      onSelectPlayer={setSelectedId}
+      onSavePlayer={(record: JsonRecord) => {
+        if (!activeSelectedId) {
+          return
+        }
+        savePlayer(activeSelectedId, record)
+          .then(() => {
+            toast.success("玩家存档已保存")
+            return detail.mutate()
+          })
+          .catch((saveError: unknown) => toast.error(String(saveError)))
+      }}
+    />
+  )
+}
+
+function ItemsPage() {
+  const { data, error, isLoading } = useItems()
+  if (isLoading) {
+    return <LoadingPanel />
+  }
+  if (error) {
+    return <ErrorPanel title="无法读取物品图鉴" error={error} />
+  }
+  return data ? <ItemsWorkspace payload={data} /> : <EmptyPanel title="暂无物品数据" description="后台未返回物品图鉴。" />
+}
+
+function EquipmentPage() {
+  const { data, error, isLoading } = useEquipmentRules()
+  if (isLoading) {
+    return <LoadingPanel />
+  }
+  if (error) {
+    return <ErrorPanel title="无法读取装备规则" error={error} />
+  }
+  return data ? <EquipmentWorkspace payload={data} /> : <EmptyPanel title="暂无装备规则" description="后台未返回装备规则。" />
+}
+
+function MysticPage() {
+  const { data, error, isLoading } = useMystic()
+  if (isLoading) {
+    return <LoadingPanel />
+  }
+  if (error) {
+    return <ErrorPanel title="无法读取秘境规则" error={error} />
+  }
+  return data ? <MysticWorkspace payload={data} /> : <EmptyPanel title="暂无秘境规则" description="后台未返回秘境规则。" />
+}
+
+function BeastPage() {
+  const { data, error, isLoading } = useBeastCards()
+  if (isLoading) {
+    return <LoadingPanel />
+  }
+  if (error) {
+    return <ErrorPanel title="无法读取兽域卡池" error={error} />
+  }
+  return data ? <BeastRealmWorkspace payload={data} /> : <EmptyPanel title="暂无兽域卡池" description="后台未返回卡牌数据。" />
+}
+
+function ConfigPage() {
+  const { data, error, isLoading, mutate } = useConfig()
+  if (isLoading) {
+    return <LoadingPanel />
+  }
+  if (error) {
+    return <ErrorPanel title="无法读取配置" error={error} />
+  }
+  if (!data) {
+    return <EmptyPanel title="暂无配置" description="后台未返回 admin_config.json。" />
+  }
+  return (
+    <ConfigWorkspace
+      key={JSON.stringify(data.config)}
+      config={data.config}
+      onSave={(config) => {
+        saveConfig(config)
+          .then(() => {
+            toast.success("全局配置已保存")
+            return mutate()
+          })
+          .catch((saveError: unknown) => toast.error(String(saveError)))
+      }}
+    />
+  )
+}
+
+function NotFoundPage() {
+  return (
+    <Alert>
+      <IconDatabase />
+      <AlertTitle>页面不存在</AlertTitle>
+      <AlertDescription>请从左侧导航选择一个后台模块。</AlertDescription>
+    </Alert>
+  )
+}
+
+export function App() {
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <main className="p-4 md:p-6">
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/players" element={<PlayersPage />} />
+            <Route path="/items" element={<ItemsPage />} />
+            <Route path="/equipment" element={<EquipmentPage />} />
+            <Route path="/mystic" element={<MysticPage />} />
+            <Route path="/beast" element={<BeastPage />} />
+            <Route path="/config" element={<ConfigPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}
+
+export default App

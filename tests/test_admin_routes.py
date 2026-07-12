@@ -13,6 +13,9 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Iterator
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 
 PACKAGE_NAME = "nonebot_plugin_xiuxian_signin"
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -185,10 +188,10 @@ def _fake_starlette_modules() -> Iterator[None]:
 
 class FakeStarletteApp:
     def __init__(self) -> None:
-        self.routes: list[dict[str, Any]] = []
+        self.router = types.SimpleNamespace(routes=[])
 
     def add_route(self, path: str, endpoint: Any, methods: list[str]) -> None:
-        self.routes.append({"path": path, "endpoint": endpoint, "methods": methods})
+        self.router.routes.append(types.SimpleNamespace(path=path, endpoint=endpoint, methods=set(methods)))
 
 
 class FakeDriver:
@@ -216,89 +219,79 @@ def _json_body(body: bytes) -> dict[str, Any]:
 
 class AdminRouteTests(unittest.TestCase):
     def test_starlette_unknown_api_route_is_json_and_ordered_after_known_routes(self) -> None:
-        driver = FakeDriver()
+        driver = types.SimpleNamespace(server_app=FastAPI())
         manager = FakeManager()
 
-        with _fake_starlette_modules():
-            installed = admin.install_admin_routes(driver, manager)
+        installed = admin.install_admin_routes(driver, manager)
 
-            self.assertTrue(installed)
-            self.assertEqual(manager.apply_config_calls, 1)
+        self.assertTrue(installed)
+        self.assertEqual(manager.apply_config_calls, 1)
 
-            def route_index(path: str, method: str) -> int:
-                for index, route in enumerate(driver.server_app.routes):
-                    if route["path"] == path and method in route["methods"]:
-                        return index
-                self.fail(f"Missing route {method} {path}")
+        def route_index(path: str, method: str) -> int:
+            for index, route in enumerate(driver.server_app.router.routes):
+                if getattr(route, "path", "") == path and method in (getattr(route, "methods", set()) or set()):
+                    return index
+            self.fail(f"Missing route {method} {path}")
 
-            unknown_path = "/xiuxian-admin/api/{api_path:path}"
-            known_api_routes = (
-                ("GET", "/xiuxian-admin/api/dashboard"),
-                ("GET", "/xiuxian-admin/api/config"),
-                ("PUT", "/xiuxian-admin/api/config"),
-                ("GET", "/xiuxian-admin/api/players"),
-                ("GET", "/xiuxian-admin/api/players/{user_id}"),
-                ("PUT", "/xiuxian-admin/api/players/{user_id}"),
-                ("POST", "/xiuxian-admin/api/backup"),
-                ("GET", "/xiuxian-admin/api/items"),
-                ("GET", "/xiuxian-admin/api/beast-realm/cards"),
-                ("GET", "/xiuxian-admin/api/mystic"),
-                ("GET", "/xiuxian-admin/api/equipment-rules"),
-            )
-            for method, known_api_path in known_api_routes:
-                self.assertLess(route_index(known_api_path, method), route_index(unknown_path, method))
+        unknown_path = "/xiuxian-admin/api/{api_path:path}"
+        known_api_routes = (
+            ("GET", "/xiuxian-admin/api/dashboard"),
+            ("GET", "/xiuxian-admin/api/config"),
+            ("PUT", "/xiuxian-admin/api/config"),
+            ("GET", "/xiuxian-admin/api/players"),
+            ("GET", "/xiuxian-admin/api/players/{user_id}"),
+            ("PUT", "/xiuxian-admin/api/players/{user_id}"),
+            ("POST", "/xiuxian-admin/api/backup"),
+            ("GET", "/xiuxian-admin/api/items"),
+            ("GET", "/xiuxian-admin/api/beast-realm/cards"),
+            ("GET", "/xiuxian-admin/api/mystic"),
+            ("GET", "/xiuxian-admin/api/equipment-rules"),
+        )
+        for method, known_api_path in known_api_routes:
+            self.assertLess(route_index(known_api_path, method), route_index(unknown_path, method))
 
-            public_asset_path = "/xiuxian-admin/assets/{asset_path:path}"
-            runtime_asset_paths = (
-                "/xiuxian-admin/assets/item-icons/{icon_path:path}",
-                "/xiuxian-admin/assets/character-portraits/{portrait_name}",
-                "/xiuxian-admin/assets/beast-spell-icons/{icon_name}",
-            )
-            for runtime_asset_path in runtime_asset_paths:
-                self.assertLess(route_index(runtime_asset_path, "GET"), route_index(public_asset_path, "GET"))
-            self.assertLess(route_index(public_asset_path, "GET"), route_index(unknown_path, "GET"))
-            self.assertLess(route_index(unknown_path, "GET"), route_index("/xiuxian-admin/{asset_path:path}", "GET"))
+        public_asset_path = "/xiuxian-admin/assets/{asset_path:path}"
+        runtime_asset_paths = (
+            "/xiuxian-admin/assets/item-icons/{icon_path:path}",
+            "/xiuxian-admin/assets/character-portraits/{portrait_name}",
+            "/xiuxian-admin/assets/beast-spell-icons/{icon_name}",
+        )
+        for runtime_asset_path in runtime_asset_paths:
+            self.assertLess(route_index(runtime_asset_path, "GET"), route_index(public_asset_path, "GET"))
+        self.assertLess(route_index(public_asset_path, "GET"), route_index("/xiuxian-admin/{asset_path:path}", "GET"))
 
-            unknown_route = driver.server_app.routes[route_index(unknown_path, "GET")]
-            self.assertEqual(set(unknown_route["methods"]), {"GET", "POST", "PUT"})
+        unknown_route = driver.server_app.router.routes[route_index(unknown_path, "GET")]
+        self.assertEqual(set(unknown_route.methods), {"GET", "POST", "PUT"})
 
-            unauthorized = asyncio.run(unknown_route["endpoint"](FakeRequest()))
-            self.assertEqual(unauthorized.status_code, 401)
-            self.assertEqual(unauthorized.data["error"], "unauthorized")
+        client = TestClient(admin.create_admin_app(manager=manager))
+        unauthorized = client.get("/xiuxian-admin/api/missing")
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(unauthorized.json()["error"], "unauthorized")
 
-            authorized = asyncio.run(unknown_route["endpoint"](FakeRequest(token="secret")))
-            self.assertEqual(authorized.status_code, 404)
-            self.assertEqual(authorized.data["error"], "not found")
+        authorized = client.get("/xiuxian-admin/api/missing", headers={"X-Xiuxian-Token": "secret"})
+        self.assertEqual(authorized.status_code, 404)
+        self.assertEqual(authorized.json()["error"], "not found")
 
-            dashboard_route = driver.server_app.routes[route_index("/xiuxian-admin/api/dashboard", "GET")]
-            dashboard = asyncio.run(dashboard_route["endpoint"](FakeRequest(token="secret")))
-            self.assertEqual(dashboard.status_code, 200)
-            self.assertEqual(dashboard.data["source"], "dashboard")
+        dashboard = client.get("/xiuxian-admin/api/dashboard", headers={"X-Xiuxian-Token": "secret"})
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard.json()["source"], "dashboard")
 
-            player_get_route = driver.server_app.routes[route_index("/xiuxian-admin/api/players/{user_id}", "GET")]
-            player_get = asyncio.run(
-                player_get_route["endpoint"](FakeRequest(token="secret", path_params={"user_id": "42"}))
-            )
-            self.assertEqual(player_get.status_code, 200)
-            self.assertEqual(player_get.data["record"]["user_id"], "42")
-            self.assertEqual(player_get.data["meta"]["realms"][0]["name"], "炼气境")
-            self.assertIn("金", player_get.data["meta"]["attributes"])
-            self.assertIn("普通筑基", player_get.data["meta"]["foundation_quality_titles"])
+        player_get = client.get("/xiuxian-admin/api/players/42", headers={"X-Xiuxian-Token": "secret"})
+        self.assertEqual(player_get.status_code, 200)
+        self.assertEqual(player_get.json()["record"]["user_id"], "42")
+        self.assertEqual(player_get.json()["meta"]["realms"][0]["name"], "炼气境")
+        self.assertIn("金", player_get.json()["meta"]["attributes"])
+        self.assertIn("普通筑基", player_get.json()["meta"]["foundation_quality_titles"])
 
-            player_put_route = driver.server_app.routes[route_index("/xiuxian-admin/api/players/{user_id}", "PUT")]
-            player_put = asyncio.run(
-                player_put_route["endpoint"](
-                    FakeRequest(
-                        token="secret",
-                        path_params={"user_id": "42"},
-                        json_data={"realm_index": 1, "root": {"attribute": "木"}},
-                    )
-                )
-            )
-            self.assertEqual(player_put.status_code, 200)
-            self.assertEqual(player_put.data["record"]["user_id"], "42")
-            self.assertEqual(player_put.data["record"]["realm_index"], 1)
-            self.assertIn("cultivation_routes", player_put.data["meta"])
+        player_put = client.put(
+            "/xiuxian-admin/api/players/42",
+            headers={"X-Xiuxian-Token": "secret"},
+            json={"realm_index": 1, "root": {"attribute": "木"}},
+        )
+        self.assertEqual(player_put.status_code, 200)
+        self.assertEqual(player_put.json()["record"]["user_id"], "42")
+        self.assertEqual(player_put.json()["record"]["realm_index"], 1)
+        self.assertIn("cultivation_routes", player_put.json()["meta"])
 
     def test_admin_manager_save_player_record_preserves_structured_editor_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -389,75 +382,52 @@ class AdminRouteTests(unittest.TestCase):
             admin.ADMIN_WEB_ROOT = root
             admin.ADMIN_WEB_INDEX = root / "index.html"
 
-            handle = admin.start_admin_server(manager, host="127.0.0.1", port=0)
-            try:
-                port = handle.port
-                for method in ("GET", "POST", "PUT"):
-                    status, content_type, body = _http_request(port, "/xiuxian-admin/api/missing", method=method)
-                    self.assertEqual(status, 401)
-                    self.assertIn("application/json", content_type)
-                    self.assertEqual(_json_body(body)["error"], "unauthorized")
+            client = TestClient(admin.create_admin_app(manager=manager, static_root=root))
+            for method in ("get", "post", "put"):
+                response = getattr(client, method)("/xiuxian-admin/api/missing")
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.json()["error"], "unauthorized")
 
-                    status, content_type, body = _http_request(
-                        port,
-                        "/xiuxian-admin/api/missing",
-                        method=method,
-                        token="secret",
-                    )
-                    self.assertEqual(status, 404)
-                    self.assertIn("application/json", content_type)
-                    self.assertEqual(_json_body(body)["error"], "not found")
-
-                status, content_type, body = _http_request(
-                    port,
-                    "/xiuxian-admin/api/dashboard",
-                    token="secret",
+                response = getattr(client, method)(
+                    "/xiuxian-admin/api/missing",
+                    headers={"X-Xiuxian-Token": "secret"},
                 )
-                self.assertEqual(status, 200)
-                self.assertIn("application/json", content_type)
-                self.assertEqual(_json_body(body)["source"], "dashboard")
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.json()["error"], "not found")
 
-                status, content_type, body = _http_request(
-                    port,
-                    "/xiuxian-admin/api/players/42",
-                    token="secret",
-                )
-                self.assertEqual(status, 200)
-                self.assertIn("application/json", content_type)
-                player_detail = _json_body(body)
-                self.assertEqual(player_detail["record"]["user_id"], "42")
-                self.assertIn("realms", player_detail["meta"])
+            dashboard = client.get("/xiuxian-admin/api/dashboard", headers={"X-Xiuxian-Token": "secret"})
+            self.assertEqual(dashboard.status_code, 200)
+            self.assertEqual(dashboard.json()["source"], "dashboard")
 
-                request = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/xiuxian-admin/api/players/42",
-                    data=json.dumps({"realm_index": 1, "custom_note": "fallback"}, ensure_ascii=False).encode("utf-8"),
-                    method="PUT",
-                )
-                request.add_header("X-Xiuxian-Token", "secret")
-                request.add_header("Content-Type", "application/json")
-                with urllib.request.urlopen(request, timeout=5) as response:
-                    self.assertEqual(response.status, 200)
-                    player_saved = _json_body(response.read())
-                self.assertEqual(player_saved["record"]["custom_note"], "fallback")
-                self.assertIn("cultivation_routes", player_saved["meta"])
+            player_detail = client.get("/xiuxian-admin/api/players/42", headers={"X-Xiuxian-Token": "secret"})
+            self.assertEqual(player_detail.status_code, 200)
+            self.assertEqual(player_detail.json()["record"]["user_id"], "42")
+            self.assertIn("realms", player_detail.json()["meta"])
 
-                status, _, body = _http_request(port, "/xiuxian-admin/assets/app.js")
-                self.assertEqual(status, 200)
-                self.assertIn(b"console.log", body)
+            player_saved = client.put(
+                "/xiuxian-admin/api/players/42",
+                headers={"X-Xiuxian-Token": "secret"},
+                json={"realm_index": 1, "custom_note": "fallback"},
+            )
+            self.assertEqual(player_saved.status_code, 200)
+            self.assertEqual(player_saved.json()["record"]["custom_note"], "fallback")
+            self.assertIn("cultivation_routes", player_saved.json()["meta"])
 
-                for asset_path in (
-                    "/xiuxian-admin/assets/item-icons/items/item_001.png",
-                    "/xiuxian-admin/assets/character-portraits/beast_001.png",
-                    "/xiuxian-admin/assets/beast-spell-icons/br_spell_001.png",
-                ):
-                    status, content_type, body = _http_request(port, asset_path)
-                    self.assertEqual(status, 401)
-                    self.assertIn("application/json", content_type)
-                    self.assertEqual(_json_body(body)["error"], "unauthorized")
-            finally:
-                handle.stop()
-                admin.ADMIN_WEB_ROOT = old_root
-                admin.ADMIN_WEB_INDEX = old_index
+            asset = client.get("/xiuxian-admin/assets/app.js")
+            self.assertEqual(asset.status_code, 200)
+            self.assertIn(b"console.log", asset.content)
+
+            for asset_path in (
+                "/xiuxian-admin/assets/item-icons/items/item_001.png",
+                "/xiuxian-admin/assets/character-portraits/beast_001.png",
+                "/xiuxian-admin/assets/beast-spell-icons/br_spell_001.png",
+            ):
+                response = client.get(asset_path)
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.json()["error"], "unauthorized")
+
+            admin.ADMIN_WEB_ROOT = old_root
+            admin.ADMIN_WEB_INDEX = old_index
 
 
 if __name__ == "__main__":

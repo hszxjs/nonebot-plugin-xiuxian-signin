@@ -1,112 +1,136 @@
-export type ApiOptions = RequestInit & { rawBody?: string };
+import ky from "ky"
+import useSWR from "swr"
 
-const TOKEN_KEY = "xiuxianAdminToken";
+import type {
+  BackupPayload,
+  BeastCardsPayload,
+  ConfigPayload,
+  DashboardPayload,
+  EquipmentPayload,
+  ItemsPayload,
+  MysticPayload,
+  PlayerDetailPayload,
+  PlayerListPayload,
+} from "@/lib/types"
 
-function adminBasePath() {
+const tokenStorageKey = "xiuxian-admin-token"
+const appRoutes = ["/players", "/items", "/equipment", "/mystic", "/beast", "/config"]
+
+export function adminBasePath() {
   if (typeof window === "undefined") {
-    return "";
+    return ""
   }
-  const pathname = window.location.pathname.replace(/\/$/, "");
-  if (!pathname || pathname === "/") {
-    return "";
+  const path = window.location.pathname.replace(/\/+$/, "")
+  const matchedRoute = appRoutes.find((route) => path === route || path.endsWith(route))
+  if (matchedRoute) {
+    const base = path.slice(0, -matchedRoute.length)
+    return base || ""
   }
-  const assetIndex = pathname.indexOf("/assets/");
-  return assetIndex >= 0 ? pathname.slice(0, assetIndex) : pathname;
+  return path === "/" ? "" : path
 }
 
-function apiUrl(path: string) {
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${adminBasePath()}${normalizedPath}`;
-}
-
-function storage(): Storage | null {
+export function getAdminToken() {
   if (typeof window === "undefined") {
-    return null;
+    return ""
   }
-  try {
-    return window.localStorage;
-  } catch (error) {
-    if (error instanceof DOMException) {
-      return null;
-    }
-    return null;
+  if (typeof window.localStorage?.getItem !== "function") {
+    return ""
   }
+  return window.localStorage.getItem(tokenStorageKey) || ""
 }
 
-export function getToken() {
-  return storage()?.getItem(TOKEN_KEY) ?? "";
+export function setAdminToken(token: string) {
+  if (typeof window.localStorage?.setItem !== "function") {
+    return
+  }
+  window.localStorage.setItem(tokenStorageKey, token)
 }
 
-export function setToken(token: string) {
-  const nextToken = token.trim();
-  const localStorage = storage();
-  if (!localStorage) {
-    return;
-  }
-  if (nextToken) {
-    localStorage.setItem(TOKEN_KEY, nextToken);
-    return;
-  }
-  localStorage.removeItem(TOKEN_KEY);
-}
-
-export function initializeTokenFromUrl() {
+export function bootstrapAdminToken() {
   if (typeof window === "undefined") {
-    return "";
+    return
   }
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get("token");
+  const token = new URLSearchParams(window.location.search).get("token")
   if (token) {
-    setToken(token);
-    return token.trim();
-  }
-  return getToken();
-}
-
-export class ApiError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
+    setAdminToken(token)
   }
 }
 
-export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { rawBody, ...fetchOptions } = options;
-  const headers = new Headers(fetchOptions.headers);
-  const body = rawBody ?? fetchOptions.body;
-  if (!headers.has("Content-Type") && body !== undefined) {
-    headers.set("Content-Type", "application/json");
-  }
+function apiPrefix() {
+  const base = adminBasePath()
+  return `${base}/api`.replace(/\/{2,}/g, "/")
+}
 
-  const token = getToken();
-  if (token) {
-    headers.set("X-Xiuxian-Token", token);
+export function assetUrl(path: string) {
+  const base = adminBasePath()
+  const normalized = `${base}${path.startsWith("/") ? path : `/${path}`}`.replace(/\/{2,}/g, "/")
+  const token = getAdminToken()
+  if (!token) {
+    return normalized
   }
+  const separator = normalized.includes("?") ? "&" : "?"
+  return `${normalized}${separator}token=${encodeURIComponent(token)}`
+}
 
-  const response = await fetch(apiUrl(path), { ...fetchOptions, body, headers });
-  const text = await response.text();
-  let data: unknown = {};
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        throw new ApiError(response.status, "接口返回了无法解析的数据");
-      }
-      throw error;
-    }
-  }
+export const api = ky.create({
+  prefix: apiPrefix(),
+  timeout: 30_000,
+  hooks: {
+    beforeRequest: [
+      ({ request }) => {
+        const token = getAdminToken()
+        if (token) {
+          request.headers.set("X-Xiuxian-Token", token)
+        }
+      },
+    ],
+  },
+})
 
-  if (!response.ok) {
-    const message = typeof data === "object" && data && "error" in data ? String(data.error) : response.statusText;
-    throw new ApiError(response.status, message);
-  }
+const fetchJson = <T>(path: string) => api.get(path).json<T>()
 
-  return data as T;
+export function useDashboard() {
+  return useSWR<DashboardPayload>("dashboard", fetchJson, { refreshInterval: 10_000 })
+}
+
+export function usePlayers(query: string) {
+  const search = query.trim()
+  const key = search ? `players?q=${encodeURIComponent(search)}` : "players"
+  return useSWR<PlayerListPayload>(key, fetchJson)
+}
+
+export function usePlayer(userId: string | null) {
+  return useSWR<PlayerDetailPayload>(userId ? `players/${encodeURIComponent(userId)}` : null, fetchJson)
+}
+
+export function useItems() {
+  return useSWR<ItemsPayload>("items", fetchJson)
+}
+
+export function useBeastCards() {
+  return useSWR<BeastCardsPayload>("beast-realm/cards", fetchJson)
+}
+
+export function useMystic() {
+  return useSWR<MysticPayload>("mystic", fetchJson)
+}
+
+export function useEquipmentRules() {
+  return useSWR<EquipmentPayload>("equipment-rules", fetchJson)
+}
+
+export function useConfig() {
+  return useSWR<ConfigPayload>("config", fetchJson)
+}
+
+export function saveConfig(config: ConfigPayload["config"]) {
+  return api.put("config", { json: config }).json<ConfigPayload>()
+}
+
+export function savePlayer(userId: string, record: PlayerDetailPayload["record"]) {
+  return api.put(`players/${encodeURIComponent(userId)}`, { json: record }).json<PlayerDetailPayload>()
+}
+
+export function createBackup() {
+  return api.post("backup").json<BackupPayload>()
 }
