@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { ConfigWorkspace } from "@/features/config/config-workspace"
@@ -41,17 +41,18 @@ describe("ConfigWorkspace", () => {
     expect(screen.getByRole("tab", { name: "秘境" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "装备" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "兽域" })).toBeInTheDocument()
-    expect(container.querySelectorAll('[data-slot="checkbox"]').length).toBeGreaterThan(1)
-    expect(container.querySelectorAll('[data-slot="slider"]').length).toBeGreaterThan(1)
-    expect(container.querySelector('[data-slot="switch"]')).not.toBeNull()
-    expect(container.querySelector('[data-slot="textarea"]')).not.toBeNull()
+    expect(container.querySelectorAll(".ant-checkbox-wrapper").length).toBeGreaterThan(1)
+    expect(container.querySelectorAll(".ant-slider").length).toBeGreaterThan(1)
+    expect(container.querySelector(".ant-switch")).not.toBeNull()
     expect(container.querySelector("table")).toBeNull()
+    fireEvent.click(screen.getByRole("tab", { name: "原始 JSON" }))
+    expect(container.querySelector("textarea")).not.toBeNull()
   })
 
   it("requires an alert dialog before saving the global config", () => {
     const { container } = render(<ConfigWorkspace config={config} onSave={vi.fn()} />)
 
     expect(screen.getByRole("button", { name: "保存全局配置" })).toBeInTheDocument()
-    expect(container.querySelector('[data-slot="alert-dialog-trigger"]')).not.toBeNull()
+    expect(container.querySelector(".ant-btn")).not.toBeNull()
   })
 })

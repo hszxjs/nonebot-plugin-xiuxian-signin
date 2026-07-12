@@ -64,8 +64,8 @@ describe("catalog workspaces", () => {
     expect(screen.getByPlaceholderText("搜索物品或来源")).toBeInTheDocument()
     expect(screen.getByText("聚气丹")).toBeInTheDocument()
     expect(container.querySelector("table")).toBeNull()
-    expect(container.querySelector('[data-slot="item-group"]')).not.toBeNull()
-    expect(container.querySelector('[data-slot="select-trigger"]')).not.toBeNull()
+    expect(container.querySelector(".ant-list")).not.toBeNull()
+    expect(container.querySelector(".ant-select")).not.toBeNull()
   })
 
   it("renders beast cards with domain cards and an advanced rules layer", () => {
@@ -76,6 +76,6 @@ describe("catalog workspaces", () => {
     expect(screen.getByText("造成一次雷击。")).toBeInTheDocument()
     expect(screen.getByText("高级规则 JSON")).toBeInTheDocument()
     expect(container.querySelector("table")).toBeNull()
-    expect(container.querySelector('[data-slot="item-group"]')).not.toBeNull()
+    expect(container.querySelector(".ant-list")).not.toBeNull()
   })
 })

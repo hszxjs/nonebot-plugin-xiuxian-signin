@@ -1,29 +1,8 @@
 import type { ReactNode } from "react"
-import { IconAlertTriangle, IconSearch } from "@tabler/icons-react"
+import { ExclamationCircleOutlined, SearchOutlined } from "@ant-design/icons"
+import { Alert, Button, Card, Empty, Input, Modal, Skeleton, Space, Statistic, Tag, Typography } from "antd"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldTitle } from "@/components/ui/field"
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Slider } from "@/components/ui/slider"
-import { Textarea } from "@/components/ui/textarea"
-import { formatJson, formatPercent, rateToSliderValue } from "@/lib/format"
+import { formatJson } from "@/lib/format"
 
 export function PageHeader({
   title,
@@ -35,47 +14,31 @@ export function PageHeader({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <div className="flex flex-col gap-1">
-        <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
+    <div className="page-header">
+      <div>
+        <Typography.Title level={2}>{title}</Typography.Title>
+        {description ? <Typography.Paragraph type="secondary">{description}</Typography.Paragraph> : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {actions ? <Space wrap>{actions}</Space> : null}
     </div>
   )
 }
 
 export function LoadingPanel({ label = "正在读取后台数据" }: { label?: string }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <Skeleton className="h-32" />
-      <Skeleton className="h-32" />
-      <Skeleton className="h-32" />
-      <Skeleton className="h-80 lg:col-span-3" />
-      <span className="sr-only">{label}</span>
-    </div>
+    <Space orientation="vertical" size="large" className="full-width" aria-label={label}>
+      <Skeleton active paragraph={{ rows: 3 }} />
+      <Skeleton active paragraph={{ rows: 8 }} />
+    </Space>
   )
 }
 
 export function ErrorPanel({ title, error }: { title: string; error: unknown }) {
-  return (
-    <Alert variant="destructive">
-      <AlertTitle>{title}</AlertTitle>
-      <AlertDescription>{String(error)}</AlertDescription>
-    </Alert>
-  )
+  return <Alert type="error" showIcon message={title} description={String(error)} />
 }
 
 export function EmptyPanel({ title, description }: { title: string; description: string }) {
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyTitle>{title}</EmptyTitle>
-        <EmptyDescription>{description}</EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent />
-    </Empty>
-  )
+  return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span>{title}：{description}</span>} />
 }
 
 export function MetricCard({
@@ -88,16 +51,9 @@ export function MetricCard({
   description?: string
 }) {
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle>{value}</CardTitle>
-      </CardHeader>
-      {description ? (
-        <CardContent>
-          <CardDescription>{description}</CardDescription>
-        </CardContent>
-      ) : null}
+    <Card size="small">
+      <Statistic title={label} value={String(value)} />
+      {description ? <Typography.Text type="secondary">{description}</Typography.Text> : null}
     </Card>
   )
 }
@@ -112,28 +68,27 @@ export function SearchField({
   placeholder: string
 }) {
   return (
-    <InputGroup>
-      <InputGroupAddon>
-        <IconSearch />
-      </InputGroupAddon>
-      <InputGroupInput value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
-    </InputGroup>
+    <Input
+      allowClear
+      prefix={<SearchOutlined />}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+    />
   )
 }
 
-export function BadgeList({ values, empty = "未设置" }: { values?: string[]; empty?: string }) {
+export function TagList({ values, empty = "未设置" }: { values?: string[]; empty?: string }) {
   const filtered = (values ?? []).filter(Boolean)
   if (!filtered.length) {
-    return <Badge variant="outline">{empty}</Badge>
+    return <Tag>{empty}</Tag>
   }
   return (
-    <div className="flex flex-wrap gap-1">
+    <Space size={[4, 4]} wrap>
       {filtered.map((value) => (
-        <Badge key={value} variant="secondary">
-          {value}
-        </Badge>
+        <Tag key={value}>{value}</Tag>
       ))}
-    </div>
+    </Space>
   )
 }
 
@@ -142,52 +97,23 @@ export function JsonTextarea({
   value,
   onChange,
   readOnly = false,
+  rows = 10,
 }: {
   label: string
   value: unknown
   onChange?: (value: string) => void
   readOnly?: boolean
+  rows?: number
 }) {
   return (
-    <FieldGroup>
-      <Field>
-        <FieldContent>
-          <FieldTitle>{label}</FieldTitle>
-          <FieldDescription>用于查看或编辑暂未结构化拆分的完整 JSON。</FieldDescription>
-        </FieldContent>
-        <Textarea
-          value={typeof value === "string" ? value : formatJson(value)}
-          onChange={(event) => onChange?.(event.target.value)}
-          readOnly={readOnly}
-          rows={10}
-        />
-      </Field>
-    </FieldGroup>
-  )
-}
-
-export function RateField({
-  title,
-  description,
-  value,
-  onChange,
-}: {
-  title: string
-  description: string
-  value: number
-  onChange: (value: number[]) => void
-}) {
-  return (
-    <Field orientation="responsive">
-      <FieldContent>
-        <FieldTitle>{title}</FieldTitle>
-        <FieldDescription>{description}</FieldDescription>
-      </FieldContent>
-      <div className="flex min-w-56 items-center gap-3">
-        <Slider value={rateToSliderValue(value)} max={100} step={1} onValueChange={onChange} />
-        <Badge variant="outline">{formatPercent(value)}</Badge>
-      </div>
-    </Field>
+    <Card title={label} size="small">
+      <Input.TextArea
+        value={typeof value === "string" ? value : formatJson(value)}
+        onChange={(event) => onChange?.(event.target.value)}
+        readOnly={readOnly}
+        rows={rows}
+      />
+    </Card>
   )
 }
 
@@ -197,33 +123,31 @@ export function ConfirmAction({
   description,
   actionLabel,
   onConfirm,
-  variant = "default",
+  danger = false,
 }: {
   triggerLabel: string
   title: string
   description: string
   actionLabel: string
   onConfirm: () => void
-  variant?: "default" | "destructive" | "outline"
+  danger?: boolean
 }) {
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant={variant}>{triggerLabel}</Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogMedia>
-            <IconAlertTriangle />
-          </AlertDialogMedia>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>{actionLabel}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Button
+      type={danger ? "primary" : "default"}
+      danger={danger}
+      onClick={() =>
+        Modal.confirm({
+          title,
+          icon: <ExclamationCircleOutlined />,
+          content: description,
+          okText: actionLabel,
+          cancelText: "取消",
+          onOk: onConfirm,
+        })
+      }
+    >
+      {triggerLabel}
+    </Button>
   )
 }

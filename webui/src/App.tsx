@@ -1,31 +1,24 @@
 import { useState } from "react"
 import {
-  IconAdjustments,
-  IconBackpack,
-  IconCards,
-  IconChartBar,
-  IconDatabase,
-  IconMap,
-  IconShieldHalf,
-  IconUsers,
-} from "@tabler/icons-react"
-import { NavLink, Route, Routes } from "react-router-dom"
-import { toast } from "sonner"
-
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+  App as AntdApp,
+  ConfigProvider,
+  Layout,
+  Menu,
+  Result,
+  theme,
+} from "antd"
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
+  AppstoreOutlined,
+  BarChartOutlined,
+  ControlOutlined,
+  DatabaseOutlined,
+  GoldOutlined,
+  SettingOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons"
+import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
+
 import { BeastRealmWorkspace } from "@/features/beast/beast-workspace"
 import { ConfigWorkspace } from "@/features/config/config-workspace"
 import { DashboardWorkspace } from "@/features/dashboard/dashboard-workspace"
@@ -50,43 +43,22 @@ import {
 import type { JsonRecord } from "@/lib/types"
 
 const navItems = [
-  { to: "/", label: "运维控制台", icon: IconChartBar, end: true },
-  { to: "/players", label: "玩家", icon: IconUsers },
-  { to: "/items", label: "物品", icon: IconBackpack },
-  { to: "/equipment", label: "装备", icon: IconShieldHalf },
-  { to: "/mystic", label: "秘境", icon: IconMap },
-  { to: "/beast", label: "兽域", icon: IconCards },
-  { to: "/config", label: "配置", icon: IconAdjustments },
+  { key: "/", label: "运维控制台", icon: <BarChartOutlined /> },
+  { key: "/players", label: "玩家", icon: <TeamOutlined /> },
+  { key: "/items", label: "物品", icon: <AppstoreOutlined /> },
+  { key: "/equipment", label: "装备", icon: <GoldOutlined /> },
+  { key: "/mystic", label: "秘境", icon: <ThunderboltOutlined /> },
+  { key: "/beast", label: "兽域", icon: <DatabaseOutlined /> },
+  { key: "/config", label: "配置", icon: <ControlOutlined /> },
 ]
 
-function AppSidebar() {
-  return (
-    <Sidebar>
-      <SidebarHeader>修仙签到后台</SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Admin</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.to} end={item.end}>
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
-  )
+function selectedMenuKey(pathname: string) {
+  const match = navItems.find((item) => item.key !== "/" && pathname.startsWith(item.key))
+  return match?.key ?? "/"
 }
 
 function DashboardPage() {
+  const { message } = AntdApp.useApp()
   const { data, error, isLoading, mutate } = useDashboard()
   if (isLoading) {
     return <LoadingPanel />
@@ -103,16 +75,17 @@ function DashboardPage() {
       onBackup={() => {
         createBackup()
           .then((result) => {
-            toast.success(`备份已创建：${result.path}`)
+            message.success(`备份已创建：${result.path}`)
             return mutate()
           })
-          .catch((backupError: unknown) => toast.error(String(backupError)))
+          .catch((backupError: unknown) => message.error(String(backupError)))
       }}
     />
   )
 }
 
 function PlayersPage() {
+  const { message } = AntdApp.useApp()
   const [query, setQuery] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const { data, error, isLoading } = usePlayers(query)
@@ -138,10 +111,10 @@ function PlayersPage() {
         }
         savePlayer(activeSelectedId, record)
           .then(() => {
-            toast.success("玩家存档已保存")
+            message.success("玩家存档已保存")
             return detail.mutate()
           })
-          .catch((saveError: unknown) => toast.error(String(saveError)))
+          .catch((saveError: unknown) => message.error(String(saveError)))
       }}
     />
   )
@@ -192,6 +165,7 @@ function BeastPage() {
 }
 
 function ConfigPage() {
+  const { message } = AntdApp.useApp()
   const { data, error, isLoading, mutate } = useConfig()
   if (isLoading) {
     return <LoadingPanel />
@@ -209,31 +183,40 @@ function ConfigPage() {
       onSave={(config) => {
         saveConfig(config)
           .then(() => {
-            toast.success("全局配置已保存")
+            message.success("全局配置已保存")
             return mutate()
           })
-          .catch((saveError: unknown) => toast.error(String(saveError)))
+          .catch((saveError: unknown) => message.error(String(saveError)))
       }}
     />
   )
 }
 
 function NotFoundPage() {
-  return (
-    <Alert>
-      <IconDatabase />
-      <AlertTitle>页面不存在</AlertTitle>
-      <AlertDescription>请从左侧导航选择一个后台模块。</AlertDescription>
-    </Alert>
-  )
+  return <Result status="404" title="页面不存在" subTitle="请从左侧导航选择一个后台模块。" />
 }
 
-export function App() {
+function AdminShell() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <main className="p-4 md:p-6">
+    <Layout className="admin-layout">
+      <Layout.Sider width={240} breakpoint="lg" collapsedWidth={0}>
+        <div className="admin-logo">
+          <SettingOutlined />
+          <span>修仙签到后台</span>
+        </div>
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[selectedMenuKey(location.pathname)]}
+          items={navItems}
+          onClick={(event) => navigate(event.key)}
+        />
+      </Layout.Sider>
+      <Layout>
+        <Layout.Content className="admin-content">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/players" element={<PlayersPage />} />
@@ -244,9 +227,27 @@ export function App() {
             <Route path="/config" element={<ConfigPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+        </Layout.Content>
+      </Layout>
+    </Layout>
+  )
+}
+
+export function App() {
+  return (
+    <ConfigProvider
+      theme={{
+        algorithm: theme.defaultAlgorithm,
+        token: {
+          borderRadius: 6,
+          colorPrimary: "#1f6f68",
+        },
+      }}
+    >
+      <AntdApp>
+        <AdminShell />
+      </AntdApp>
+    </ConfigProvider>
   )
 }
 

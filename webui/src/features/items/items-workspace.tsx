@@ -1,27 +1,9 @@
 import { useMemo, useState } from "react"
+import { Avatar, Card, List, Select, Space, Tag, Typography } from "antd"
 
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from "@/components/ui/item"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { assetUrl } from "@/lib/api"
 import type { ItemEntry, ItemsPayload } from "@/lib/types"
-import { BadgeList, EmptyPanel, PageHeader, SearchField } from "@/features/shared/ui"
+import { EmptyPanel, PageHeader, SearchField, TagList } from "@/features/shared/ui"
 
 function encodeAssetPath(path: string) {
   return path
@@ -46,77 +28,66 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="workspace-stack">
       <PageHeader
         title="物品图鉴"
         description="展示签到、秘境、商店等玩法中可出现的物品，支持按领域含义筛选。"
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>筛选</CardTitle>
-          <CardDescription>动态列表使用搜索输入和枚举选择，避免长表格。</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
-            <SearchField value={query} onChange={setQuery} placeholder="搜索物品或来源" />
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="全部类别" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">全部类别</SelectItem>
-                  {payload.meta.categories.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
+      <Card title="筛选">
+        <div className="two-column">
+          <SearchField value={query} onChange={setQuery} placeholder="搜索物品或来源" />
+          <Select
+            value={category}
+            onChange={setCategory}
+            options={[
+              { value: "all", label: "全部类别" },
+              ...payload.meta.categories.map((name) => ({ value: name, label: name })),
+            ]}
+          />
+        </div>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>物品条目</CardTitle>
-          <CardDescription>{filteredItems.length} / {payload.items.length} 个条目。</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredItems.length ? (
-            <ItemGroup>
-              {filteredItems.map((item) => (
-                <Item key={item.name} variant={item.customized ? "outline" : "default"}>
-                  {item.icon ? (
-                    <ItemMedia variant="image">
-                      <img src={assetUrl(`/assets/item-icons/${encodeAssetPath(item.icon)}`)} alt={item.name} />
-                    </ItemMedia>
-                  ) : null}
-                  <ItemContent>
-                    <ItemTitle>
-                      {item.name}
-                      {item.category ? <Badge variant="outline">{item.category}</Badge> : null}
-                      {item.customized ? <Badge variant="secondary">已覆盖</Badge> : null}
-                    </ItemTitle>
-                    <ItemDescription>{item.usage || item.story || item.source || "暂无描述"}</ItemDescription>
-                    <div className="flex flex-wrap gap-2">
-                      <BadgeList values={item.tiers} />
-                      <BadgeList values={item.grades} />
-                    </div>
-                  </ItemContent>
-                  <ItemActions>
-                    {item.required_realm ? <Badge variant="outline">{item.required_realm}</Badge> : null}
-                    {item.source ? <Badge variant="secondary">{item.source}</Badge> : null}
-                  </ItemActions>
-                </Item>
-              ))}
-            </ItemGroup>
-          ) : (
-            <EmptyPanel title="没有匹配物品" description="调整搜索词或类别后再查看。" />
-          )}
-        </CardContent>
+      <Card title="物品条目" extra={`${filteredItems.length} / ${payload.items.length} 个条目`}>
+        {filteredItems.length ? (
+          <List
+            dataSource={filteredItems}
+            renderItem={(item) => (
+              <List.Item
+                actions={[
+                  item.required_realm ? <Tag key="realm">{item.required_realm}</Tag> : null,
+                  item.source ? <Tag key="source">{item.source}</Tag> : null,
+                ].filter(Boolean)}
+              >
+                <List.Item.Meta
+                  avatar={
+                    item.icon ? (
+                      <Avatar shape="square" src={assetUrl(`/assets/item-icons/${encodeAssetPath(item.icon)}`)} />
+                    ) : undefined
+                  }
+                  title={
+                    <Space wrap>
+                      <span>{item.name}</span>
+                      {item.category ? <Tag>{item.category}</Tag> : null}
+                      {item.customized ? <Tag color="processing">已覆盖</Tag> : null}
+                    </Space>
+                  }
+                  description={
+                    <Space orientation="vertical">
+                      <Typography.Text type="secondary">{item.usage || item.story || item.source || "暂无描述"}</Typography.Text>
+                      <Space wrap>
+                        <TagList values={item.tiers} />
+                        <TagList values={item.grades} />
+                      </Space>
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <EmptyPanel title="没有匹配物品" description="调整搜索词或类别后再查看。" />
+        )}
       </Card>
     </div>
   )

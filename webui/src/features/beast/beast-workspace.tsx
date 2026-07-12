@@ -1,29 +1,10 @@
 import { useMemo, useState } from "react"
+import { Avatar, Card, List, Select, Space, Tag, Typography } from "antd"
 
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from "@/components/ui/item"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { assetUrl } from "@/lib/api"
 import { formatJson, formatNumber } from "@/lib/format"
 import type { BeastCard, BeastCardsPayload } from "@/lib/types"
-import { EmptyPanel, PageHeader, SearchField } from "@/features/shared/ui"
+import { EmptyPanel, JsonTextarea, PageHeader, SearchField } from "@/features/shared/ui"
 
 function cardMatches(card: BeastCard, query: string, kind: string) {
   const text = [card.name, card.id, card.kind, card.effect, card.story].join("\n").toLowerCase()
@@ -32,7 +13,7 @@ function cardMatches(card: BeastCard, query: string, kind: string) {
   return matchesQuery && matchesKind
 }
 
-function statBadges(card: BeastCard) {
+function statTags(card: BeastCard) {
   return [
     ["攻", card.attack],
     ["防", card.defense],
@@ -54,92 +35,75 @@ export function BeastRealmWorkspace({ payload }: { payload: BeastCardsPayload })
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="workspace-stack">
       <PageHeader title="兽域卡池" description="展示兽域卡牌、战斗数值、卡池份数与规则覆盖状态。" />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>筛选</CardTitle>
-          <CardDescription>卡池实体以可搜索条目展示，规则 JSON 放在高级层。</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
-            <SearchField value={query} onChange={setQuery} placeholder="搜索卡牌、效果或故事" />
-            <Select value={kind} onValueChange={setKind}>
-              <SelectTrigger>
-                <SelectValue placeholder="全部类型" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">全部类型</SelectItem>
-                  {kinds.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
+      <Card title="筛选">
+        <div className="two-column">
+          <SearchField value={query} onChange={setQuery} placeholder="搜索卡牌、效果或故事" />
+          <Select
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: "all", label: "全部类型" },
+              ...kinds.map((value) => ({ value, label: value })),
+            ]}
+          />
+        </div>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>卡牌条目</CardTitle>
-          <CardDescription>{filteredCards.length} / {payload.cards.length} 张卡牌。</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredCards.length ? (
-            <ItemGroup>
-              {filteredCards.map((card) => (
-                <Item key={card.id} variant={card.customized ? "outline" : "default"}>
-                  {card.spell_icon ? (
-                    <ItemMedia variant="image">
-                      <img
-                        src={assetUrl(`/assets/beast-spell-icons/${encodeURIComponent(card.spell_icon)}`)}
-                        alt={card.name}
-                      />
-                    </ItemMedia>
-                  ) : null}
-                  <ItemContent>
-                    <ItemTitle>
-                      {card.name}
-                      {card.kind ? <Badge variant="outline">{card.kind}</Badge> : null}
-                      {card.customized ? <Badge variant="secondary">已覆盖</Badge> : null}
-                    </ItemTitle>
-                    <ItemDescription>{card.effect || card.story || card.id}</ItemDescription>
-                    <div className="flex flex-wrap gap-1">
-                      {statBadges(card).map(([label, value]) => (
-                        <Badge key={`${card.id}-${label}`} variant="secondary">
-                          {label} {formatNumber(value)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </ItemContent>
-                  <ItemActions>
-                    {typeof card.pool_copies === "number" ? (
-                      <Badge variant="outline">池 {formatNumber(card.pool_copies)}</Badge>
-                    ) : null}
-                  </ItemActions>
-                </Item>
-              ))}
-            </ItemGroup>
-          ) : (
-            <EmptyPanel title="没有匹配卡牌" description="调整搜索词或类型后再查看。" />
-          )}
-        </CardContent>
+      <Card title="卡牌条目" extra={`${filteredCards.length} / ${payload.cards.length} 张卡牌`}>
+        {filteredCards.length ? (
+          <List
+            dataSource={filteredCards}
+            renderItem={(card) => (
+              <List.Item
+                actions={[
+                  typeof card.pool_copies === "number" ? (
+                    <Tag key="pool">池 {formatNumber(card.pool_copies)}</Tag>
+                  ) : null,
+                ].filter(Boolean)}
+              >
+                <List.Item.Meta
+                  avatar={
+                    card.spell_icon ? (
+                      <Avatar shape="square" src={assetUrl(`/assets/beast-spell-icons/${encodeURIComponent(card.spell_icon)}`)} />
+                    ) : undefined
+                  }
+                  title={
+                    <Space wrap>
+                      <span>{card.name}</span>
+                      {card.kind ? <Tag>{card.kind}</Tag> : null}
+                      {card.customized ? <Tag color="processing">已覆盖</Tag> : null}
+                    </Space>
+                  }
+                  description={
+                    <Space orientation="vertical">
+                      <Typography.Text type="secondary">{card.effect || card.story || card.id}</Typography.Text>
+                      <Space wrap>
+                        {statTags(card).map(([label, value]) => (
+                          <Tag key={`${card.id}-${label}`}>
+                            {label} {formatNumber(value)}
+                          </Tag>
+                        ))}
+                      </Space>
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <EmptyPanel title="没有匹配卡牌" description="调整搜索词或类型后再查看。" />
+        )}
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>高级规则 JSON</CardTitle>
-          <CardDescription>用于核查卡牌规则结构，后续可拆成更细粒度规则编辑器。</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Textarea readOnly value={formatJson(payload.cards.map((card) => ({ id: card.id, rules: card.rules })))} rows={8} />
-        </CardContent>
-      </Card>
+      <JsonTextarea
+        label="高级规则 JSON"
+        value={formatJson(payload.cards.map((card) => ({ id: card.id, rules: card.rules })))}
+        readOnly
+        rows={8}
+      />
     </div>
   )
 }
