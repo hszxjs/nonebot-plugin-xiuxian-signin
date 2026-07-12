@@ -34,7 +34,7 @@ const selectedPlayer: PlayerDetailPayload = {
     realms: [{ index: 2, name: "筑基境" }],
     attributes: ["metal", "wood"],
     attribute_labels: { metal: "金灵根", wood: "木灵根" },
-    tiers: ["凡品", "黄阶"],
+    tiers: ["凡品", "黄阶", "玄阶", "地阶", "天阶", "变异灵根"],
     grades: ["下品", "中品"],
     categories: ["丹药"],
     mystic_types: ["普通秘境"],

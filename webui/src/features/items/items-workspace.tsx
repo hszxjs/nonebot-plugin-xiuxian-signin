@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Avatar, Card, List, Select, Space, Tag, Typography } from "antd"
+import { Card, List, Pagination, Select, Space, Tag, Typography } from "antd"
 
 import { assetUrl } from "@/lib/api"
 import type { ItemEntry, ItemsPayload } from "@/lib/types"
@@ -22,10 +22,16 @@ function itemMatches(item: ItemEntry, query: string, category: string) {
 export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(48)
   const filteredItems = useMemo(
     () => payload.items.filter((item) => itemMatches(item, query, category)),
     [category, payload.items, query]
   )
+  const pagedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredItems.slice(start, start + pageSize)
+  }, [currentPage, filteredItems, pageSize])
 
   return (
     <div className="workspace-stack">
@@ -36,10 +42,20 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
 
       <Card title="筛选">
         <div className="two-column">
-          <SearchField value={query} onChange={setQuery} placeholder="搜索物品或来源" />
+          <SearchField
+            value={query}
+            onChange={(value) => {
+              setQuery(value)
+              setCurrentPage(1)
+            }}
+            placeholder="搜索物品或来源"
+          />
           <Select
             value={category}
-            onChange={setCategory}
+            onChange={(value) => {
+              setCategory(value)
+              setCurrentPage(1)
+            }}
             options={[
               { value: "all", label: "全部类别" },
               ...payload.meta.categories.map((name) => ({ value: name, label: name })),
@@ -51,7 +67,7 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
       <Card title="物品条目" extra={`${filteredItems.length} / ${payload.items.length} 个条目`}>
         {filteredItems.length ? (
           <List
-            dataSource={filteredItems}
+            dataSource={pagedItems}
             renderItem={(item) => (
               <List.Item
                 actions={[
@@ -62,7 +78,13 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
                 <List.Item.Meta
                   avatar={
                     item.icon ? (
-                      <Avatar shape="square" src={assetUrl(`/assets/item-icons/${encodeAssetPath(item.icon)}`)} />
+                      <img
+                        className="item-thumb"
+                        loading="lazy"
+                        decoding="async"
+                        src={assetUrl(`/assets/item-icons/${encodeAssetPath(item.icon)}`)}
+                        alt={item.name}
+                      />
                     ) : undefined
                   }
                   title={
@@ -88,6 +110,19 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
         ) : (
           <EmptyPanel title="没有匹配物品" description="调整搜索词或类别后再查看。" />
         )}
+        {filteredItems.length > pageSize ? (
+          <Pagination
+            current={currentPage}
+            pageSize={pageSize}
+            total={filteredItems.length}
+            showSizeChanger
+            pageSizeOptions={[24, 48, 96, 160]}
+            onChange={(page, size) => {
+              setCurrentPage(page)
+              setPageSize(size)
+            }}
+          />
+        ) : null}
       </Card>
     </div>
   )

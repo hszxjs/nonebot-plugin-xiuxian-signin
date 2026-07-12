@@ -25,6 +25,7 @@ GRADE_POOL = [
 ]
 
 TIER_ORDER = ["凡品", "黄阶", "玄阶", "地阶", "天阶", "仙阶", "仙帝兵"]
+ROOT_TIER_ORDER = ["凡品", "黄阶", "玄阶", "地阶", "天阶", "变异灵根"]
 GRADE_ORDER = ["下品", "中品", "上品", "极品"]
 METHOD_GROWTH_TIERS = ["凡品", "黄阶", "玄阶", "地阶", "天阶", "仙阶"]
 METHOD_LAYER_STEP = 10

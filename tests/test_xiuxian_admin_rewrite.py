@@ -200,6 +200,15 @@ class XiuxianAdminRewriteTest(unittest.TestCase):
                 200,
             )
 
+    def test_player_meta_uses_root_tiers_not_equipment_tiers(self) -> None:
+        with TemporaryDirectory() as tmp:
+            manager = admin.AdminManager(admin.JsonStore(Path(tmp)), Path(tmp))
+            tiers = manager.player_meta()["tiers"]
+
+        self.assertEqual(tiers, ["凡品", "黄阶", "玄阶", "地阶", "天阶", "变异灵根"])
+        self.assertNotIn("仙阶", tiers)
+        self.assertNotIn("仙帝兵", tiers)
+
 
 if __name__ == "__main__":
     unittest.main()

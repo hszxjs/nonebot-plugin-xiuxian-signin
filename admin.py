@@ -285,7 +285,7 @@ class AdminManager:
             "realms": [{"index": index, "name": name} for index, name in enumerate(domain.REALMS)],
             "attributes": list(domain.ROOT_ATTRIBUTES),
             "attribute_labels": {attr: domain.root_attribute_label(attr) for attr in domain.ROOT_ATTRIBUTES},
-            "tiers": list(domain.TIER_ORDER),
+            "tiers": list(domain.ROOT_TIER_ORDER),
             "grades": list(domain.GRADE_ORDER),
             "categories": categories,
             "mystic_types": mystic_types,

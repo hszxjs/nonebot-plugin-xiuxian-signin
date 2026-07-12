@@ -63,9 +63,27 @@ describe("catalog workspaces", () => {
     expect(screen.getByRole("heading", { name: "物品图鉴" })).toBeInTheDocument()
     expect(screen.getByPlaceholderText("搜索物品或来源")).toBeInTheDocument()
     expect(screen.getByText("聚气丹")).toBeInTheDocument()
+    expect(screen.getByAltText("聚气丹")).toHaveAttribute("loading", "lazy")
     expect(container.querySelector("table")).toBeNull()
     expect(container.querySelector(".ant-list")).not.toBeNull()
     expect(container.querySelector(".ant-select")).not.toBeNull()
+  })
+
+  it("paginates item catalog entries instead of rendering every item at once", () => {
+    const manyItems: ItemsPayload = {
+      ...items,
+      items: Array.from({ length: 60 }, (_, index) => ({
+        ...items.items[0],
+        name: `聚气丹 ${index + 1}`,
+        icon: "丹药/聚气丹.png",
+      })),
+    }
+
+    render(<ItemsWorkspace payload={manyItems} />)
+
+    expect(screen.getByText("聚气丹 1")).toBeInTheDocument()
+    expect(screen.queryByText("聚气丹 60")).toBeNull()
+    expect(screen.getByTitle("2")).toBeInTheDocument()
   })
 
   it("renders beast cards with domain cards and an advanced rules layer", () => {
