@@ -536,7 +536,12 @@ set_font_paths(config.xiuxian_signin_font_path, config.xiuxian_signin_bold_font_
 def get_data_dir() -> Path:
     if config.xiuxian_signin_data_dir:
         return Path(config.xiuxian_signin_data_dir)
-    return localstore.get_plugin_data_dir()
+    base_data_dir = getattr(localstore, "BASE_DATA_DIR", None)
+    if base_data_dir is None:
+        return localstore.get_plugin_data_dir()
+    data_dir = Path(base_data_dir) / "nonebot_plugin_xiuxian_signin"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
 
 
 store = JsonStore(get_data_dir())
