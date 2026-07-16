@@ -72,6 +72,68 @@ export function assetUrl(path: string) {
   return `${normalized}${separator}token=${encodeURIComponent(token)}`
 }
 
+type ApiErrorPayload = {
+  error?: unknown
+  detail?: unknown
+}
+
+class ApiRequestError extends Error {
+  toString() {
+    return this.message
+  }
+}
+
+function errorResponse(error: unknown) {
+  const response = (error as { response?: unknown } | null)?.response
+  return response instanceof Response ? response : null
+}
+
+function payloadMessage(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return ""
+  }
+  const { error, detail } = payload as ApiErrorPayload
+  if (typeof error === "string" && error.trim()) {
+    return error
+  }
+  if (typeof detail === "string" && detail.trim()) {
+    return detail
+  }
+  return ""
+}
+
+function statusMessage(response: Response) {
+  const statusText = response.statusText.trim()
+  return statusText ? `Request failed (${response.status} ${statusText})` : `Request failed (${response.status})`
+}
+
+export async function apiErrorMessage(error: unknown) {
+  const response = errorResponse(error)
+  if (response) {
+    try {
+      const message = payloadMessage(await response.clone().json())
+      if (message) {
+        return message
+      }
+    } catch {
+      return statusMessage(response)
+    }
+    return statusMessage(response)
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
+  return String(error || "unknown error")
+}
+
+async function apiJson<T>(request: Promise<T>) {
+  try {
+    return await request
+  } catch (error) {
+    throw new ApiRequestError(await apiErrorMessage(error))
+  }
+}
+
 export const api = ky.create({
   prefix: apiPrefix(),
   timeout: 30_000,
@@ -87,7 +149,7 @@ export const api = ky.create({
   },
 })
 
-const fetchJson = <T>(path: string) => api.get(path).json<T>()
+const fetchJson = <T>(path: string) => apiJson(api.get(path).json<T>())
 
 export function useDashboard() {
   return useSWR<DashboardPayload>("dashboard", fetchJson, { refreshInterval: 10_000 })
@@ -124,13 +186,13 @@ export function useConfig() {
 }
 
 export function saveConfig(config: ConfigPayload["config"]) {
-  return api.put("config", { json: config }).json<ConfigPayload>()
+  return apiJson(api.put("config", { json: config }).json<ConfigPayload>())
 }
 
 export function savePlayer(userId: string, record: PlayerDetailPayload["record"]) {
-  return api.put(`players/${encodeURIComponent(userId)}`, { json: record }).json<PlayerDetailPayload>()
+  return apiJson(api.put(`players/${encodeURIComponent(userId)}`, { json: record }).json<PlayerDetailPayload>())
 }
 
 export function createBackup() {
-  return api.post("backup").json<BackupPayload>()
+  return apiJson(api.post("backup").json<BackupPayload>())
 }

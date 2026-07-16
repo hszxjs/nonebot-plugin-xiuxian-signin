@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nonebot-plugin-xiuxian-signin"
-version = "0.5.1"
+version = "0.5.2"
 description = "A NoneBot2 cultivation signin plugin with image panels, fishing, realms, mystic realms, items, duels and PicMenu Next support."
 readme = "README.md"
 requires-python = ">=3.10, <4.0"

@@ -94,7 +94,10 @@ http://<NoneBot主机>:8081/xiuxian-admin
 ## 开发校验
 
 ```bash
-python -m compileall .
+python -m unittest discover -s tests -v
+python -m py_compile __init__.py admin.py admin_dashboard.py beast_realm.py beast_realm_cards.py cards.py character_assets.py config.py domain.py storage.py tests/test_admin_routes.py tests/test_admin_dashboard.py tests/test_domain_features.py tests/test_xiuxian_admin_rewrite.py
+pnpm --dir webui test
+pnpm --dir webui build
 python tools/render_adventure_preview.py
 ```
 

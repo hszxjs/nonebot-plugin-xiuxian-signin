@@ -463,6 +463,16 @@ def _json_error(message: str, status_code: int) -> JSONResponse:
     return JSONResponse({"ok": False, "error": message}, status_code=status_code)
 
 
+async def _json_object_or_error(request: Request, object_error: str) -> tuple[dict[str, Any] | None, JSONResponse | None]:
+    try:
+        data = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None, _json_error("invalid json body", 400)
+    if not isinstance(data, dict):
+        return None, _json_error(object_error, 400)
+    return data, None
+
+
 def create_admin_app(
     *,
     manager: AdminManager,
@@ -503,9 +513,10 @@ def create_admin_app(
         x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
         authorize(x_xiuxian_token, token)
-        data = await request.json()
-        if not isinstance(data, dict):
-            return _json_error("config must be an object", 400)
+        data, error = await _json_object_or_error(request, "config must be an object")
+        if error is not None:
+            return error
+        assert data is not None
         manager.save_config(data)
         manager.apply_config()
         return {"ok": True, "config": manager.load_config()}
@@ -536,9 +547,10 @@ def create_admin_app(
         x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
         authorize(x_xiuxian_token, token)
-        data = await request.json()
-        if not isinstance(data, dict):
-            return _json_error("record must be an object", 400)
+        data, error = await _json_object_or_error(request, "record must be an object")
+        if error is not None:
+            return error
+        assert data is not None
         return {"ok": True, "record": manager.save_player_record(user_id, data), "meta": manager.player_meta()}
 
     async def backup(

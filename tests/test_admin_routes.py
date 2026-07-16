@@ -293,6 +293,18 @@ class AdminRouteTests(unittest.TestCase):
         self.assertEqual(player_put.json()["record"]["realm_index"], 1)
         self.assertIn("cultivation_routes", player_put.json()["meta"])
 
+    def test_put_config_rejects_malformed_json_with_json_error(self) -> None:
+        client = TestClient(admin.create_admin_app(manager=FakeManager()))
+
+        response = client.put(
+            "/xiuxian-admin/api/config",
+            headers={"X-Xiuxian-Token": "secret", "Content-Type": "application/json"},
+            content=b"{",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"ok": False, "error": "invalid json body"})
+
     def test_admin_manager_save_player_record_preserves_structured_editor_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)
