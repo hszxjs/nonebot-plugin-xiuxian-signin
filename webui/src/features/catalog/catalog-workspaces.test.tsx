@@ -60,7 +60,9 @@ describe("catalog workspaces", () => {
   it("renders item catalog entries as searchable item cards", () => {
     const { container } = render(<ItemsWorkspace payload={items} />)
 
-    expect(screen.getByRole("heading", { name: "物品图鉴" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "物品图鉴" }),
+    ).toBeInTheDocument()
     expect(screen.getByPlaceholderText("搜索物品或来源")).toBeInTheDocument()
     expect(screen.getByText("聚气丹")).toBeInTheDocument()
     expect(screen.getByAltText("聚气丹")).toHaveAttribute("loading", "lazy")
@@ -89,7 +91,9 @@ describe("catalog workspaces", () => {
   it("renders beast cards with domain cards and an advanced rules layer", () => {
     const { container } = render(<BeastRealmWorkspace payload={beastCards} />)
 
-    expect(screen.getByRole("heading", { name: "兽域卡池" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "兽域卡池" }),
+    ).toBeInTheDocument()
     expect(screen.getByText("雷纹灵兽")).toBeInTheDocument()
     expect(screen.getByText("造成一次雷击。")).toBeInTheDocument()
     expect(screen.getByText("高级规则 JSON")).toBeInTheDocument()

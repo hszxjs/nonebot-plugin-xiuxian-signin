@@ -126,19 +126,7 @@ export type BeastCardsPayload = {
 
 export type MysticPayload = {
   ok: boolean
-  mystic: {
-    types: string[]
-    high_risk_types: string[]
-    enabled_types: string[]
-    enabled_high_risk_types: string[]
-    category_weights: Record<string, number>
-    drop_overrides: Record<string, JsonValue>
-    fishing_option_rate: number
-    extra_fishing_chance_rate: number
-    categories: string[]
-    tiers: string[]
-    grades: string[]
-  }
+  mystic: MysticConfig
 }
 
 export type EquipmentPayload = {
@@ -163,18 +151,43 @@ export type EquipmentPayload = {
 }
 
 export type EquipmentRules = {
-    realm_tier_unlocks?: Record<string, string[]>
-    tier_default_realm?: Record<string, number>
-    artifact_drop_pools?: Record<string, unknown>
-    artifact_power_base?: Record<string, number>
-    artifact_realm_power_base?: Record<string, number>
-    artifact_tier_power_ratio?: Record<string, number>
-    artifact_grade_ratio?: Record<string, number>
-    artifact_immortal_upgrade_rate?: number
-    [key: string]: unknown
+  realm_tier_unlocks?: Record<string, string[]>
+  tier_default_realm?: Record<string, number>
+  artifact_drop_pools?: Record<string, unknown>
+  artifact_power_base?: Record<string, number>
+  artifact_realm_power_base?: Record<string, number>
+  artifact_tier_power_ratio?: Record<string, number>
+  artifact_grade_ratio?: Record<string, number>
+  artifact_immortal_upgrade_rate?: number
+  [key: string]: unknown
 }
 
 export type MysticConfig = {
+  map_size_rules?: MysticMapSizeRule[]
+  min_map_size?: number
+  max_map_size?: number
+  normal_node_weights?: Record<string, number>
+  high_risk_node_weights?: Record<string, number>
+  normal_branch_density?: number
+  high_risk_branch_density?: number
+  high_risk_loop_count?: number
+  consecutive_combat_limit?: number
+  ordinary_monster_hp_multiplier?: number
+  boss_hp_multiplier?: number
+  reward_multiplier?: number
+  damage_growth_per_ten_rounds?: number
+  encounter_response_seconds?: number
+  battle_prepare_seconds?: number
+  player_action_seconds?: number
+  boss_vote_seconds?: number
+  leader_inactive_seconds?: number
+  leader_transfer_vote_seconds?: number
+  rescue_wait_seconds?: number
+  signin_normal_token_count?: number
+  signin_high_risk_token_count?: number
+  daily_task_normal_token_count?: number
+  daily_task_high_risk_token_count?: number
+  themes?: MysticThemeBinding[]
   types?: string[]
   high_risk_types?: string[]
   enabled_types: string[]
@@ -187,6 +200,21 @@ export type MysticConfig = {
   tiers?: string[]
   grades?: string[]
   [key: string]: unknown
+}
+
+export type MysticMapSizeRule = {
+  minimum_boss_realm_index: number
+  node_count: 24 | 28 | 32 | 36 | 40 | 44 | 48
+}
+
+export type MysticThemeBinding = {
+  theme_id: string
+  display_name: string
+  risk: string
+  template_id: string
+  background_path: string
+  background_exists: boolean
+  template_exists: boolean
 }
 
 export type AdminConfig = {

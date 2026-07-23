@@ -7,7 +7,7 @@ name = "nonebot-plugin-xiuxian-signin"
 version = "0.5.2"
 description = "A NoneBot2 cultivation signin plugin with image panels, fishing, realms, mystic realms, items, duels and PicMenu Next support."
 readme = "README.md"
-requires-python = ">=3.10, <4.0"
+requires-python = ">=3.12, <4.0"
 license = { text = "MIT" }
 authors = [
     { name = "fallen_rainy" },
@@ -19,8 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Communications :: Chat",
@@ -44,6 +42,7 @@ Issues = "https://github.com/hszxjs/nonebot-plugin-xiuxian-signin/issues"
 
 [project.optional-dependencies]
 dev = [
+    "mypy>=1.11",
     "ruff>=0.4.0",
 ]
 
@@ -75,11 +74,30 @@ nonebot_plugin_xiuxian_signin = [
     "assets/spirit_root_icons/spirit_root_icon_manifest.json",
     "assets/spirit_root_icons/*.png",
     "assets/ui_sprite/signin/output/sprites/*.png",
+    "assets/mystic_maps/manifest.json",
+    "assets/mystic_maps/templates.json",
+    "assets/mystic_maps/backgrounds/*.png",
+    "assets/mystic_dungeon_ui/*.png",
 ]
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.format]
 line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+files = [
+    "mystic_battle.py",
+    "mystic_cards.py",
+    "mystic_dungeon.py",
+    "mystic_runtime.py",
+    "storage.py",
+    "admin.py",
+]
+follow_imports = "skip"
+check_untyped_defs = true
+no_implicit_optional = true
+warn_unused_ignores = true

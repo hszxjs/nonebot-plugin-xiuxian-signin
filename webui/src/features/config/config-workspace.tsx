@@ -1,14 +1,27 @@
+import {
+  Card,
+  Checkbox,
+  Form,
+  Input,
+  List,
+  Slider,
+  Space,
+  Switch,
+  Tabs,
+  Tag,
+  Typography,
+} from "antd"
 import { useMemo, useState } from "react"
-import { Card, Checkbox, Form, Input, List, Slider, Space, Switch, Tabs, Tag, Typography } from "antd"
-
+import { ConfirmAction, PageHeader } from "@/features/shared/ui"
 import { formatJson, formatNumber, sliderValueToRate } from "@/lib/format"
 import type { AdminConfig } from "@/lib/types"
-import { ConfirmAction, PageHeader } from "@/features/shared/ui"
 
 function parseConfig(text: string, fallback: AdminConfig) {
   try {
     const parsed = JSON.parse(text)
-    return parsed && typeof parsed === "object" ? (parsed as AdminConfig) : fallback
+    return parsed && typeof parsed === "object"
+      ? (parsed as AdminConfig)
+      : fallback
   } catch {
     return fallback
   }
@@ -25,15 +38,18 @@ export function ConfigWorkspace({
   const [jsonText, setJsonText] = useState(formatJson(config))
   const mystic = draft.mystic
   const mysticTypes = mystic.types ?? mystic.enabled_types ?? []
-  const highRiskTypes = mystic.high_risk_types ?? mystic.enabled_high_risk_types ?? []
+  const highRiskTypes =
+    mystic.high_risk_types ?? mystic.enabled_high_risk_types ?? []
   const highRiskEnabled = mystic.enabled_high_risk_types.length > 0
   const realms = useMemo(
     () =>
-      Object.entries(draft.equipment_rules.realm_tier_unlocks ?? {}).map(([index, tiers]) => ({
-        index,
-        tiers,
-      })),
-    [draft.equipment_rules.realm_tier_unlocks]
+      Object.entries(draft.equipment_rules.realm_tier_unlocks ?? {}).map(
+        ([index, tiers]) => ({
+          index,
+          tiers,
+        }),
+      ),
+    [draft.equipment_rules.realm_tier_unlocks],
   )
 
   function updateDraft(next: AdminConfig) {
@@ -73,11 +89,17 @@ export function ConfigWorkspace({
                   <Form.Item label="普通秘境">
                     <Checkbox.Group
                       value={mystic.enabled_types}
-                      options={mysticTypes.map((type) => ({ value: type, label: type }))}
+                      options={mysticTypes.map((type) => ({
+                        value: type,
+                        label: type,
+                      }))}
                       onChange={(values) =>
                         updateDraft({
                           ...draft,
-                          mystic: { ...mystic, enabled_types: values.map(String) },
+                          mystic: {
+                            ...mystic,
+                            enabled_types: values.map(String),
+                          },
                         })
                       }
                     />
@@ -88,7 +110,12 @@ export function ConfigWorkspace({
                       onChange={(checked) =>
                         updateDraft({
                           ...draft,
-                          mystic: { ...mystic, enabled_high_risk_types: checked ? highRiskTypes : [] },
+                          mystic: {
+                            ...mystic,
+                            enabled_high_risk_types: checked
+                              ? highRiskTypes
+                              : [],
+                          },
                         })
                       }
                     />
@@ -96,11 +123,17 @@ export function ConfigWorkspace({
                   <Form.Item label="高风险类型">
                     <Checkbox.Group
                       value={mystic.enabled_high_risk_types}
-                      options={highRiskTypes.map((type) => ({ value: type, label: type }))}
+                      options={highRiskTypes.map((type) => ({
+                        value: type,
+                        label: type,
+                      }))}
                       onChange={(values) =>
                         updateDraft({
                           ...draft,
-                          mystic: { ...mystic, enabled_high_risk_types: values.map(String) },
+                          mystic: {
+                            ...mystic,
+                            enabled_high_risk_types: values.map(String),
+                          },
                         })
                       }
                     />
@@ -113,7 +146,10 @@ export function ConfigWorkspace({
                       onChange={(value) =>
                         updateDraft({
                           ...draft,
-                          mystic: { ...mystic, fishing_option_rate: sliderValueToRate([value]) },
+                          mystic: {
+                            ...mystic,
+                            fishing_option_rate: sliderValueToRate([value]),
+                          },
                         })
                       }
                     />
@@ -122,11 +158,18 @@ export function ConfigWorkspace({
                     <Slider
                       min={0}
                       max={100}
-                      value={Math.round(draft.signin.extra_fishing_chance_rate * 100)}
+                      value={Math.round(
+                        draft.signin.extra_fishing_chance_rate * 100,
+                      )}
                       onChange={(value) =>
                         updateDraft({
                           ...draft,
-                          signin: { ...draft.signin, extra_fishing_chance_rate: sliderValueToRate([value]) },
+                          signin: {
+                            ...draft.signin,
+                            extra_fishing_chance_rate: sliderValueToRate([
+                              value,
+                            ]),
+                          },
                         })
                       }
                     />
@@ -145,7 +188,10 @@ export function ConfigWorkspace({
                     dataSource={realms}
                     renderItem={(realm) => (
                       <List.Item>
-                        <List.Item.Meta title={`境界 #${realm.index}`} description={`${realm.tiers.length} 个可用品阶`} />
+                        <List.Item.Meta
+                          title={`境界 #${realm.index}`}
+                          description={`${realm.tiers.length} 个可用品阶`}
+                        />
                         <Space wrap>
                           {realm.tiers.map((tier) => (
                             <Tag key={`${realm.index}-${tier}`}>{tier}</Tag>
@@ -159,20 +205,35 @@ export function ConfigWorkspace({
                       <Slider
                         min={0}
                         max={100}
-                        value={Math.round(Number(draft.equipment_rules.artifact_immortal_upgrade_rate ?? 0) * 100)}
+                        value={Math.round(
+                          Number(
+                            draft.equipment_rules
+                              .artifact_immortal_upgrade_rate ?? 0,
+                          ) * 100,
+                        )}
                         onChange={(value) =>
                           updateDraft({
                             ...draft,
                             equipment_rules: {
                               ...draft.equipment_rules,
-                              artifact_immortal_upgrade_rate: sliderValueToRate([value]),
+                              artifact_immortal_upgrade_rate: sliderValueToRate(
+                                [value],
+                              ),
                             },
                           })
                         }
                       />
                     </Form.Item>
                     <Tag>
-                      {formatNumber(Math.round(Number(draft.equipment_rules.artifact_immortal_upgrade_rate ?? 0) * 100))}%
+                      {formatNumber(
+                        Math.round(
+                          Number(
+                            draft.equipment_rules
+                              .artifact_immortal_upgrade_rate ?? 0,
+                          ) * 100,
+                        ),
+                      )}
+                      %
                     </Tag>
                   </Form>
                 </div>
@@ -183,7 +244,10 @@ export function ConfigWorkspace({
             key: "beast",
             label: "兽域",
             children: (
-              <Card title="兽域卡池" extra={`${Object.keys(draft.beast_realm.card_overrides).length} 个覆盖`}>
+              <Card
+                title="兽域卡池"
+                extra={`${Object.keys(draft.beast_realm.card_overrides).length} 个覆盖`}
+              >
                 <Form layout="vertical">
                   <Form.Item label="默认卡池份数">
                     <Slider
@@ -193,12 +257,17 @@ export function ConfigWorkspace({
                       onChange={(value) =>
                         updateDraft({
                           ...draft,
-                          beast_realm: { ...draft.beast_realm, card_pool_copies: Number(value) },
+                          beast_realm: {
+                            ...draft.beast_realm,
+                            card_pool_copies: Number(value),
+                          },
                         })
                       }
                     />
                   </Form.Item>
-                  <Typography.Text type="secondary">卡牌覆盖规则仍保留在完整 JSON 中，避免误删嵌套结构。</Typography.Text>
+                  <Typography.Text type="secondary">
+                    卡牌覆盖规则仍保留在完整 JSON 中，避免误删嵌套结构。
+                  </Typography.Text>
                 </Form>
               </Card>
             ),
@@ -208,7 +277,11 @@ export function ConfigWorkspace({
             label: "原始 JSON",
             children: (
               <Card title="完整配置 JSON">
-                <Input.TextArea value={jsonText} onChange={(event) => setJsonText(event.target.value)} rows={22} />
+                <Input.TextArea
+                  value={jsonText}
+                  onChange={(event) => setJsonText(event.target.value)}
+                  rows={22}
+                />
               </Card>
             ),
           },

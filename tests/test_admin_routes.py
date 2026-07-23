@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import importlib.util
 import json
@@ -371,6 +370,10 @@ class AdminRouteTests(unittest.TestCase):
 
             config = manager.load_config()
             self.assertEqual(config["mystic"]["fishing_option_rate"], 0.05)
+            self.assertEqual(config["mystic"]["signin_normal_token_count"], 0)
+            self.assertEqual(config["mystic"]["signin_high_risk_token_count"], 0)
+            self.assertEqual(config["mystic"]["daily_task_normal_token_count"], 0)
+            self.assertEqual(config["mystic"]["daily_task_high_risk_token_count"], 0)
             self.assertEqual(config["signin"]["extra_fishing_chance_rate"], 0.10)
 
             config["mystic"]["fishing_option_rate"] = 0.25
@@ -380,6 +383,73 @@ class AdminRouteTests(unittest.TestCase):
             payload = manager.mystic_payload()
             self.assertEqual(payload["fishing_option_rate"], 0.25)
             self.assertEqual(payload["extra_fishing_chance_rate"], 0.35)
+            self.assertEqual(payload["signin_normal_token_count"], 0)
+            self.assertEqual(payload["daily_task_high_risk_token_count"], 0)
+
+    def test_default_mystic_config_exposes_map_sizes_and_timeouts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+
+            payload = manager.mystic_payload()
+
+            self.assertEqual(
+                [item["node_count"] for item in payload["map_size_rules"]],
+                [24, 28, 32, 36, 40, 44, 48],
+            )
+            self.assertEqual(payload["encounter_response_seconds"], 60)
+            self.assertEqual(payload["battle_prepare_seconds"], 60)
+            self.assertEqual(payload["boss_vote_seconds"], 60)
+
+    def test_mystic_config_rejects_unsupported_sizes_and_invalid_weights(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+            invalid = manager.mystic_payload()
+            invalid["map_size_rules"][0]["node_count"] = 26
+            invalid["normal_node_weights"] = {"random": 0.8, "combat": 0.8}
+
+            with self.assertRaisesRegex(ValueError, "node_count|weights"):
+                manager.save_mystic_config(invalid)
+
+    def test_put_mystic_route_saves_only_mystic_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+            original = manager.load_config()
+            original["mystic"]["fishing_option_rate"] = 0.37
+            original["mystic"]["category_weights"] = {"灵器": 1.0}
+            original["mystic"]["drop_overrides"] = {
+                "ancient_sect_ruins": {"灵器": 0.5}
+            }
+            manager.save_config(original)
+            original = manager.load_config()
+            payload = manager.mystic_payload()
+            payload["encounter_response_seconds"] = 45
+            client = TestClient(admin.create_admin_app(manager=manager))
+
+            response = client.put("/xiuxian-admin/api/mystic", json=payload)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(
+                response.json()["mystic"]["encounter_response_seconds"],
+                45,
+            )
+            saved = manager.load_config()
+            self.assertEqual(saved["mystic"]["encounter_response_seconds"], 45)
+            self.assertEqual(
+                saved["mystic"]["fishing_option_rate"],
+                original["mystic"]["fishing_option_rate"],
+            )
+            self.assertEqual(
+                saved["mystic"]["category_weights"],
+                original["mystic"]["category_weights"],
+            )
+            self.assertEqual(
+                saved["mystic"]["drop_overrides"],
+                original["mystic"]["drop_overrides"],
+            )
+            self.assertEqual(saved["equipment_rules"], original["equipment_rules"])
 
     def test_fallback_server_matches_unknown_api_and_asset_auth_boundaries(self) -> None:
         manager = FakeManager()

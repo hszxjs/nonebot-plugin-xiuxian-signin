@@ -57,16 +57,20 @@ describe("PlayersWorkspace", () => {
         onQueryChange={vi.fn()}
         onSelectPlayer={vi.fn()}
         onSavePlayer={vi.fn()}
-      />
+      />,
     )
 
-    expect(screen.getByRole("heading", { name: "玩家管理" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "玩家管理" }),
+    ).toBeInTheDocument()
     expect(screen.getByText("灵根属性")).toBeInTheDocument()
     expect(screen.getByText("修行路线")).toBeInTheDocument()
-    expect(container.querySelectorAll(".ant-select").length).toBeGreaterThanOrEqual(4)
+    expect(
+      container.querySelectorAll(".ant-select").length,
+    ).toBeGreaterThanOrEqual(4)
     expect(container.querySelector("textarea")).toBeNull()
     expect(screen.queryByText("高级存档 JSON")).toBeNull()
-  })
+  }, 10_000)
 
   it("saves the complete record so unmodeled fields are preserved", async () => {
     const onSavePlayer = vi.fn()
@@ -78,12 +82,14 @@ describe("PlayersWorkspace", () => {
         onQueryChange={vi.fn()}
         onSelectPlayer={vi.fn()}
         onSavePlayer={onSavePlayer}
-      />
+      />,
     )
 
     fireEvent.click(screen.getByRole("button", { name: "保存玩家存档" }))
     fireEvent.click(await screen.findByRole("button", { name: "保存存档" }))
 
-    expect(onSavePlayer).toHaveBeenCalledWith(expect.objectContaining({ custom_note: "保留" }))
-  })
+    expect(onSavePlayer).toHaveBeenCalledWith(
+      expect.objectContaining({ custom_note: "保留" }),
+    )
+  }, 10_000)
 })

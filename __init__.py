@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+# NoneBot plugins must be required before importing their dependent modules.
+# ruff: noqa: E402
+
 import asyncio
 from collections import Counter
 import random
 import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
@@ -21,6 +24,7 @@ from nonebot import get_bot, get_driver, logger, on_message, require
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as localstore
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent, MessageSegment, PrivateMessageEvent
+from nonebot.exception import ActionFailed, NetworkError
 from nonebot.matcher import Matcher
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
@@ -28,7 +32,6 @@ from nonebot.rule import Rule
 from . import beast_realm as beast_realm_game
 from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_signin_card, render_text_panel, set_font_paths
 from .beast_realm_cards import render_beast_realm_panel
-from .character_assets import beast_portrait_bytes
 from .config import Config
 from .domain import (
     CANCEL_WORDS,
@@ -97,10 +100,7 @@ from .domain import (
     complete_daily_task,
 
     daily_tasks_text,
-    draw_mystic_entrances,
-
     draw_talisman_by_index,
-    draw_tianji_mystic_entrances,
     duel_records,
     equip_array,
     equip_artifact,
@@ -111,7 +111,6 @@ from .domain import (
     method_profile,
     format_method_detail,
     ensure_combat_profile,
-    explore_mystic_realm,
     fishing_count_from_text,
     identify_misc_item,
     learn_special_ability,
@@ -119,8 +118,6 @@ from .domain import (
     method_power,
     technique_cooldown,
     technique_mana_cost,
-    mystic_realm_options_text,
-    mystic_realm_title_from_entry,
     plant_spirit_plant,
     pop_reward_by_category_index,
     puppet_power,
@@ -130,7 +127,6 @@ from .domain import (
     batch_sell_rewards,
     batch_sell_low_realm_artifacts,
     deduce_array,
-    divine_ability_catalog_text,
     emperor_artifact_catalog_text,
     equip_immortal_seed,
     immortal_seed_text,
@@ -161,7 +157,6 @@ from .domain import (
     spirit_stone_text,
     talisman_draw_text,
     tianji_divination_text,
-    start_mystic_realm,
     unequip_artifact,
     unequip_talisman,
     use_curio,
@@ -172,7 +167,25 @@ from .domain import (
     use_talisman,
 )
 from .admin import AdminManager, start_admin_server
-from .storage import JsonStore
+from .mystic_battle import MysticBattleService
+from .mystic_cards import MysticMapRenderer
+from .mystic_dungeon import (
+    DungeonMode,
+    DungeonPhase,
+    DungeonRisk,
+    MysticDungeonService,
+    MysticTemplateCatalog,
+    active_mystic_gameplay_config,
+    active_mystic_theme_ids,
+    default_mystic_gameplay_config,
+)
+from .mystic_runtime import (
+    DungeonEntryOffer,
+    MysticCommandCoordinator,
+    MysticCommandResult,
+    parse_mystic_group_command,
+)
+from .storage import JsonStore, MysticRescueRequest
 
 __version__ = "0.5.1"
 
@@ -228,24 +241,24 @@ PICMENU_NEXT_FUNCS = [
     },
     {
         'func': '秘境与任务',
-        'trigger_method': '秘境 / 探索 1 / 天机秘境 / 每日任务 / 秘境救援 1000',
-        'trigger_condition': '秘境入口 60 秒内选择；任务每日签到后生成',
-        'brief_des': '探索秘境、挑战首领、完成任务并处理反噬救援',
-        'detail_des': '`秘境` 抽取限时入口；进入后发送 `探索 编号`；首领挑战胜利可折算多次探索奖励并获得妖丹；失败后可发布 `秘境救援 金额`。',
+        'trigger_method': '创建单人秘境 普通 / 创建秘境队伍 普通 / 投骰 1-6 / 秘境救援 1000',
+        'trigger_condition': '单人立即开始；组队需 2-3 人准备后由队长开始',
+        'brief_des': '走格子秘境、随机遭遇、Boss 团队战和失败救援',
+        'detail_des': '新版秘境固定地图按骰子前进，普通战斗在私聊中进行，Boss 以队伍人数分段并支持续战投票；战斗失败后可发布秘境救援。',
     },
     {
         'func': '御兽秘境',
         'trigger_method': '御兽秘境开局 PVE / 御兽秘境开局 PVP / 加入御兽秘境 / 御兽秘境图鉴',
         'trigger_condition': '群聊开局，私聊在任务堂招募随从；PVP/PVE均需4人，单人1V2在私聊开启',
         'brief_des': '类酒馆战棋的4人排位斗兽、4V4秘境演武与单人1V2试炼',
-        'detail_des': '`御兽秘境开局 PVE` 开启4名修士对4名bot代理的秘境演武；`御兽秘境开局 PVP` 开启4人排位战，每回合随机两场1V1。私聊 `御兽秘境1V2` 可开启单人PVE。开始后系统私聊任务堂，使用 `购买 1`、`施法 1 2`、`升堂`、`完成招募` 完成每回合操作。',
+        'detail_des': '新版秘境固定地图按骰子前进，普通战斗在私聊中进行，Boss 以队伍人数分段并支持续战投票；战斗失败后可发布秘境救援。',
     },
     {
         'func': '路线与身份',
         'trigger_method': '修炼路线 / 选择路线 剑修 / 选择身份 天机阁弟子 / 双修 @群友',
         'trigger_condition': '主路线同一时间只能选择一种；身份有境界和签到天数门槛',
         'brief_des': '选择剑修、术修、炼丹师、炼器师、阵法师和身份令牌',
-        'detail_des': '`修炼路线` 查看效果；`选择路线 名称` 切换主路线；天机阁提供秘境示警和占卜坐堂，合欢宗提供双修次数。',
+        'detail_des': '新版秘境固定地图按骰子前进，普通战斗在私聊中进行，Boss 以队伍人数分段并支持续战投票；战斗失败后可发布秘境救援。',
     },
     {
         'func': '交易与商店',
@@ -266,7 +279,7 @@ PICMENU_NEXT_FUNCS = [
         'trigger_method': '浏览器访问 /xiuxian-admin',
         'trigger_condition': '服主需要在 NoneBot 后端启用管理页，可配置管理 Token',
         'brief_des': '查看和修改玩家档案、物品属性、灵器规则、秘境掉落配置',
-        'detail_des': '后台可备份 users.json，编辑玩家记录，查看全部物品用途、故事、获取途径，并调整灵器境界限制与秘境掉落权重。',
+        'detail_des': '新版秘境固定地图按骰子前进，普通战斗在私聊中进行，Boss 以队伍人数分段并支持续战投票；战斗失败后可发布秘境救援。',
     },
 ]
 
@@ -281,7 +294,7 @@ __plugin_meta__ = PluginMetadata(
         "灵器：灵器 / 装备灵器 1 主手 / 战力，灵器按境界绑定，假仙后可获得仙器\n"
         "功法阵盘：功法 / 参悟功法 1 / 阵法推演 1，重复获得会推演升层或升品\n"
         "神通：神通 / 神通图鉴 / 领悟神通 1，查看传承材料并在斗法中触发\n"
-        "秘境：秘境 / 探索 1 / 天机秘境 / 秘境救援 1000，探索、挑战首领和处理反噬\n"
+        "秘境：创建单人秘境 普通 / 创建秘境队伍 普通 / 投骰 / 秘境状态 / 秘境地图 / 秘境救援 1000\n"
         "御兽秘境：御兽秘境开局 PVE / PVP，私聊任务堂招募随从，群聊播报战报\n"
         "交易：商店 / 万宝楼 / 交易 @对方 灵器 1 100 / 批量出售 杂物 20 / 批量出售低阶灵器\n"
         "后台：浏览器访问 /xiuxian-admin，可查看玩家档案、物品属性、灵器规则和秘境掉落配置"
@@ -378,7 +391,6 @@ DOUDIZHU_TEXTS = {
 } | DOUDIZHU_HELP_TEXTS
 DOUDIZHU_PLAY_PREFIXES = ("出牌", "打牌")
 DOUDIZHU_BID_PREFIXES = ("叫分",)
-MYSTIC_ENTRY_TEXTS = {"秘境", "查看秘境", "秘境入口", "探查秘境"}
 UNEQUIP_TEXTS = {"卸下灵器", "卸下装备"}
 EQUIP_PREFIXES = ("装备灵器", "装备")
 ARTIFACT_SLOT_NAMES = ("主手", "副手", "护甲", "护盾")
@@ -429,14 +441,12 @@ RESCUE_REQUEST_PREFIXES = ('秘境救援', '发起救援')
 RESCUE_TAKE_PREFIXES = ('救援', '接受救援')
 TALISMAN_DRAW_PREFIXES = ("\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7ed8\u7b26")
 SPECIAL_ABILITY_LEARN_PREFIXES = ("\u9886\u609f\u795e\u901a", "\u53c2\u609f\u795e\u901a")
-MYSTIC_EXPLORE_PREFIXES = ("探索", "秘境探索")
 DIVINATION_PREFIXES = ("\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366")
 DUEL_PREFIXES = ("pk", "PK", "切磋", "挑战")
 NORMAL_DUEL_TEXTS = {"申请普通斗法", "普通斗法", "普通斗法申请", "申请斗法", "斗法匹配"}
 FISHING_TEXTS = ("\u5782\u9493", "\u9493\u9c7c", "\u8bf8\u5929\u4e07\u754c\u5782\u9493")
 COMMAND_PREFIX_CHARS = "/!！.。"
 PENDING_FISHING_TTL = 120
-MYSTIC_ENTRY_TTL = 60
 DIVINATION_PENDING_TTL = 60
 TIANJI_HALL_IDENTITIES = {"\u5929\u673a\u9601\u5f1f\u5b50", "\u5929\u673a\u9601\u957f\u8001", "\u5929\u673a\u9601\u592a\u4e0a\u957f\u8001"}
 DIVINATION_SITTER_INCOME = 8
@@ -459,7 +469,6 @@ NORMAL_DUEL_IGNORED_SEGMENT_TYPES = {"at", "reply", "node"}
 RANK_SETTLE_HOUR = 22
 RANK_SETTLE_MINUTE = 0
 pending_fishing_users: dict[str, float] = {}
-pending_mystic_entries: dict[str, dict[str, Any]] = {}
 pending_divinations: dict[str, dict[str, Any]] = {}
 normal_duel_queue: dict[str, dict[str, Any]] = {}
 normal_duel_sessions: dict[str, dict[str, Any]] = {}
@@ -469,29 +478,6 @@ beast_realm_private_routes: dict[str, str] = {}
 BEAST_REALM_ICON = "beast_realm"
 rank_scheduler_task: Optional[asyncio.Task] = None
 admin_http_server = None
-
-
-async def send_mystic_timeout_notice(
-    key: str,
-    expected_expires_at: float,
-    user_id: str,
-    group_id: Optional[str] = None,
-) -> None:
-    await asyncio.sleep(max(0.0, expected_expires_at - time.monotonic()))
-    pending = pending_mystic_entries.get(key)
-    if pending is None or float(pending.get("expires_at", 0)) != expected_expires_at:
-        return
-    pending_mystic_entries.pop(key, None)
-    try:
-        record = await store.get_user(user_id)
-        message = panel_segment("秘境入口", "已超时，如有需求系统将为宿主重新抽取。", record, icon="warning")
-        bot = get_bot()
-        if group_id is not None:
-            await bot.send_group_msg(group_id=int(group_id), message=message)
-        else:
-            await bot.send_private_msg(user_id=int(user_id), message=message)
-    except Exception:
-        logger.exception("发送秘境入口超时提示失败")
 
 
 async def send_divination_timeout_notice(
@@ -600,6 +586,25 @@ def local_now() -> datetime:
 
 def local_today() -> date:
     return local_now().date()
+
+
+mystic_catalog = MysticTemplateCatalog.from_files()
+mystic_coordinator = MysticCommandCoordinator(
+    store=store,
+    dungeon_service=MysticDungeonService(
+        mystic_catalog,
+        now=local_now,
+        config_provider=active_mystic_gameplay_config,
+        enabled_theme_ids_provider=active_mystic_theme_ids,
+    ),
+    battle_service=MysticBattleService(
+        default_mystic_gameplay_config(),
+        now=local_now,
+        config_provider=active_mystic_gameplay_config,
+    ),
+    renderer=MysticMapRenderer(allow_placeholder_background=True),
+    now=local_now,
+)
 
 
 async def fetch_avatar(user_id: str) -> Optional[bytes]:
@@ -791,10 +796,6 @@ def is_equip_puppet_command_text(text: str) -> bool:
 
 def is_plant_command_text(text: str) -> bool:
     return is_prefixed_index_command(text, PLANT_EQUIP_PREFIXES)
-
-
-def is_mystic_explore_command_text(text: str) -> bool:
-    return is_prefixed_index_command(text, MYSTIC_EXPLORE_PREFIXES)
 
 
 def is_route_command_text(text: str) -> bool:
@@ -1170,14 +1171,14 @@ def parse_short_index_text(text: str) -> Optional[int]:
     return aliases.get(token, int(token) if token.isdigit() else None)
 
 
-def mystic_pending_key(event: MessageEvent) -> str:
+def conversation_pending_key(event: MessageEvent) -> str:
     if isinstance(event, GroupMessageEvent):
         return f"group:{event.group_id}:{event.get_user_id()}"
     return f"private:{event.get_user_id()}"
 
 
 def divination_pending_key(event: MessageEvent) -> str:
-    return mystic_pending_key(event)
+    return conversation_pending_key(event)
 
 
 def is_equip_method_command_text(text: str) -> bool:
@@ -1213,7 +1214,8 @@ def parse_duel_target(event: MessageEvent) -> Optional[str]:
 
 def is_managed_command_text(text: str) -> bool:
     return (
-        text in SIGNIN_TEXTS
+        parse_mystic_group_command(text) is not None
+        or text in SIGNIN_TEXTS
         or text in STATUS_TEXTS
         or text in HELP_TEXTS
         or text in NEWBIE_TUTORIAL_TEXTS
@@ -1233,7 +1235,6 @@ def is_managed_command_text(text: str) -> bool:
         or is_acquired_root_command_text(text)
         or is_special_ability_command_text(text)
         or is_special_ability_learn_command_text(text)
-        or text in MYSTIC_ENTRY_TEXTS
         or is_route_command_text(text)
         or is_task_command_text(text)
         or is_shop_command_text(text)
@@ -1265,7 +1266,6 @@ def is_managed_command_text(text: str) -> bool:
         or is_plant_command_text(text)
         or is_item_use_command_text(text)
         or is_spirit_liquid_use_command_text(text)
-        or is_mystic_explore_command_text(text)
         or is_duel_command_text(text)
     )
 
@@ -1599,34 +1599,6 @@ async def send_normal_duel_prepare_messages(session: dict[str, Any]) -> None:
         send_normal_duel_prepare_cards(left_id, left_record, str(session.get("left_name") or left_id)),
         send_normal_duel_prepare_cards(right_id, right_record, str(session.get("right_name") or right_id)),
     )
-
-
-async def send_mystic_boss_duel_report(user_id: str, record, result: dict[str, Any]) -> bool:
-    if not result:
-        return False
-    try:
-        left = result.get("left", {})
-        right = result.get("right", {})
-        left_avatar = await fetch_avatar(str(left.get("user_id") or user_id))
-        right_avatar = beast_portrait_bytes(str(right.get("nickname") or ""))
-        image = render_battle_card(
-            result,
-            left_avatar=left_avatar,
-            right_avatar=right_avatar,
-            width=config.xiuxian_signin_image_width,
-        )
-        await get_bot().send_private_msg(user_id=int(user_id), message=MessageSegment.image(BytesIO(image)))
-        return True
-    except Exception as exc:
-        logger.debug(f"发送秘境首领斗法私聊战报失败: {user_id} {exc}")
-        try:
-            await get_bot().send_private_msg(
-                user_id=int(user_id),
-                message=panel_segment("秘境首领斗法", "斗法战报生成完成，但图片私聊发送失败，请检查好友或临时会话权限。", record, icon="warning"),
-            )
-        except Exception:
-            logger.debug(f"发送秘境首领斗法失败提示失败: {user_id}")
-        return False
 
 
 async def build_normal_duel_image(result: dict[str, Any]) -> bytes:
@@ -2737,20 +2709,6 @@ def item_icon_for_category(category: str) -> str:
     }.get(category, "bag")
 
 
-def format_mystic_entries(entries: list[dict[str, Any]]) -> str:
-    if not entries:
-        return "当前后台未开启任何秘境入口。"
-    lines = ["当前发现以下秘境入口："]
-    for index, entry in enumerate(entries, start=1):
-        title = mystic_realm_title_from_entry(entry)
-        recommended = str(entry.get("recommended") or "未知")
-        lines.append(f"{index}、{title}（推荐修为：{recommended}）")
-    if any(entry.get("insight") for entry in entries):
-        lines.append("天机示警已开启：进入后会标出坏结局选项。")
-    lines.append("请在 60 秒内回复入口编号，超时后入口会关闭。")
-    return "\n".join(lines)
-
-
 def format_power_status(record, nickname: str) -> str:
     summary = battle_summary(record)
     lines = [
@@ -2918,6 +2876,19 @@ async def rank_scheduler() -> None:
         await asyncio.sleep(60)
 
 
+async def recover_mystic_dungeons() -> None:
+    try:
+        recovered = await mystic_coordinator.recover_active_runs()
+        logger.info(
+            "秘境状态恢复完成："
+            f"应战超时 {recovered.response_expirations}，"
+            f"投票超时 {recovered.vote_expirations}，"
+            f"恢复截止时间 {recovered.scheduled_deadline_count}"
+        )
+    except Exception:
+        logger.exception("秘境状态恢复失败")
+
+
 @driver.on_startup
 async def start_rank_scheduler() -> None:
     global admin_http_server, rank_scheduler_task
@@ -2940,6 +2911,7 @@ async def start_rank_scheduler() -> None:
             admin_manager.apply_config()
     else:
         admin_manager.apply_config()
+    await recover_mystic_dungeons()
     rank_scheduler_task = asyncio.create_task(rank_scheduler())
 
 
@@ -3134,6 +3106,22 @@ async def is_tianji_mystic_message(event: MessageEvent) -> bool:
     return is_tianji_mystic_command_text(normalized_plain_text(event))
 
 
+async def is_mystic_group_message(event: MessageEvent) -> bool:
+    return (
+        isinstance(event, GroupMessageEvent)
+        and parse_mystic_group_command(normalized_plain_text(event)) is not None
+    )
+
+
+async def is_mystic_private_message(event: MessageEvent) -> bool:
+    if not isinstance(event, PrivateMessageEvent):
+        return False
+    return await mystic_coordinator.accepts_private_message(
+        event.get_user_id(),
+        normalized_plain_text(event),
+    )
+
+
 async def is_divination_message(event: MessageEvent) -> bool:
     return is_divination_command_text(normalized_plain_text(event))
 
@@ -3178,21 +3166,6 @@ async def is_acquired_root_message(event: MessageEvent) -> bool:
 
 async def is_spirit_liquid_use_message(event: MessageEvent) -> bool:
     return is_spirit_liquid_use_command_text(normalized_plain_text(event))
-
-
-async def is_mystic_entry_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in MYSTIC_ENTRY_TEXTS
-
-
-async def is_mystic_entry_reply(event: MessageEvent) -> bool:
-    pending = pending_mystic_entries.get(mystic_pending_key(event))
-    if pending is None:
-        return False
-    return parse_short_index_text(normalized_plain_text(event)) is not None
-
-
-async def is_mystic_explore_message(event: MessageEvent) -> bool:
-    return is_mystic_explore_command_text(normalized_plain_text(event))
 
 
 async def is_fishing_message(event: MessageEvent) -> bool:
@@ -3336,6 +3309,8 @@ async def is_beast_realm_private_message(event: MessageEvent) -> bool:
 
 beast_realm_group_cmd = on_message(rule=Rule(is_beast_realm_group_message), priority=10, block=True)
 beast_realm_private_cmd = on_message(rule=Rule(is_beast_realm_private_message), priority=7, block=True)
+mystic_group_cmd = on_message(rule=Rule(is_mystic_group_message), priority=8, block=True)
+mystic_private_cmd = on_message(rule=Rule(is_mystic_private_message), priority=6, block=True)
 help_cmd = on_message(rule=Rule(is_help_message), priority=10, block=True)
 newbie_tutorial_cmd = on_message(rule=Rule(is_newbie_tutorial_message), priority=10, block=True)
 catalog_cmd = on_message(rule=Rule(is_catalog_message), priority=10, block=True)
@@ -3369,10 +3344,7 @@ plant_cmd = on_message(rule=Rule(is_plant_message), priority=10, block=True)
 item_use_cmd = on_message(rule=Rule(is_item_use_message), priority=10, block=True)
 acquired_root_cmd = on_message(rule=Rule(is_acquired_root_message), priority=10, block=True)
 spirit_liquid_use_cmd = on_message(rule=Rule(is_spirit_liquid_use_message), priority=10, block=True)
-mystic_entry_reply = on_message(rule=Rule(is_mystic_entry_reply), priority=8, block=True)
 divination_reply = on_message(rule=Rule(is_divination_reply), priority=8, block=True)
-mystic_entry = on_message(rule=Rule(is_mystic_entry_message), priority=10, block=True)
-mystic_explore = on_message(rule=Rule(is_mystic_explore_message), priority=10, block=True)
 fishing = on_message(rule=Rule(is_fishing_message), priority=10, block=True)
 fishing_reply = on_message(rule=Rule(is_fishing_reply), priority=9, block=True)
 cultivation_rank = on_message(rule=Rule(is_cultivation_rank_message), priority=10, block=True)
@@ -3394,6 +3366,88 @@ doudizhu_cmd = on_message(rule=Rule(is_doudizhu_message), priority=10, block=Tru
 chat_rank_counter = on_message(rule=Rule(is_group_chat_for_rank), priority=99, block=False)
 
 
+
+
+async def finish_mystic_command_result(
+    matcher: Matcher,
+    user_id: str,
+    result: MysticCommandResult,
+) -> None:
+    record = await store.get_user(user_id)
+    if result.error:
+        await finish_panel(matcher, "秘境操作失败", result.error, record, icon="warning")
+        return
+    for target_user_id, private_text in result.private_messages:
+        try:
+            await get_bot().send_private_msg(
+                user_id=int(target_user_id),
+                message=private_text,
+            )
+        except (ActionFailed, NetworkError, RuntimeError, ValueError):
+            logger.debug(f"发送秘境私聊提示失败: {target_user_id}")
+    if result.image_bytes is not None:
+        try:
+            await matcher.send(MessageSegment.image(BytesIO(result.image_bytes)))
+        except (ActionFailed, NetworkError, OSError, RuntimeError, ValueError):
+            await finish_panel(
+                matcher,
+                "秘境地图",
+                result.message or "地图图片发送失败，请稍后重试。",
+                record,
+                icon="mystic",
+            )
+            return
+        await matcher.finish()
+        return
+    await finish_panel(
+        matcher,
+        "秘境",
+        result.message or "秘境状态已更新。",
+        record,
+        icon="mystic",
+    )
+
+
+@mystic_group_cmd.handle()
+async def handle_mystic_group(
+    matcher: Matcher,
+    event: GroupMessageEvent,
+) -> None:
+    user_id = event.get_user_id()
+    nickname = await group_member_display_name(event, user_id)
+    result = await mystic_coordinator.handle_group(
+        str(event.group_id),
+        user_id,
+        normalized_plain_text(event),
+        nickname=nickname,
+    )
+    await finish_mystic_command_result(matcher, user_id, result)
+
+
+@mystic_private_cmd.handle()
+async def handle_mystic_private(
+    matcher: Matcher,
+    event: PrivateMessageEvent,
+) -> None:
+    user_id = event.get_user_id()
+    route = await mystic_coordinator.resolve_private_context(user_id)
+    if route is None:
+        await finish_panel(matcher, "秘境", "当前没有可操作的秘境。", icon="warning")
+        return
+    text = normalized_plain_text(event)
+    if text in {"秘境状态", "秘境地图"}:
+        result = await mystic_coordinator.handle_group(
+            route.source_group_id,
+            user_id,
+            text,
+        )
+    else:
+        result = await mystic_coordinator.handle_private(
+            user_id,
+            text,
+            action_id=f"onebot:{event.message_id}",
+        )
+    await finish_mystic_command_result(matcher, user_id, result)
 
 
 @beast_realm_group_cmd.handle()
@@ -4039,8 +4093,11 @@ async def handle_rescue(matcher: Matcher, event: MessageEvent) -> None:
         if not requests:
             lines.append("\u6682\u65e0\u6551\u63f4\u59d4\u6258\u3002")
         for req in requests[:10]:
-            realm = req.get("realm", {})
-            lines.append(f"{req.get('id')}\uff1a{req.get('requester_name')} \u6c42\u63f4 {realm.get('title') or realm.get('type')}\uff0c\u916c\u52b3 {spirit_stone_text(int(req.get('reward_stones', 0)))}")
+            lines.append(
+                f"{req.request_id}\uff1a{req.requester_name} \u6c42\u63f4"
+                f"\uff0c\u5269\u4f59\u751f\u547d {req.remaining_hp}"
+                f"\uff0c\u916c\u52b3 {spirit_stone_text(req.reward_stones)}"
+            )
         lines.append("\u53d1\u8d77\uff1a\u79d8\u5883\u6551\u63f4 1000\uff1b\u63a5\u53d6\uff1a\u6551\u63f4 \u59d4\u6258\u7f16\u53f7\u3002")
         await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", "\n".join(lines), record, icon="mystic")
     amount = parse_rescue_request(text)
@@ -4049,25 +4106,47 @@ async def handle_rescue(matcher: Matcher, event: MessageEvent) -> None:
             await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", "\u8bf7\u5199\u660e\u6551\u63f4\u916c\u52b3\uff0c\u4f8b\u5982\uff1a\u79d8\u5883\u6551\u63f4 1000\u3002", record, icon="mystic")
         if record.spirit_stones < amount:
             await finish_panel(matcher, "\u6551\u63f4\u5931\u8d25", f"\u7075\u77f3\u4e0d\u8db3\uff0c\u5f53\u524d\u4ec5\u6709 {spirit_stone_text(record.spirit_stones)}\u3002", record, icon="warning")
-        if not record.last_failed_mystic_realm:
-            await finish_panel(matcher, "\u6551\u63f4\u5931\u8d25", "\u5f53\u524d\u6ca1\u6709\u53ef\u59d4\u6258\u6551\u63f4\u7684\u5931\u8d25\u79d8\u5883\u8bb0\u5f55\u3002", record, icon="warning")
-        record.spirit_stones -= amount
-        request = await store.create_rescue_request(group_id, event.get_user_id(), nickname_from_event(event), record.last_failed_mystic_realm, amount)
-        await store.save_user(record)
-        await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", f"\u5df2\u53d1\u5e03\u6551\u63f4\u59d4\u6258 {request.get('id')}\uff0c\u916c\u52b3 {spirit_stone_text(amount)}\u3002\u5176\u4ed6\u4fee\u58eb\u53ef\u53d1\u9001\uff1a\u6551\u63f4 {request.get('id')}\u3002", record, icon="mystic")
+        run_id = await store.find_active_mystic_run_id(event.get_user_id())
+        run = await store.get_mystic_run(run_id or "")
+        if (
+            run is None
+            or run.phase is not DungeonPhase.AWAITING_RESCUE
+            or run.leader_id != event.get_user_id()
+            or run.active_encounter_id is None
+        ):
+            await finish_panel(matcher, "\u6551\u63f4\u5931\u8d25", "\u5f53\u524d\u6ca1\u6709\u53ef\u59d4\u6258\u6551\u63f4\u7684\u65b0\u7248\u79d8\u5883\u906d\u9047\u3002", record, icon="warning")
+        encounter = await store.get_mystic_encounter(run.active_encounter_id)
+        if encounter is None or encounter.shared_monster_hp <= 0:
+            await finish_panel(matcher, "\u6551\u63f4\u5931\u8d25", "\u79d8\u5883\u906d\u9047\u72b6\u6001\u7f3a\u5931\u3002", record, icon="warning")
+        request = MysticRescueRequest(
+            request_id=f"rescue:{run.run_id}:{run.revision}",
+            run_id=run.run_id,
+            encounter_id=encounter.encounter_id,
+            group_id=group_id,
+            requester_id=event.get_user_id(),
+            requester_name=nickname_from_event(event),
+            reward_stones=amount,
+            monster_snapshot=encounter.monster_record,
+            remaining_hp=encounter.shared_monster_hp,
+            deadline=(
+                local_now()
+                + timedelta(
+                    seconds=mystic_coordinator.battle_service.config.rescue_wait_seconds
+                )
+            ).isoformat(),
+        )
+        saved_request = await store.create_rescue_request(request)
+        await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", f"\u5df2\u53d1\u5e03\u6551\u63f4\u59d4\u6258 {saved_request.request_id}\uff0c\u916c\u52b3 {spirit_stone_text(amount)}\u3002\u5176\u4ed6\u4fee\u58eb\u53ef\u53d1\u9001\uff1a\u6551\u63f4 {saved_request.request_id}\u3002", record, icon="mystic")
     take_id = parse_rescue_take(text)
     if take_id is not None:
         if not take_id:
             await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", "\u8bf7\u53d1\u9001\uff1a\u6551\u63f4 \u59d4\u6258\u7f16\u53f7\u3002", record, icon="mystic")
-        request = await store.take_rescue_request(group_id, take_id, event.get_user_id())
-        if not request:
-            await finish_panel(matcher, "\u63a5\u53d6\u5931\u8d25", "\u6ca1\u6709\u627e\u5230\u8fd9\u6761\u53ef\u63a5\u53d6\u6551\u63f4\uff0c\u6216\u4e0d\u80fd\u6551\u63f4\u81ea\u5df1\u3002", record, icon="warning")
-        realm = dict(request.get("realm") or {})
-        realm["rescued_from"] = request.get("requester_id")
-        record.mystic_realm = realm
-        record.spirit_stones += int(request.get("reward_stones", 0))
-        await store.save_user(record)
-        await finish_panel(matcher, "\u79d8\u5883\u6551\u63f4", f"\u5df2\u63a5\u53d6 {request.get('requester_name')} \u7684\u6551\u63f4\u59d4\u6258\uff0c\u83b7\u5f97\u916c\u52b3 {spirit_stone_text(int(request.get('reward_stones', 0)))}\u3002\n{mystic_realm_options_text(record)}", record, icon="mystic")
+        result = await mystic_coordinator.take_rescue(
+            group_id,
+            take_id,
+            event.get_user_id(),
+        )
+        await finish_mystic_command_result(matcher, event.get_user_id(), result)
 
 
 @talisman_draw_cmd.handle()
@@ -4093,28 +4172,44 @@ async def handle_talisman_draw(matcher: Matcher, event: MessageEvent) -> None:
 async def handle_tianji_mystic(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    success, message, entries = draw_tianji_mystic_entrances(record, local_today())
-    if not success:
-        await finish_panel(matcher, "天机秘境", message, record, icon="mystic")
-    key = mystic_pending_key(event)
-    expires_at = time.monotonic() + MYSTIC_ENTRY_TTL
-    pending_mystic_entries[key] = {"expires_at": expires_at, "entries": entries}
-    asyncio.create_task(
-        send_mystic_timeout_notice(
-            key,
-            expires_at,
-            event.get_user_id(),
-            str(event.group_id) if isinstance(event, GroupMessageEvent) else None,
+    if not isinstance(event, GroupMessageEvent):
+        await finish_panel(
+            matcher,
+            "天机秘境",
+            "天机秘境需要在群聊中开启。",
+            record,
+            icon="warning",
         )
+        return
+    themes = sorted(
+        (
+            theme
+            for theme in mystic_catalog.themes.values()
+            if theme.risk is DungeonRisk.NORMAL
+        ),
+        key=lambda theme: theme.theme_id,
     )
-    await finish_panel(
-        matcher,
-        "天机秘境",
-        f"{message}\n{format_mystic_entries(entries)}",
-        record,
-        subtitle="60秒内回复编号",
-        icon="mystic",
+    theme = themes[
+        sum(f"{event.group_id}:{event.get_user_id()}:{local_today()}".encode("utf-8"))
+        % len(themes)
+    ]
+    offer = DungeonEntryOffer(
+        mode=DungeonMode.SOLO,
+        risk=DungeonRisk.NORMAL,
+        theme_id=theme.theme_id,
+        boss_realm_index=record.realm_index,
+        insight=True,
     )
+    try:
+        result = await mystic_coordinator.create_from_offer(
+            str(event.group_id),
+            event.get_user_id(),
+            offer,
+        )
+    except (LookupError, PermissionError, ValueError) as exc:
+        await finish_panel(matcher, "天机秘境", str(exc), record, icon="warning")
+        return
+    await finish_mystic_command_result(matcher, event.get_user_id(), result)
 
 
 @tianji_sit_cmd.handle()
@@ -4334,89 +4429,6 @@ async def handle_spirit_liquid_use(matcher: Matcher, event: MessageEvent) -> Non
         record,
         icon="stone" if success else "warning",
     )
-
-@mystic_entry.handle()
-async def handle_mystic_entry(matcher: Matcher, event: MessageEvent) -> None:
-    await remember_group_member(event)
-    record = await store.get_user(event.get_user_id())
-    if record.mystic_realm:
-        await finish_panel(matcher, "秘境探索", mystic_realm_options_text(record), record, icon="mystic")
-    entries = draw_mystic_entrances(record)
-    if not entries:
-        await finish_panel(matcher, "秘境入口", "当前后台未开启任何秘境入口。", record, icon="mystic")
-    key = mystic_pending_key(event)
-    expires_at = time.monotonic() + MYSTIC_ENTRY_TTL
-    pending_mystic_entries[key] = {
-        "expires_at": expires_at,
-        "entries": entries,
-    }
-    asyncio.create_task(
-        send_mystic_timeout_notice(
-            key,
-            expires_at,
-            event.get_user_id(),
-            str(event.group_id) if isinstance(event, GroupMessageEvent) else None,
-        )
-    )
-    await finish_panel(
-        matcher,
-        "秘境入口",
-        format_mystic_entries(entries),
-        record,
-        subtitle="60秒内回复编号",
-        icon="mystic",
-    )
-
-
-@mystic_entry_reply.handle()
-async def handle_mystic_entry_reply(matcher: Matcher, event: MessageEvent) -> None:
-    await remember_group_member(event)
-    key = mystic_pending_key(event)
-    pending = pending_mystic_entries.get(key)
-    record = await store.get_user(event.get_user_id())
-    if pending is None or float(pending.get("expires_at", 0)) < time.monotonic():
-        pending_mystic_entries.pop(key, None)
-        await finish_panel(matcher, "秘境入口", "已超时，如有需求系统将为宿主重新抽取。", record, icon="warning")
-    index = parse_short_index_text(normalized_plain_text(event))
-    entries = list(pending.get("entries", []))
-    if index is None or index < 1 or index > len(entries):
-        await finish_panel(matcher, "秘境入口", f"请选择 1-{len(entries)} 之间的秘境入口。", record, icon="warning")
-    entry = entries[index - 1]
-    success, message = start_mystic_realm(record, str(entry.get("type", "")), local_today(), entry)
-    pending_mystic_entries.pop(key, None)
-    if success:
-        await store.save_user(record)
-    await finish_panel(
-        matcher,
-        "秘境探索" if success else "进入失败",
-        f"正在进入，传送中——\n{message}" if success else message,
-        record,
-        icon="mystic" if success else "warning",
-    )
-
-
-@mystic_explore.handle()
-async def handle_mystic_explore(matcher: Matcher, event: MessageEvent) -> None:
-    await remember_group_member(event)
-    record = await store.get_user(event.get_user_id())
-    option_index = parse_prefixed_index(normalized_plain_text(event), MYSTIC_EXPLORE_PREFIXES)
-    if option_index is None:
-        await finish_panel(matcher, "操作提示", "请发送“探索 编号”，例如：探索 1。", record, icon="mystic")
-    record.combat_nickname = nickname_from_event(event) or f"QQ {event.get_user_id()}"
-    success, message = explore_mystic_realm(record, option_index, local_now())
-    boss_duel = getattr(record, "last_mystic_boss_duel", None)
-    if boss_duel:
-        sent = await send_mystic_boss_duel_report(event.get_user_id(), record, boss_duel)
-        record.last_mystic_boss_duel = None
-        if not sent:
-            message = f"{message}\n私聊战报发送失败，请检查好友或临时会话权限。"
-    unique_note = await enforce_unique_rewards(record, event) if success else ""
-    if unique_note:
-        message = f"{message}\n{unique_note}"
-    if success:
-        await store.save_user(record)
-    await finish_panel(matcher, "秘境探索" if success else "操作失败", message, record, icon="mystic" if success else "warning")
-
 
 @signin.handle()
 async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
@@ -5080,7 +5092,7 @@ async def do_fishing(matcher: Matcher, event: MessageEvent, count: int) -> None:
     count = max(1, min(count, record.fishing_chances, 10))
     await send_panel(matcher, "灵河垂钓", f"正在为宿主进行{count}次垂钓。", record, icon="fishing")
     rewards = apply_fishing(record, count)
-    unique_note = await enforce_unique_rewards(record, event)
+    await enforce_unique_rewards(record, event)
     pending_fishing_users.pop(user_id, None)
     await store.save_user(record)
     image = await build_fishing_image(event, record, rewards)

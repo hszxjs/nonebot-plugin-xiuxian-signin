@@ -36,16 +36,37 @@ class DomainFeatureTests(unittest.TestCase):
     def tearDown(self) -> None:
         domain.apply_admin_config({})
 
-    def test_admin_config_controls_fishing_option_and_extra_signin_rates(self) -> None:
-        domain.apply_admin_config(
+    def test_user_record_ignores_legacy_mystic_runtime_fields(self) -> None:
+        legacy_keys = {
+            "mystic_realm",
+            "last_failed_mystic_realm",
+            "mystic_boss_successes",
+            "mystic_boss_daily_date",
+            "mystic_boss_daily_attempts",
+            "mystic_boss_daily_bonus",
+            "mystic_boss_week_key",
+            "mystic_boss_week_attempts",
+            "mystic_boss_week_claimed",
+        }
+        payload = domain.UserRecord(user_id="42", root=root()).to_dict()
+        payload.update(
             {
-                "mystic": {"fishing_option_rate": 1.5},
-                "signin": {"extra_fishing_chance_rate": -0.5},
+                "mystic_realm": {"steps_left": 8},
+                "last_failed_mystic_realm": {"type": "上古宗门遗址"},
+                "mystic_boss_successes": {"2026-07-16": ["legacy"]},
+                "mystic_boss_daily_date": "2026-07-16",
+                "mystic_boss_daily_attempts": 2,
+                "mystic_boss_daily_bonus": 1,
+                "mystic_boss_week_key": "2026-W29",
+                "mystic_boss_week_attempts": 3,
+                "mystic_boss_week_claimed": [3],
             }
         )
 
-        self.assertEqual(domain.MYSTIC_FISHING_OPTION_RATE, 1.0)
-        self.assertEqual(domain.SIGNIN_EXTRA_FISHING_CHANCE_RATE, 0.0)
+        record = domain.UserRecord.from_dict(payload)
+
+        self.assertTrue(all(not hasattr(record, key) for key in legacy_keys))
+        self.assertTrue(legacy_keys.isdisjoint(record.to_dict()))
 
     def test_signin_reports_and_applies_extra_fishing_chance(self) -> None:
         domain.apply_admin_config({"signin": {"extra_fishing_chance_rate": 1.0}})
@@ -57,39 +78,63 @@ class DomainFeatureTests(unittest.TestCase):
         self.assertEqual(record.pending_fishing, 2)
         self.assertEqual(result.fishing_chances_gained, 2)
 
-    def test_mystic_roll_can_add_fishing_chance_option(self) -> None:
-        domain.apply_admin_config({"mystic": {"fishing_option_rate": 1.0}})
-
-        options = domain.roll_mystic_options("上古宗门遗址")
-
-        self.assertTrue(any(option.get("fishing_chance") == 1 for option in options))
-
-    def test_mystic_fishing_option_grants_chance_without_reward_roll(self) -> None:
-        record = domain.UserRecord(
-            user_id="42",
-            root=root(),
-            mystic_realm={
-                "type": "上古宗门遗址",
-                "steps_left": 2,
-                "step": 0,
-                "danger": 0,
-                "options": [
-                    {
-                        "text": "循着灵河回响抛下一缕神识钓线",
-                        "fishing_chance": 1,
-                        "success": "灵河回应。",
-                    }
-                ],
-            },
+    def test_signin_can_grant_configured_mystic_tokens(self) -> None:
+        domain.apply_admin_config(
+            {
+                "mystic": {
+                    "signin_normal_token_count": 1,
+                    "signin_high_risk_token_count": 1,
+                }
+            }
         )
+        record = domain.UserRecord(user_id="42", root=root())
 
-        success, message = domain.explore_mystic_realm(record, 1, date(2026, 7, 9))
+        domain.apply_signin(record, date(2026, 7, 16))
+
+        self.assertEqual(domain.reward_count_by_names(record, ["普通秘境令牌"]), 1)
+        self.assertEqual(domain.reward_count_by_names(record, ["高风险秘境令牌"]), 1)
+
+    def test_mystic_token_grant_counts_are_clamped_to_zero_through_ten(self) -> None:
+        domain.apply_admin_config(
+            {
+                "mystic": {
+                    "signin_normal_token_count": 99,
+                    "signin_high_risk_token_count": -4,
+                }
+            }
+        )
+        record = domain.UserRecord(user_id="42", root=root())
+
+        domain.apply_signin(record, date(2026, 7, 16))
+
+        self.assertEqual(domain.reward_count_by_names(record, ["普通秘境令牌"]), 10)
+        self.assertEqual(domain.reward_count_by_names(record, ["高风险秘境令牌"]), 0)
+
+    def test_daily_task_can_grant_configured_mystic_tokens(self) -> None:
+        domain.apply_admin_config(
+            {
+                "mystic": {
+                    "daily_task_normal_token_count": 1,
+                    "daily_task_high_risk_token_count": 1,
+                }
+            }
+        )
+        record = domain.UserRecord(user_id="42", root=root())
+        domain.generate_daily_tasks(record, date(2026, 7, 16))
+
+        success, _ = domain.complete_daily_task(record, 1, date(2026, 7, 16))
 
         self.assertTrue(success)
-        self.assertIn("垂钓次数 +1", message)
-        self.assertEqual(record.fishing_chances, 1)
-        self.assertEqual(record.pending_fishing, 1)
-        self.assertEqual(record.mystic_realm["steps_left"], 1)
+        self.assertEqual(domain.reward_count_by_names(record, ["普通秘境令牌"]), 1)
+        self.assertEqual(domain.reward_count_by_names(record, ["高风险秘境令牌"]), 1)
+
+    def test_mystic_tokens_are_admin_items_but_not_fishing_drops(self) -> None:
+        token_names = set(domain.MYSTIC_TOKEN_DEFINITIONS)
+        fishing_names = {str(item[3]) for item in domain.FISHING_REWARDS}
+        catalog_names = {str(item["name"]) for item in domain.admin_item_catalog()}
+
+        self.assertTrue(token_names <= catalog_names)
+        self.assertTrue(token_names.isdisjoint(fishing_names))
 
     def test_batch_sell_low_realm_artifacts_keeps_equipped_unique_and_current_realm_items(self) -> None:
         equipped = artifact("旧剑", 1, uid="equipped")

@@ -81,12 +81,18 @@ describe("DashboardWorkspace", () => {
   afterEach(() => cleanup())
 
   it("renders snapshot operations data with Ant Design cards and a realm chart", () => {
-    const { container } = render(<DashboardWorkspace dashboard={dashboard} onBackup={vi.fn()} />)
+    const { container } = render(
+      <DashboardWorkspace dashboard={dashboard} onBackup={vi.fn()} />,
+    )
 
-    expect(screen.getByRole("heading", { name: "修仙运维控制台" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "修仙运维控制台" }),
+    ).toBeInTheDocument()
     expect(screen.getByText("玩家总数")).toBeInTheDocument()
     expect(screen.getAllByText("筑基境").length).toBeGreaterThan(0)
-    expect(screen.getByTestId("realm-distribution-chart")).toHaveTextContent("筑基境:2")
+    expect(screen.getByTestId("realm-distribution-chart")).toHaveTextContent(
+      "筑基境:2",
+    )
     expect(screen.getByText("云行")).toBeInTheDocument()
     expect(screen.getByText("沉舟")).toBeInTheDocument()
     expect(container.querySelector("table")).toBeNull()
@@ -95,10 +101,14 @@ describe("DashboardWorkspace", () => {
   })
 
   it("keeps the backup action behind an alert dialog trigger", () => {
-    const { container } = render(<DashboardWorkspace dashboard={dashboard} onBackup={vi.fn()} />)
+    const { container } = render(
+      <DashboardWorkspace dashboard={dashboard} onBackup={vi.fn()} />,
+    )
     const actionCard = screen.getByTestId("dashboard-maintenance-card")
 
-    expect(within(actionCard).getByRole("button", { name: "创建玩家备份" })).toBeInTheDocument()
+    expect(
+      within(actionCard).getByRole("button", { name: "创建玩家备份" }),
+    ).toBeInTheDocument()
     expect(container.querySelector(".ant-btn")).not.toBeNull()
   })
 })

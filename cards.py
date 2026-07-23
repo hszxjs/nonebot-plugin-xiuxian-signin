@@ -28,14 +28,10 @@ from .domain import (
     acquired_root_summary,
     normalize_acquired_roots,
     combat_max_mana,
-    hehuan_remaining_text,
     is_breakthrough_bottleneck,
     reward_display_name,
     root_attribute_name,
     tier_exp,
-    spirit_stone_text,
-    tianji_status_text,
-    reward_signature,
     artifact_slots,
     REALMS,
 )
@@ -1128,9 +1124,7 @@ def render_fishing_card(
     gold = "#8a571f"
 
     title_font = load_font(sp(43), bold=True)
-    subtitle_font = load_font(sp(21), bold=True)
     value_font = load_font(sp(21), bold=True)
-    small_font = load_font(sp(16), bold=True)
 
     def panel_text(xy: tuple[int, int], text: str, font: ImageFont.ImageFont, fill: Any = ink, weight: int = 2) -> None:
         draw_weighted_text(draw, (sp(xy[0]), sp(xy[1])), text, font, fill, weight=weight)
@@ -2110,15 +2104,12 @@ def render_adventure_card(
     veil = (255, 250, 229, 102)
     veil_soft = (255, 255, 245, 72)
     veil_deep = (52, 36, 70, 78)
-    line = (245, 228, 177, 138)
 
     title_font = load_font(sp(42), bold=True)
     subtitle_font = load_font(sp(24), bold=True)
-    label_font = load_font(sp(21), bold=True)
     value_font = load_font(sp(23), bold=True)
     small_font = load_font(sp(20), bold=True)
     tiny_font = load_font(sp(17), bold=True)
-    number_font = load_font(sp(30), bold=True)
 
     layout = {
         "title": (242, 64, 1015, 152),
@@ -2518,13 +2509,7 @@ def render_adventure_card(
     main_weapon = item_name(main_item)
     off_weapon = item_name(off_item)
     armor = item_name(armor_item)
-    life_artifact = str(summary.get("life_artifact") or "\u672a\u796d\u70bc")
-    talisman = str(summary.get("talisman") or "未装备")
     method = str(summary.get("method") or "\u672a\u53c2\u609f")
-    array = str(summary.get("array") or "\u672a\u5e03\u7f6e")
-    puppet = str(summary.get("puppet") or "\u672a\u542f\u7528")
-    plant = str(summary.get("plant") or "\u672a\u683d\u79cd")
-    immortal_seed = str(summary.get("immortal_seed") or "未装备")
     mana_label = str(summary.get("mana_label") or "\u7075\u529b")
     nickname_text = nickname or f"QQ {record.user_id}"
 
@@ -2618,9 +2603,7 @@ def render_text_panel(
     measure = Image.new("RGBA", (width, 120), (0, 0, 0, 0))
     measure_draw = ImageDraw.Draw(measure)
     title_font = fit_font(measure_draw, title, width - 280, 64, bold=True, min_size=42)
-    subtitle_font = load_font(28, bold=True)
     body_font = load_font(34, bold=True)
-    small_font = load_font(26, bold=True)
     section_font = load_font(32, bold=True)
     max_text_width = width - 260
 

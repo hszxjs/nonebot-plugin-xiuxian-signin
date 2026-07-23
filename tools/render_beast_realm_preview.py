@@ -564,7 +564,7 @@ def render_task_hall_preview() -> Image.Image:
         draw_beast_card(canvas, card, (x, 292, x + 176, 590), selected=idx == 1)
     draw.text((514, 720), "任务堂商店", font=font(26), fill="#f6df9b")
     shop_cards = [pick_card("妖兽", 3, 2), pick_card("散修", 3, 1), pick_card("佛修", 2, 4), pick_card("系统持有者", 3, 0), br.BEAST_REALM_SPELL_BY_ID["br_spell_009"]]
-    card_w, card_h = 178, 254
+    card_w = 178
     for idx, card in enumerate(shop_cards, start=1):
         x = 514 + (idx - 1) * 214
         box = (x, 764, x + card_w, 1018)

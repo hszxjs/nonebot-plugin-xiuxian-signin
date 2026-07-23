@@ -13,8 +13,14 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from zoneinfo import ZoneInfo
 
-from . import beast_realm, domain
+from . import beast_realm, domain, mystic_dungeon
 from .admin_dashboard import build_dashboard_payload
+from .mystic_dungeon import (
+    DungeonRisk,
+    MysticGameplayConfig,
+    MysticTemplateCatalog,
+    default_mystic_gameplay_config,
+)
 from .storage import JsonStore
 
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
@@ -34,6 +40,15 @@ ADMIN_WEB_MISSING_HTML = """<!doctype html>
 </html>"""
 _ITEM_ICON_RECORD_CACHE: list[dict[str, Any]] | None = None
 _ITEM_ICON_LOOKUP_CACHE: tuple[dict[str, str], dict[str, str], list[tuple[str, str]]] | None = None
+_MYSTIC_CATALOG = MysticTemplateCatalog.from_files()
+
+
+def _mystic_theme_ids(risk: DungeonRisk) -> list[str]:
+    return sorted(
+        theme_id
+        for theme_id, theme in _MYSTIC_CATALOG.themes.items()
+        if theme.risk is risk
+    )
 
 
 def item_icon_records() -> list[dict[str, Any]]:
@@ -152,11 +167,16 @@ DEFAULT_ADMIN_CONFIG: dict[str, Any] = {
         "artifact_immortal_upgrade_rate": domain.ARTIFACT_IMMORTAL_UPGRADE_RATE,
     },
     "mystic": {
-        "enabled_types": list(domain.MYSTIC_REALM_TYPES),
-        "enabled_high_risk_types": list(domain.HIGH_RISK_MYSTIC_REALM_TYPES),
+        **default_mystic_gameplay_config().to_mapping(),
+        "enabled_types": _mystic_theme_ids(DungeonRisk.NORMAL),
+        "enabled_high_risk_types": _mystic_theme_ids(DungeonRisk.HIGH),
         "category_weights": domain.default_mystic_category_weights(),
         "drop_overrides": {},
         "fishing_option_rate": 0.05,
+        "signin_normal_token_count": 0,
+        "signin_high_risk_token_count": 0,
+        "daily_task_normal_token_count": 0,
+        "daily_task_high_risk_token_count": 0,
     },
     "signin": {"extra_fishing_chance_rate": 0.10},
     "item_overrides": {},
@@ -213,6 +233,7 @@ class AdminManager:
         config = self.load_config()
         domain.apply_admin_config(config)
         beast_realm.apply_admin_config(config)
+        mystic_dungeon.apply_admin_config(config)
 
     def backup_users(self) -> dict[str, Any]:
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -299,19 +320,70 @@ class AdminManager:
         config = self.load_config()
         mystic = config.get("mystic", {}) if isinstance(config.get("mystic"), dict) else {}
         signin = config.get("signin", {}) if isinstance(config.get("signin"), dict) else {}
+        gameplay = MysticGameplayConfig.from_mapping(mystic).to_mapping()
+        themes = [
+            {
+                "theme_id": theme_id,
+                "display_name": theme.display_name,
+                "risk": theme.risk.value,
+                "template_id": theme.template_id,
+                "background_path": str(theme.background_path),
+                "background_exists": theme.background_path.is_file(),
+                "template_exists": theme.template_id in _MYSTIC_CATALOG.templates,
+            }
+            for theme_id, theme in sorted(_MYSTIC_CATALOG.themes.items())
+        ]
         return {
-            "types": list(domain.MYSTIC_REALM_TYPES),
-            "high_risk_types": list(domain.HIGH_RISK_MYSTIC_REALM_TYPES),
-            "enabled_types": mystic.get("enabled_types", list(domain.MYSTIC_REALM_TYPES)),
-            "enabled_high_risk_types": mystic.get("enabled_high_risk_types", list(domain.HIGH_RISK_MYSTIC_REALM_TYPES)),
+            **gameplay,
+            "types": _mystic_theme_ids(DungeonRisk.NORMAL),
+            "high_risk_types": _mystic_theme_ids(DungeonRisk.HIGH),
+            "enabled_types": mystic.get(
+                "enabled_types",
+                _mystic_theme_ids(DungeonRisk.NORMAL),
+            ),
+            "enabled_high_risk_types": mystic.get(
+                "enabled_high_risk_types",
+                _mystic_theme_ids(DungeonRisk.HIGH),
+            ),
+            "supported_map_sizes": list({rule["node_count"] for rule in gameplay["map_size_rules"]}),
+            "themes": themes,
+            "token_definitions": dict(domain.MYSTIC_TOKEN_DEFINITIONS),
             "category_weights": mystic.get("category_weights", {}),
             "drop_overrides": mystic.get("drop_overrides", {}),
             "fishing_option_rate": mystic.get("fishing_option_rate", 0.05),
+            "signin_normal_token_count": mystic.get("signin_normal_token_count", 0),
+            "signin_high_risk_token_count": mystic.get("signin_high_risk_token_count", 0),
+            "daily_task_normal_token_count": mystic.get("daily_task_normal_token_count", 0),
+            "daily_task_high_risk_token_count": mystic.get("daily_task_high_risk_token_count", 0),
             "extra_fishing_chance_rate": signin.get("extra_fishing_chance_rate", 0.10),
             "categories": list(domain.REWARD_CATEGORIES) + [domain.IMMORTAL_SEED_CATEGORY],
             "tiers": list(domain.TIER_ORDER),
             "grades": list(domain.GRADE_ORDER),
         }
+
+    def save_mystic_config(self, data: dict[str, Any]) -> dict[str, Any]:
+        validated = MysticGameplayConfig.from_mapping(data).to_mapping()
+        normal_ids = set(_mystic_theme_ids(DungeonRisk.NORMAL))
+        high_risk_ids = set(_mystic_theme_ids(DungeonRisk.HIGH))
+        enabled_types = [str(item) for item in data.get("enabled_types", normal_ids)]
+        enabled_high_risk_types = [
+            str(item)
+            for item in data.get("enabled_high_risk_types", high_risk_ids)
+        ]
+        if not set(enabled_types) <= normal_ids:
+            raise ValueError("enabled_types contains an unknown normal theme")
+        if not set(enabled_high_risk_types) <= high_risk_ids:
+            raise ValueError("enabled_high_risk_types contains an unknown high-risk theme")
+        validated["enabled_types"] = enabled_types
+        validated["enabled_high_risk_types"] = enabled_high_risk_types
+        config = self.load_config()
+        current_mystic = config.get("mystic", {})
+        preserved = dict(current_mystic) if isinstance(current_mystic, dict) else {}
+        preserved.update(validated)
+        config["mystic"] = preserved
+        self.save_config(config)
+        self.apply_config()
+        return self.mystic_payload()
 
     def equipment_rules(self) -> dict[str, Any]:
         return self.load_config().get("equipment_rules", {})
@@ -581,6 +653,22 @@ def create_admin_app(
         authorize(x_xiuxian_token, token)
         return {"ok": True, "mystic": manager.mystic_payload()}
 
+    async def put_mystic(
+        request: Request,
+        token: str | None = Query(default=None),
+        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
+    ) -> Any:
+        authorize(x_xiuxian_token, token)
+        data, error = await _json_object_or_error(request, "mystic config must be an object")
+        if error is not None:
+            return error
+        assert data is not None
+        try:
+            payload = manager.save_mystic_config(data)
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
+        return {"ok": True, "mystic": payload}
+
     async def equipment_rules(
         token: str | None = Query(default=None),
         x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
@@ -658,6 +746,7 @@ def create_admin_app(
     app.add_api_route(f"{normalized_base_path}/api/items", items, methods=["GET"])
     app.add_api_route(f"{normalized_base_path}/api/beast-realm/cards", beast_cards, methods=["GET"])
     app.add_api_route(f"{normalized_base_path}/api/mystic", mystic, methods=["GET"])
+    app.add_api_route(f"{normalized_base_path}/api/mystic", put_mystic, methods=["PUT"])
     app.add_api_route(f"{normalized_base_path}/api/equipment-rules", equipment_rules, methods=["GET"])
     app.add_api_route(f"{normalized_base_path}/api/{{api_path:path}}", unknown_api, methods=["GET", "POST", "PUT"])
     app.add_api_route(f"{normalized_base_path}/assets/item-icons/{{icon_path:path}}", item_icon, methods=["GET"])

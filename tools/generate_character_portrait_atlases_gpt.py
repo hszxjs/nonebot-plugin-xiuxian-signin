@@ -19,7 +19,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 PKG_NAME = "nonebot_plugin_xiuxian_signin"

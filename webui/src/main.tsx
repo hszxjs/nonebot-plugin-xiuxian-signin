@@ -4,15 +4,21 @@ import { BrowserRouter } from "react-router-dom"
 
 import "antd/dist/reset.css"
 import "./index.css"
-import App from "./App.tsx"
 import { adminBasePath, bootstrapAdminToken } from "@/lib/api.ts"
+import App from "./App.tsx"
 
 bootstrapAdminToken()
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root")
+
+if (!rootElement) {
+  throw new Error('Root element "#root" was not found')
+}
+
+createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter basename={adminBasePath() || "/"}>
       <App />
     </BrowserRouter>
-  </StrictMode>
+  </StrictMode>,
 )

@@ -1,4 +1,4 @@
-import path from "path"
+import path from "node:path"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vitest/config"
 
@@ -27,7 +27,11 @@ export default defineConfig({
           ) {
             return "react-vendor"
           }
-          if (id.includes("/antd/") || id.includes("/@ant-design/icons/") || id.includes("/rc-")) {
+          if (
+            id.includes("/antd/") ||
+            id.includes("/@ant-design/icons/") ||
+            id.includes("/rc-")
+          ) {
             return "antd-vendor"
           }
           if (id.includes("/@ant-design/charts/") || id.includes("/@antv/")) {

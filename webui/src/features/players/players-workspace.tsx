@@ -1,16 +1,39 @@
+import {
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  List,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from "antd"
 import { useMemo, useState } from "react"
-import { Card, Form, Input, InputNumber, List, Select, Space, Tag, Typography } from "antd"
-
+import {
+  ConfirmAction,
+  EmptyPanel,
+  PageHeader,
+  SearchField,
+} from "@/features/shared/ui"
 import { formatCompactNumber, formatNumber } from "@/lib/format"
-import type { JsonRecord, JsonValue, PlayerDetailPayload, PlayerSummary } from "@/lib/types"
-import { ConfirmAction, EmptyPanel, PageHeader, SearchField } from "@/features/shared/ui"
+import type {
+  JsonRecord,
+  JsonValue,
+  PlayerDetailPayload,
+  PlayerSummary,
+} from "@/lib/types"
 
 function playerText(player: PlayerSummary) {
-  return [player.user_id, player.nickname, player.realm].join("\n").toLowerCase()
+  return [player.user_id, player.nickname, player.realm]
+    .join("\n")
+    .toLowerCase()
 }
 
 function asRecord(value: JsonValue | undefined): JsonRecord {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {}
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : {}
 }
 
 function stringValue(value: JsonValue | undefined) {
@@ -54,20 +77,38 @@ export function PlayersWorkspace({
 
   return (
     <div className="workspace-stack">
-      <PageHeader title="玩家管理" description="玩家是动态实体列表，使用搜索和结构化详情面板处理。" />
+      <PageHeader
+        title="玩家管理"
+        description="玩家是动态实体列表，使用搜索和结构化详情面板处理。"
+      />
 
       <div className="player-grid">
-        <Card title="玩家列表" extra={`${filteredPlayers.length} / ${players.length} 名玩家`}>
+        <Card
+          title="玩家列表"
+          extra={`${filteredPlayers.length} / ${players.length} 名玩家`}
+        >
           <Space orientation="vertical" size="middle" className="full-width">
-            <SearchField value={query} onChange={onQueryChange} placeholder="搜索 QQ、昵称或境界" />
+            <SearchField
+              value={query}
+              onChange={onQueryChange}
+              placeholder="搜索 QQ、昵称或境界"
+            />
             <div className="player-list">
               {filteredPlayers.length ? (
                 <List
                   dataSource={filteredPlayers}
                   renderItem={(player) => (
                     <List.Item
-                      className={selectedPlayer?.record.user_id === player.user_id ? "selected-list-item" : ""}
-                      actions={[<Tag key="power">{formatCompactNumber(player.battle_power)}</Tag>]}
+                      className={
+                        selectedPlayer?.record.user_id === player.user_id
+                          ? "selected-list-item"
+                          : ""
+                      }
+                      actions={[
+                        <Tag key="power">
+                          {formatCompactNumber(player.battle_power)}
+                        </Tag>,
+                      ]}
                       onClick={() => onSelectPlayer(player.user_id)}
                     >
                       <List.Item.Meta
@@ -83,7 +124,10 @@ export function PlayersWorkspace({
                   )}
                 />
               ) : (
-                <EmptyPanel title="没有匹配玩家" description="调整搜索词后再查看。" />
+                <EmptyPanel
+                  title="没有匹配玩家"
+                  description="调整搜索词后再查看。"
+                />
               )}
             </div>
           </Space>
@@ -97,7 +141,10 @@ export function PlayersWorkspace({
               onSavePlayer={onSavePlayer}
             />
           ) : (
-            <EmptyPanel title="未选择玩家" description="从左侧列表选择一个玩家查看详情。" />
+            <EmptyPanel
+              title="未选择玩家"
+              description="从左侧列表选择一个玩家查看详情。"
+            />
           )}
         </Card>
       </div>
@@ -141,7 +188,10 @@ function PlayerRecordEditor({
           <Input value={String(record.user_id ?? "")} readOnly />
         </Form.Item>
         <Form.Item label="昵称">
-          <Input value={stringValue(record.nickname)} onChange={(event) => updateField("nickname", event.target.value)} />
+          <Input
+            value={stringValue(record.nickname)}
+            onChange={(event) => updateField("nickname", event.target.value)}
+          />
         </Form.Item>
         <Form.Item label="境界">
           <Select
@@ -163,7 +213,9 @@ function PlayerRecordEditor({
             className="full-width"
             min={0}
             value={numberValue(record.spirit_stones)}
-            onChange={(value) => updateField("spirit_stones", Number(value ?? 0))}
+            onChange={(value) =>
+              updateField("spirit_stones", Number(value ?? 0))
+            }
           />
         </Form.Item>
         <Form.Item label="境界经验">
@@ -187,7 +239,9 @@ function PlayerRecordEditor({
             className="full-width"
             min={0}
             value={numberValue(record.fishing_chances)}
-            onChange={(value) => updateField("fishing_chances", Number(value ?? 0))}
+            onChange={(value) =>
+              updateField("fishing_chances", Number(value ?? 0))
+            }
           />
         </Form.Item>
       </div>

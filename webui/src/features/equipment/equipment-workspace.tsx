@@ -1,8 +1,7 @@
 import { Card, List, Space, Tag, Typography } from "antd"
-
+import { JsonTextarea, PageHeader, TagList } from "@/features/shared/ui"
 import { formatJson, formatNumber } from "@/lib/format"
 import type { EquipmentPayload } from "@/lib/types"
-import { JsonTextarea, PageHeader, TagList } from "@/features/shared/ui"
 
 export function EquipmentWorkspace({ payload }: { payload: EquipmentPayload }) {
   const unlocks = Object.entries(payload.rules.realm_tier_unlocks ?? {})
@@ -10,7 +9,10 @@ export function EquipmentWorkspace({ payload }: { payload: EquipmentPayload }) {
 
   return (
     <div className="workspace-stack">
-      <PageHeader title="装备规则" description="展示境界解锁、默认境界和法器目录。" />
+      <PageHeader
+        title="装备规则"
+        description="展示境界解锁、默认境界和法器目录。"
+      />
 
       <div className="catalog-grid">
         <Card title="境界解锁">
@@ -18,7 +20,10 @@ export function EquipmentWorkspace({ payload }: { payload: EquipmentPayload }) {
             dataSource={unlocks}
             renderItem={([realmIndex, tiers]) => (
               <List.Item>
-                <List.Item.Meta title={`境界 #${realmIndex}`} description={`${tiers.length} 个品阶`} />
+                <List.Item.Meta
+                  title={`境界 #${realmIndex}`}
+                  description={`${tiers.length} 个品阶`}
+                />
                 <TagList values={tiers} />
               </List.Item>
             )}
@@ -29,19 +34,32 @@ export function EquipmentWorkspace({ payload }: { payload: EquipmentPayload }) {
           <List
             dataSource={tierDefaults}
             renderItem={([tier, realmIndex]) => (
-              <List.Item actions={[<Tag key="realm">{formatNumber(realmIndex)}</Tag>]}>
-                <List.Item.Meta title={tier} description={`默认境界索引 ${formatNumber(realmIndex)}`} />
+              <List.Item
+                actions={[<Tag key="realm">{formatNumber(realmIndex)}</Tag>]}
+              >
+                <List.Item.Meta
+                  title={tier}
+                  description={`默认境界索引 ${formatNumber(realmIndex)}`}
+                />
               </List.Item>
             )}
           />
         </Card>
       </div>
 
-      <Card title="法器目录" extra={`${payload.meta.artifacts.length} 个境界绑定法器`}>
+      <Card
+        title="法器目录"
+        extra={`${payload.meta.artifacts.length} 个境界绑定法器`}
+      >
         <List
           dataSource={payload.meta.artifacts}
           renderItem={(artifact) => (
-            <List.Item actions={[<Tag key="tier">{artifact.tier}</Tag>, <Tag key="grade">{artifact.grade}</Tag>]}>
+            <List.Item
+              actions={[
+                <Tag key="tier">{artifact.tier}</Tag>,
+                <Tag key="grade">{artifact.grade}</Tag>,
+              ]}
+            >
               <List.Item.Meta
                 title={
                   <Space wrap>
@@ -49,14 +67,22 @@ export function EquipmentWorkspace({ payload }: { payload: EquipmentPayload }) {
                     <Tag>{artifact.realm}</Tag>
                   </Space>
                 }
-                description={<Typography.Text type="secondary">{artifact.attribute_label || artifact.attribute}</Typography.Text>}
+                description={
+                  <Typography.Text type="secondary">
+                    {artifact.attribute_label || artifact.attribute}
+                  </Typography.Text>
+                }
               />
             </List.Item>
           )}
         />
       </Card>
 
-      <JsonTextarea label="装备完整规则 JSON" value={formatJson(payload.rules)} readOnly />
+      <JsonTextarea
+        label="装备完整规则 JSON"
+        value={formatJson(payload.rules)}
+        readOnly
+      />
     </div>
   )
 }

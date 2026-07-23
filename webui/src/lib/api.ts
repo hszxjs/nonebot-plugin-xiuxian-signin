@@ -8,20 +8,30 @@ import type {
   DashboardPayload,
   EquipmentPayload,
   ItemsPayload,
+  MysticConfig,
   MysticPayload,
   PlayerDetailPayload,
   PlayerListPayload,
 } from "@/lib/types"
 
 const tokenStorageKey = "xiuxian-admin-token"
-const appRoutes = ["/players", "/items", "/equipment", "/mystic", "/beast", "/config"]
+const appRoutes = [
+  "/players",
+  "/items",
+  "/equipment",
+  "/mystic",
+  "/beast",
+  "/config",
+]
 
 export function adminBasePath() {
   if (typeof window === "undefined") {
     return ""
   }
   const path = window.location.pathname.replace(/\/+$/, "")
-  const matchedRoute = appRoutes.find((route) => path === route || path.endsWith(route))
+  const matchedRoute = appRoutes.find(
+    (route) => path === route || path.endsWith(route),
+  )
   if (matchedRoute) {
     const base = path.slice(0, -matchedRoute.length)
     return base || ""
@@ -58,12 +68,17 @@ export function bootstrapAdminToken() {
 
 function apiPrefix() {
   const base = adminBasePath()
-  return `${base}/api`.replace(/\/{2,}/g, "/")
+  const path = `${base}/api`.replace(/\/{2,}/g, "/")
+  if (typeof window === "undefined") {
+    return path
+  }
+  return new URL(path, window.location.origin).toString()
 }
 
 export function assetUrl(path: string) {
   const base = adminBasePath()
-  const normalized = `${base}${path.startsWith("/") ? path : `/${path}`}`.replace(/\/{2,}/g, "/")
+  const normalized =
+    `${base}${path.startsWith("/") ? path : `/${path}`}`.replace(/\/{2,}/g, "/")
   const token = getAdminToken()
   if (!token) {
     return normalized
@@ -104,7 +119,9 @@ function payloadMessage(payload: unknown) {
 
 function statusMessage(response: Response) {
   const statusText = response.statusText.trim()
-  return statusText ? `Request failed (${response.status} ${statusText})` : `Request failed (${response.status})`
+  return statusText
+    ? `Request failed (${response.status} ${statusText})`
+    : `Request failed (${response.status})`
 }
 
 export async function apiErrorMessage(error: unknown) {
@@ -152,7 +169,9 @@ export const api = ky.create({
 const fetchJson = <T>(path: string) => apiJson(api.get(path).json<T>())
 
 export function useDashboard() {
-  return useSWR<DashboardPayload>("dashboard", fetchJson, { refreshInterval: 10_000 })
+  return useSWR<DashboardPayload>("dashboard", fetchJson, {
+    refreshInterval: 10_000,
+  })
 }
 
 export function usePlayers(query: string) {
@@ -162,7 +181,10 @@ export function usePlayers(query: string) {
 }
 
 export function usePlayer(userId: string | null) {
-  return useSWR<PlayerDetailPayload>(userId ? `players/${encodeURIComponent(userId)}` : null, fetchJson)
+  return useSWR<PlayerDetailPayload>(
+    userId ? `players/${encodeURIComponent(userId)}` : null,
+    fetchJson,
+  )
 }
 
 export function useItems() {
@@ -177,6 +199,10 @@ export function useMystic() {
   return useSWR<MysticPayload>("mystic", fetchJson)
 }
 
+export function saveMysticConfig(config: MysticConfig) {
+  return apiJson(api.put("mystic", { json: config }).json<MysticPayload>())
+}
+
 export function useEquipmentRules() {
   return useSWR<EquipmentPayload>("equipment-rules", fetchJson)
 }
@@ -189,8 +215,15 @@ export function saveConfig(config: ConfigPayload["config"]) {
   return apiJson(api.put("config", { json: config }).json<ConfigPayload>())
 }
 
-export function savePlayer(userId: string, record: PlayerDetailPayload["record"]) {
-  return apiJson(api.put(`players/${encodeURIComponent(userId)}`, { json: record }).json<PlayerDetailPayload>())
+export function savePlayer(
+  userId: string,
+  record: PlayerDetailPayload["record"],
+) {
+  return apiJson(
+    api
+      .put(`players/${encodeURIComponent(userId)}`, { json: record })
+      .json<PlayerDetailPayload>(),
+  )
 }
 
 export function createBackup() {

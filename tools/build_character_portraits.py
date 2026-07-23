@@ -331,8 +331,6 @@ def draw_beast(draw: ImageDraw.ImageDraw, width: int, height: int, style: Factio
 def draw_beast_variant(draw: ImageDraw.ImageDraw, width: int, height: int, style: FactionStyle, record: dict[str, Any]) -> None:
     archetype = str(record.get("archetype") or "")
     name = str(record.get("name") or "")
-    seed = str(record.get("id") or name)
-    rng = random.Random(stable_int(f"variant:{seed}"))
     cx = width // 2
     dark = style.accent_dark
     aura = style.aura

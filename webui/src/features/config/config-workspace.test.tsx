@@ -12,7 +12,9 @@ const config: AdminConfig = {
       "1": ["凡品", "黄阶", "玄阶"],
     },
     tier_default_realm: { 凡品: 0, 黄阶: 0, 玄阶: 1 },
-    artifact_drop_pools: { "0": [{ name: "青竹剑", tier: "凡品", grade: "下品" }] },
+    artifact_drop_pools: {
+      "0": [{ name: "青竹剑", tier: "凡品", grade: "下品" }],
+    },
     artifact_power_base: { 凡品: 100 },
     artifact_realm_power_base: { "0": 100 },
     artifact_tier_power_ratio: { 凡品: 1 },
@@ -35,13 +37,19 @@ describe("ConfigWorkspace", () => {
   afterEach(() => cleanup())
 
   it("uses shape-aware controls for gameplay configuration", () => {
-    const { container } = render(<ConfigWorkspace config={config} onSave={vi.fn()} />)
+    const { container } = render(
+      <ConfigWorkspace config={config} onSave={vi.fn()} />,
+    )
 
-    expect(screen.getByRole("heading", { name: "配置管理" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "配置管理" }),
+    ).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "秘境" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "装备" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "兽域" })).toBeInTheDocument()
-    expect(container.querySelectorAll(".ant-checkbox-wrapper").length).toBeGreaterThan(1)
+    expect(
+      container.querySelectorAll(".ant-checkbox-wrapper").length,
+    ).toBeGreaterThan(1)
     expect(container.querySelectorAll(".ant-slider").length).toBeGreaterThan(1)
     expect(container.querySelector(".ant-switch")).not.toBeNull()
     expect(container.querySelector("table")).toBeNull()
@@ -50,9 +58,13 @@ describe("ConfigWorkspace", () => {
   })
 
   it("requires an alert dialog before saving the global config", () => {
-    const { container } = render(<ConfigWorkspace config={config} onSave={vi.fn()} />)
+    const { container } = render(
+      <ConfigWorkspace config={config} onSave={vi.fn()} />,
+    )
 
-    expect(screen.getByRole("button", { name: "保存全局配置" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "保存全局配置" }),
+    ).toBeInTheDocument()
     expect(container.querySelector(".ant-btn")).not.toBeNull()
   })
 })

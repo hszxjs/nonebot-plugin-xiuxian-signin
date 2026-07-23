@@ -1,12 +1,3 @@
-import { useState } from "react"
-import {
-  App as AntdApp,
-  ConfigProvider,
-  Layout,
-  Menu,
-  Result,
-  theme,
-} from "antd"
 import {
   AppstoreOutlined,
   BarChartOutlined,
@@ -17,6 +8,15 @@ import {
   TeamOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons"
+import {
+  App as AntdApp,
+  ConfigProvider,
+  Layout,
+  Menu,
+  Result,
+  theme,
+} from "antd"
+import { useState } from "react"
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
 
 import { BeastRealmWorkspace } from "@/features/beast/beast-workspace"
@@ -30,6 +30,7 @@ import { EmptyPanel, ErrorPanel, LoadingPanel } from "@/features/shared/ui"
 import {
   createBackup,
   saveConfig,
+  saveMysticConfig,
   savePlayer,
   useBeastCards,
   useConfig,
@@ -53,7 +54,9 @@ const navItems = [
 ]
 
 function selectedMenuKey(pathname: string) {
-  const match = navItems.find((item) => item.key !== "/" && pathname.startsWith(item.key))
+  const match = navItems.find(
+    (item) => item.key !== "/" && pathname.startsWith(item.key),
+  )
   return match?.key ?? "/"
 }
 
@@ -67,7 +70,12 @@ function DashboardPage() {
     return <ErrorPanel title="无法读取运维快照" error={error} />
   }
   if (!data) {
-    return <EmptyPanel title="暂无运维数据" description="等待后台生成 dashboard payload。" />
+    return (
+      <EmptyPanel
+        title="暂无运维数据"
+        description="等待后台生成 dashboard payload。"
+      />
+    )
   }
   return (
     <DashboardWorkspace
@@ -128,7 +136,11 @@ function ItemsPage() {
   if (error) {
     return <ErrorPanel title="无法读取物品图鉴" error={error} />
   }
-  return data ? <ItemsWorkspace payload={data} /> : <EmptyPanel title="暂无物品数据" description="后台未返回物品图鉴。" />
+  return data ? (
+    <ItemsWorkspace payload={data} />
+  ) : (
+    <EmptyPanel title="暂无物品数据" description="后台未返回物品图鉴。" />
+  )
 }
 
 function EquipmentPage() {
@@ -139,10 +151,15 @@ function EquipmentPage() {
   if (error) {
     return <ErrorPanel title="无法读取装备规则" error={error} />
   }
-  return data ? <EquipmentWorkspace payload={data} /> : <EmptyPanel title="暂无装备规则" description="后台未返回装备规则。" />
+  return data ? (
+    <EquipmentWorkspace payload={data} />
+  ) : (
+    <EmptyPanel title="暂无装备规则" description="后台未返回装备规则。" />
+  )
 }
 
 function MysticPage() {
+  const { message } = AntdApp.useApp()
   const { data, error, isLoading } = useMystic()
   if (isLoading) {
     return <LoadingPanel />
@@ -150,7 +167,18 @@ function MysticPage() {
   if (error) {
     return <ErrorPanel title="无法读取秘境规则" error={error} />
   }
-  return data ? <MysticWorkspace payload={data} /> : <EmptyPanel title="暂无秘境规则" description="后台未返回秘境规则。" />
+  return data ? (
+    <MysticWorkspace
+      payload={data}
+      onSave={(config) => {
+        saveMysticConfig(config)
+          .then(() => message.success("秘境配置已保存"))
+          .catch((saveError: unknown) => message.error(String(saveError)))
+      }}
+    />
+  ) : (
+    <EmptyPanel title="暂无秘境规则" description="后台未返回秘境规则。" />
+  )
 }
 
 function BeastPage() {
@@ -161,7 +189,11 @@ function BeastPage() {
   if (error) {
     return <ErrorPanel title="无法读取兽域卡池" error={error} />
   }
-  return data ? <BeastRealmWorkspace payload={data} /> : <EmptyPanel title="暂无兽域卡池" description="后台未返回卡牌数据。" />
+  return data ? (
+    <BeastRealmWorkspace payload={data} />
+  ) : (
+    <EmptyPanel title="暂无兽域卡池" description="后台未返回卡牌数据。" />
+  )
 }
 
 function ConfigPage() {
@@ -174,7 +206,12 @@ function ConfigPage() {
     return <ErrorPanel title="无法读取配置" error={error} />
   }
   if (!data) {
-    return <EmptyPanel title="暂无配置" description="后台未返回 admin_config.json。" />
+    return (
+      <EmptyPanel
+        title="暂无配置"
+        description="后台未返回 admin_config.json。"
+      />
+    )
   }
   return (
     <ConfigWorkspace
@@ -193,7 +230,13 @@ function ConfigPage() {
 }
 
 function NotFoundPage() {
-  return <Result status="404" title="页面不存在" subTitle="请从左侧导航选择一个后台模块。" />
+  return (
+    <Result
+      status="404"
+      title="页面不存在"
+      subTitle="请从左侧导航选择一个后台模块。"
+    />
+  )
 }
 
 function AdminShell() {

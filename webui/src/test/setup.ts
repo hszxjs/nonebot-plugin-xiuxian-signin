@@ -37,6 +37,6 @@ vi.mock("@ant-design/charts", () => ({
     React.createElement(
       "div",
       { "data-testid": "realm-distribution-chart" },
-      data?.map((item) => `${item.realm}:${item.count}`).join(", ")
+      data?.map((item) => `${item.realm}:${item.count}`).join(", "),
     ),
 }))

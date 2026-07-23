@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "themes": {
+    "ancient_sect_ruins": {
+      "display_name": "上古宗门遗址",
+      "risk": "normal",
+      "template_id": "ancient_sect_ruins",
+      "background": "backgrounds/ancient_sect_ruins.png",
+      "sha256": "8b0555241ceab680ca9fae25758cd92e1aba2045a3edf0224e0ad632e72d9553"
+    },
+    "beast_tide": {
+      "display_name": "兽潮",
+      "risk": "normal",
+      "template_id": "beast_tide",
+      "background": "backgrounds/beast_tide.png",
+      "sha256": "69924c20a9b13165b0139f22f597d44c0f85ecbb6bc1705abfc98d82d073d91d"
+    },
+    "ancient_cultivator_cave": {
+      "display_name": "上古大能洞府",
+      "risk": "normal",
+      "template_id": "ancient_cultivator_cave",
+      "background": "backgrounds/ancient_cultivator_cave.png",
+      "sha256": "3c64131e1a9c6ddcbde7de63a41d99c468d9c85bd23b742471aa4b817677ffdf"
+    },
+    "star_mine": {
+      "display_name": "星古矿区",
+      "risk": "normal",
+      "template_id": "star_mine",
+      "background": "backgrounds/star_mine.png",
+      "sha256": "fc99e4c39a510087bc061ba3c76fb64c2aa4a248d4056f2774fd841474a9695c"
+    },
+    "soul_remnant": {
+      "display_name": "魂界残域",
+      "risk": "normal",
+      "template_id": "soul_remnant",
+      "background": "backgrounds/soul_remnant.png",
+      "sha256": "aad87e89943bcf544b32f01a00de77995a4874de5b1498a11d2295665cf2a6a3"
+    },
+    "bronze_cloud_palace": {
+      "display_name": "古铜云阙",
+      "risk": "normal",
+      "template_id": "bronze_cloud_palace",
+      "background": "backgrounds/bronze_cloud_palace.png",
+      "sha256": "9ea3cc248f487e306ff4d9abec622fab92f288391c8ab41c6e0780380f8ecc9f"
+    },
+    "far_wilderness_boundary": {
+      "display_name": "远荒限界",
+      "risk": "high",
+      "template_id": "far_wilderness_boundary",
+      "background": "backgrounds/far_wilderness_boundary.png",
+      "sha256": "d3150437f268360b874d45b29dda38c043809ce43d3cf0c6302f60c6dadbcd7a"
+    },
+    "silent_black_mountain": {
+      "display_name": "沉寂黑山",
+      "risk": "high",
+      "template_id": "silent_black_mountain",
+      "background": "backgrounds/silent_black_mountain.png",
+      "sha256": "1df92f611843546fc0851021465faf94ed2c7d5a952e8a27630fa922b29e3d6a"
+    },
+    "prime_star_mine": {
+      "display_name": "星初矿渊",
+      "risk": "high",
+      "template_id": "prime_star_mine",
+      "background": "backgrounds/prime_star_mine.png",
+      "sha256": "88c19a3b7eaa76d3f12fdf8735b80f10a7454aedc5be6f4b15d423cf01e44a0f"
+    },
+    "fallen_god_ruins": {
+      "display_name": "神陨废墟",
+      "risk": "high",
+      "template_id": "fallen_god_ruins",
+      "background": "backgrounds/fallen_god_ruins.png",
+      "sha256": "ec059638967d40049fe246f4524b798a7bbb5dcd96cee497cfe0dbf891b19018"
+    },
+    "immortal_sleep_valley": {
+      "display_name": "仙眠幽谷",
+      "risk": "high",
+      "template_id": "immortal_sleep_valley",
+      "background": "backgrounds/immortal_sleep_valley.png",
+      "sha256": "7d832533b1e30b000ddd61c0c0778815c44931e8e23ef39231257a400c888c37"
+    },
+    "reincarnation_tide_eye": {
+      "display_name": "轮回潮眼",
+      "risk": "high",
+      "template_id": "reincarnation_tide_eye",
+      "background": "backgrounds/reincarnation_tide_eye.png",
+      "sha256": "3710a7d014a54883fcba4d3d29b7601f626392799a4e147da7df87222b63ccfd"
+    },
+    "burial_sky_island": {
+      "display_name": "葬天岛",
+      "risk": "high",
+      "template_id": "burial_sky_island",
+      "background": "backgrounds/burial_sky_island.png",
+      "sha256": "46f2e9e30551ea68b34b1efc5f22bd4f1cc10e5ff96d4d3cc2709a66473aa86c"
+    },
+    "qiongheng_ancient_hall": {
+      "display_name": "穹衡古殿",
+      "risk": "high",
+      "template_id": "qiongheng_ancient_hall",
+      "background": "backgrounds/qiongheng_ancient_hall.png",
+      "sha256": "fa005caa0a0315c8f15cafdf548add6ef660a2eddddc425c7c5321175dc8103d"
+    },
+    "five_elements_land": {
+      "display_name": "五行之地",
+      "risk": "high",
+      "template_id": "five_elements_land",
+      "background": "backgrounds/five_elements_land.png",
+      "sha256": "4acb7d80e441ee03976ea8edd7e5a86bb8e58fa109ab43ac8045bd2d91eeb15c"
+    },
+    "outer_battlefield": {
+      "display_name": "域外战场",
+      "risk": "high",
+      "template_id": "outer_battlefield",
+      "background": "backgrounds/outer_battlefield.png",
+      "sha256": "b9d6adc3e0f6241c00ca854c52d8724a37c57027678d60930406eed9fa48c4f0"
+    },
+    "nether_spring_demon_sect": {
+      "display_name": "幽泉魔宗",
+      "risk": "high",
+      "template_id": "nether_spring_demon_sect",
+      "background": "backgrounds/nether_spring_demon_sect.png",
+      "sha256": "6d704f579b2206e0dc2bfd180cfc45bfc5ccdb252af50e8d95e16a7b838bbf39"
+    },
+    "dust_ruins": {
+      "display_name": "荒尘墟",
+      "risk": "high",
+      "template_id": "dust_ruins",
+      "background": "backgrounds/dust_ruins.png",
+      "sha256": "8b840bddbcb5f8e57e6367a0b8b9f7d87ec52df912a03eee1f3f0ea58d72a56c"
+    },
+    "star_fate_lonely_realm": {
+      "display_name": "星运孤界",
+      "risk": "high",
+      "template_id": "star_fate_lonely_realm",
+      "background": "backgrounds/star_fate_lonely_realm.png",
+      "sha256": "8fad13d5892a32fc692598373265150ce76fd29b901e0f8a9ed076142b34ecfb"
+    },
+    "heaven_gate_battlefield": {
+      "display_name": "天关古战场",
+      "risk": "high",
+      "template_id": "heaven_gate_battlefield",
+      "background": "backgrounds/heaven_gate_battlefield.png",
+      "sha256": "c07b324955f48003694b4dfc711c4b11ea5aa2981e8d4d93ffac7b1d8cc5dd74"
+    },
+    "seven_constellations_road": {
+      "display_name": "七宿星空古路",
+      "risk": "high",
+      "template_id": "seven_constellations_road",
+      "background": "backgrounds/seven_constellations_road.png",
+      "sha256": "0834beea3c3725883ac8a335eb151be5aee835e5654041db290bd3761403f12a"
+    },
+    "bronze_cloud_deep": {
+      "display_name": "古铜云阙深层",
+      "risk": "high",
+      "template_id": "bronze_cloud_deep",
+      "background": "backgrounds/bronze_cloud_deep.png",
+      "sha256": "7ef2decfd7d7f304bc8fc9c0102c15dd01c80adab78cfcf5514ea0b1fa3ba834"
+    },
+    "thunder_pool": {
+      "display_name": "雷池古域",
+      "risk": "high",
+      "template_id": "thunder_pool",
+      "background": "backgrounds/thunder_pool.png",
+      "sha256": "5fa2cf1cd71149662465eba86cb97b316d929eca9bdfcb4dbe0cb4801e87762e"
+    },
+    "mystic_stone_gate": {
+      "display_name": "玄界石门",
+      "risk": "high",
+      "template_id": "mystic_stone_gate",
+      "background": "backgrounds/mystic_stone_gate.png",
+      "sha256": "1773c146fa4c60be1b1fbfd6aa8352089a616aae0f77db44f21d8d00087bcf6b"
+    },
+    "starfall_remnant": {
+      "display_name": "星陨残原",
+      "risk": "high",
+      "template_id": "starfall_remnant",
+      "background": "backgrounds/starfall_remnant.png",
+      "sha256": "34dfc93b84128d6a9a825be2049850cbf9957d09c1bff84dca6de2642a3ff8e8"
+    },
+    "green_mystic_shadow": {
+      "display_name": "青玄门影",
+      "risk": "high",
+      "template_id": "green_mystic_shadow",
+      "background": "backgrounds/green_mystic_shadow.png",
+      "sha256": "9117a11f0e1481d07f7fa0f77794baa7782f133a189ea729ffbfcdecee9ec742"
+    }
+  }
+}

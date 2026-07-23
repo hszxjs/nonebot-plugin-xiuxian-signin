@@ -1,9 +1,13 @@
-import { useMemo, useState } from "react"
 import { Card, List, Pagination, Select, Space, Tag, Typography } from "antd"
-
+import { useMemo, useState } from "react"
+import {
+  EmptyPanel,
+  PageHeader,
+  SearchField,
+  TagList,
+} from "@/features/shared/ui"
 import { assetUrl } from "@/lib/api"
 import type { ItemEntry, ItemsPayload } from "@/lib/types"
-import { EmptyPanel, PageHeader, SearchField, TagList } from "@/features/shared/ui"
 
 function encodeAssetPath(path: string) {
   return path
@@ -13,8 +17,11 @@ function encodeAssetPath(path: string) {
 }
 
 function itemMatches(item: ItemEntry, query: string, category: string) {
-  const text = [item.name, item.category, item.source, item.usage, item.story].join("\n").toLowerCase()
-  const matchesQuery = !query.trim() || text.includes(query.trim().toLowerCase())
+  const text = [item.name, item.category, item.source, item.usage, item.story]
+    .join("\n")
+    .toLowerCase()
+  const matchesQuery =
+    !query.trim() || text.includes(query.trim().toLowerCase())
   const matchesCategory = category === "all" || item.category === category
   return matchesQuery && matchesCategory
 }
@@ -26,7 +33,7 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
   const [pageSize, setPageSize] = useState(48)
   const filteredItems = useMemo(
     () => payload.items.filter((item) => itemMatches(item, query, category)),
-    [category, payload.items, query]
+    [category, payload.items, query],
   )
   const pagedItems = useMemo(() => {
     const start = (currentPage - 1) * pageSize
@@ -58,20 +65,28 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
             }}
             options={[
               { value: "all", label: "全部类别" },
-              ...payload.meta.categories.map((name) => ({ value: name, label: name })),
+              ...payload.meta.categories.map((name) => ({
+                value: name,
+                label: name,
+              })),
             ]}
           />
         </div>
       </Card>
 
-      <Card title="物品条目" extra={`${filteredItems.length} / ${payload.items.length} 个条目`}>
+      <Card
+        title="物品条目"
+        extra={`${filteredItems.length} / ${payload.items.length} 个条目`}
+      >
         {filteredItems.length ? (
           <List
             dataSource={pagedItems}
             renderItem={(item) => (
               <List.Item
                 actions={[
-                  item.required_realm ? <Tag key="realm">{item.required_realm}</Tag> : null,
+                  item.required_realm ? (
+                    <Tag key="realm">{item.required_realm}</Tag>
+                  ) : null,
                   item.source ? <Tag key="source">{item.source}</Tag> : null,
                 ].filter(Boolean)}
               >
@@ -82,7 +97,9 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
                         className="item-thumb"
                         loading="lazy"
                         decoding="async"
-                        src={assetUrl(`/assets/item-icons/${encodeAssetPath(item.icon)}`)}
+                        src={assetUrl(
+                          `/assets/item-icons/${encodeAssetPath(item.icon)}`,
+                        )}
                         alt={item.name}
                       />
                     ) : undefined
@@ -91,12 +108,16 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
                     <Space wrap>
                       <span>{item.name}</span>
                       {item.category ? <Tag>{item.category}</Tag> : null}
-                      {item.customized ? <Tag color="processing">已覆盖</Tag> : null}
+                      {item.customized ? (
+                        <Tag color="processing">已覆盖</Tag>
+                      ) : null}
                     </Space>
                   }
                   description={
                     <Space orientation="vertical">
-                      <Typography.Text type="secondary">{item.usage || item.story || item.source || "暂无描述"}</Typography.Text>
+                      <Typography.Text type="secondary">
+                        {item.usage || item.story || item.source || "暂无描述"}
+                      </Typography.Text>
                       <Space wrap>
                         <TagList values={item.tiers} />
                         <TagList values={item.grades} />
@@ -108,7 +129,10 @@ export function ItemsWorkspace({ payload }: { payload: ItemsPayload }) {
             )}
           />
         ) : (
-          <EmptyPanel title="没有匹配物品" description="调整搜索词或类别后再查看。" />
+          <EmptyPanel
+            title="没有匹配物品"
+            description="调整搜索词或类别后再查看。"
+          />
         )}
         {filteredItems.length > pageSize ? (
           <Pagination
