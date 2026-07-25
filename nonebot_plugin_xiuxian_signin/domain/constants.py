@@ -1460,8 +1460,6 @@ ARTIFACT_REALM_TIER_UNLOCKS = {
     index: list(artifact_realm_tiers_for_index(index))
     for index in range(len(REALMS))
 }
-MYSTIC_FISHING_OPTION_RATE = 0.05
-SIGNIN_EXTRA_FISHING_CHANCE_RATE = 0.10
 MYSTIC_TOKEN_DEFINITIONS = {
     "普通秘境令牌": {
         "tier": "玄阶",
@@ -1476,10 +1474,7 @@ MYSTIC_TOKEN_DEFINITIONS = {
         "description": "开启高风险秘境副本的凭证。",
     },
 }
-SIGNIN_NORMAL_MYSTIC_TOKEN_COUNT = 0
-SIGNIN_HIGH_RISK_MYSTIC_TOKEN_COUNT = 0
-DAILY_TASK_NORMAL_MYSTIC_TOKEN_COUNT = 0
-DAILY_TASK_HIGH_RISK_MYSTIC_TOKEN_COUNT = 0
+
 TALISMAN_DRAW_REALM_REQUIREMENT = {"\u51e1\u54c1": 0, "\u9ec4\u9636": 0, "\u7384\u9636": 3, "\u5730\u9636": 4, "\u5929\u9636": 5}
 ALCHEMY_RECIPES = {
     "筑基丹": {"tier": "黄阶", "grade": "中品", "materials": ["凝露草", "清心草叶", "百年朱果"], "cost": 80, "difficulty": 4},
