@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from .domain import (
+from ..domain import (
     UserRecord,
     append_reward,
     apply_exp,
@@ -14,8 +14,8 @@ from .domain import (
     normalize_mystic_settlement_ids,
     sanitize_user_record_data,
 )
-from .mystic_battle import DungeonEncounter, EncounterPhase
-from .mystic_dungeon import DungeonPhase, MysticDungeonRun
+from ..mystic_battle import DungeonEncounter, EncounterPhase
+from ..mystic_dungeon import DungeonPhase, MysticDungeonRun
 
 
 MYSTIC_TERMINAL_PHASES = {

@@ -8,7 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 CHARACTER_MANIFEST_PATH = ROOT / "assets" / "character_portraits" / "manifest.json"
 SPELL_ICON_DIR = ROOT / "assets" / "beast_realm_spell_icons"
 FOLLOWER_LABEL = "随从"

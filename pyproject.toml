@@ -95,7 +95,7 @@ files = [
     "nonebot_plugin_xiuxian_signin/mystic_cards.py",
     "nonebot_plugin_xiuxian_signin/mystic_dungeon.py",
     "nonebot_plugin_xiuxian_signin/mystic_runtime.py",
-    "nonebot_plugin_xiuxian_signin/storage.py",
+    "nonebot_plugin_xiuxian_signin/storage/__init__.py",
     "nonebot_plugin_xiuxian_signin/admin.py",
 ]
 follow_imports = "skip"
