@@ -71,6 +71,10 @@ class FakeManager:
     def apply_config(self) -> None:
         return None
 
+    def validate_mystic_theme_selections(self, data: dict[str, Any]) -> dict[str, Any]:
+        real = admin.AdminManager(admin.JsonStore(self.data_dir), self.data_dir)
+        return real.validate_mystic_theme_selections(data)
+
     def list_players(self, query: str = "") -> list[dict[str, Any]]:
         return [
             {
@@ -208,6 +212,90 @@ class XiuxianAdminRewriteTest(unittest.TestCase):
         self.assertEqual(tiers, ["凡品", "黄阶", "玄阶", "地阶", "天阶", "变异灵根"])
         self.assertNotIn("仙阶", tiers)
         self.assertNotIn("仙帝兵", tiers)
+
+    def test_load_config_migrates_legacy_mystic_display_names(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "admin_config.json").write_text(
+                json.dumps(
+                    {
+                        "mystic": {
+                            "enabled_types": ["上古宗门遗址", "兽潮"],
+                            "enabled_high_risk_types": ["远荒限界", "雷池古域"],
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            manager = admin.AdminManager(admin.JsonStore(root), root)
+
+            mystic = manager.load_config()["mystic"]
+
+        self.assertEqual(
+            mystic["enabled_types"],
+            ["ancient_sect_ruins", "beast_tide"],
+        )
+        self.assertEqual(
+            mystic["enabled_high_risk_types"],
+            ["far_wilderness_boundary", "thunder_pool"],
+        )
+
+    def test_load_config_restores_all_normal_themes_for_empty_selection(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "admin_config.json").write_text(
+                json.dumps(
+                    {"mystic": {"enabled_types": []}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            manager = admin.AdminManager(admin.JsonStore(root), root)
+
+            enabled_types = manager.load_config()["mystic"]["enabled_types"]
+
+        self.assertEqual(
+            enabled_types,
+            admin._mystic_theme_ids(admin.DungeonRisk.NORMAL),
+        )
+
+    def test_load_config_restores_all_high_risk_themes_for_invalid_selection(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "admin_config.json").write_text(
+                json.dumps(
+                    {"mystic": {"enabled_high_risk_types": ["不存在的秘境"]}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            manager = admin.AdminManager(admin.JsonStore(root), root)
+
+            enabled_types = manager.load_config()["mystic"][
+                "enabled_high_risk_types"
+            ]
+
+        self.assertEqual(
+            enabled_types,
+            admin._mystic_theme_ids(admin.DungeonRisk.HIGH),
+        )
+
+    def test_save_mystic_config_rejects_empty_theme_selection(self) -> None:
+        for field in ("enabled_types", "enabled_high_risk_types"):
+            with self.subTest(field=field), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                manager = admin.AdminManager(admin.JsonStore(root), root)
+                data = json.loads(
+                    json.dumps(
+                        admin.DEFAULT_ADMIN_CONFIG["mystic"],
+                        ensure_ascii=False,
+                    )
+                )
+                data[field] = []
+
+                with self.assertRaisesRegex(ValueError, "至少启用一个"):
+                    manager.save_mystic_config(data)
 
 
 if __name__ == "__main__":

@@ -304,6 +304,36 @@ class AdminRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"ok": False, "error": "invalid json body"})
 
+    def test_put_config_rejects_invalid_mystic_theme_selections(self) -> None:
+        cases = (
+            ("enabled_types", [], "至少启用一个"),
+            (
+                "enabled_high_risk_types",
+                ["不存在的秘境"],
+                "unknown high-risk theme",
+            ),
+        )
+        for field, value, error_text in cases:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                data_dir = Path(tmp)
+                manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+                config = manager.load_config()
+                config["mystic"][field] = value
+                original_config = manager.config_path.read_text(encoding="utf-8")
+                client = TestClient(admin.create_admin_app(manager=manager))
+
+                response = client.put(
+                    "/xiuxian-admin/api/config",
+                    json=config,
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(error_text, response.json()["error"])
+                self.assertEqual(
+                    manager.config_path.read_text(encoding="utf-8"),
+                    original_config,
+                )
+
     def test_admin_manager_save_player_record_preserves_structured_editor_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)

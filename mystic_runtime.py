@@ -28,6 +28,7 @@ from .mystic_dungeon import (
     NodeKind,
     MovementResult,
 )
+from .mystic_menu import mystic_menu_text
 from .domain import UserRecord, combat_max_hp
 from .storage import (
     JsonStore,
@@ -38,6 +39,7 @@ from .storage import (
 
 
 class MysticGroupAction(StrEnum):
+    HELP = "help"
     STATUS = "status"
     CREATE_SOLO = "create_solo"
     CREATE_TEAM = "create_team"
@@ -65,6 +67,8 @@ class _GroupCommandParser:
 
     def parse(self, normalized: str) -> MysticParsedCommand | None:
         exact = {
+            "秘境": MysticParsedCommand(MysticGroupAction.HELP),
+            "秘境帮助": MysticParsedCommand(MysticGroupAction.HELP),
             "秘境状态": MysticParsedCommand(MysticGroupAction.STATUS),
             "秘境地图": MysticParsedCommand(MysticGroupAction.MAP),
             "加入秘境队伍": MysticParsedCommand(MysticGroupAction.JOIN),
@@ -1097,6 +1101,8 @@ class MysticCommandCoordinator:
         user_id: str,
         parsed: MysticParsedCommand,
     ) -> MysticCommandResult:
+        if parsed.action is MysticGroupAction.HELP:
+            return MysticCommandResult(message=mystic_menu_text())
         if parsed.action is MysticGroupAction.CREATE_SOLO:
             return await self._create_solo(group_id, user_id, parsed.argument)
         if parsed.action is MysticGroupAction.CREATE_TEAM:

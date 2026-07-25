@@ -51,6 +51,45 @@ def _mystic_theme_ids(risk: DungeonRisk) -> list[str]:
     )
 
 
+def _normalized_mystic_theme_ids(values: Any, risk: DungeonRisk) -> list[str]:
+    available_theme_ids = _mystic_theme_ids(risk)
+    if not isinstance(values, list):
+        return available_theme_ids
+    available_theme_id_set = set(available_theme_ids)
+    display_name_to_id = {
+        theme.display_name: theme_id
+        for theme_id, theme in _MYSTIC_CATALOG.themes.items()
+        if theme.risk is risk
+    }
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        theme_id = (
+            value
+            if value in available_theme_id_set
+            else display_name_to_id.get(value)
+        )
+        if theme_id is None or theme_id in seen:
+            continue
+        normalized.append(theme_id)
+        seen.add(theme_id)
+    return normalized or available_theme_ids
+
+
+def _normalize_mystic_theme_config(config: dict[str, Any]) -> None:
+    mystic = config.get("mystic")
+    if not isinstance(mystic, dict):
+        return
+    mystic["enabled_types"] = _normalized_mystic_theme_ids(
+        mystic.get("enabled_types"), DungeonRisk.NORMAL
+    )
+    mystic["enabled_high_risk_types"] = _normalized_mystic_theme_ids(
+        mystic.get("enabled_high_risk_types"), DungeonRisk.HIGH
+    )
+
+
 def item_icon_records() -> list[dict[str, Any]]:
     global _ITEM_ICON_RECORD_CACHE
     if _ITEM_ICON_RECORD_CACHE is not None:
@@ -221,6 +260,7 @@ class AdminManager:
             data = {}
         merged = json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
         deep_update(merged, data if isinstance(data, dict) else {})
+        _normalize_mystic_theme_config(merged)
         return merged
 
     def save_config(self, data: dict[str, Any]) -> None:
@@ -361,21 +401,39 @@ class AdminManager:
             "grades": list(domain.GRADE_ORDER),
         }
 
-    def save_mystic_config(self, data: dict[str, Any]) -> dict[str, Any]:
+    def validate_mystic_theme_selections(self, data: dict[str, Any]) -> dict[str, Any]:
         validated = MysticGameplayConfig.from_mapping(data).to_mapping()
-        normal_ids = set(_mystic_theme_ids(DungeonRisk.NORMAL))
-        high_risk_ids = set(_mystic_theme_ids(DungeonRisk.HIGH))
-        enabled_types = [str(item) for item in data.get("enabled_types", normal_ids)]
+        normal_theme_ids = _mystic_theme_ids(DungeonRisk.NORMAL)
+        high_risk_theme_ids = _mystic_theme_ids(DungeonRisk.HIGH)
+        raw_enabled_types = data.get("enabled_types", normal_theme_ids)
+        raw_enabled_high_risk_types = data.get(
+            "enabled_high_risk_types",
+            high_risk_theme_ids,
+        )
+        if not isinstance(raw_enabled_types, list):
+            raise ValueError("普通秘境地图主题配置必须是列表")
+        if not isinstance(raw_enabled_high_risk_types, list):
+            raise ValueError("高风险秘境地图主题配置必须是列表")
+        enabled_types = [str(item) for item in raw_enabled_types]
         enabled_high_risk_types = [
-            str(item)
-            for item in data.get("enabled_high_risk_types", high_risk_ids)
+            str(item) for item in raw_enabled_high_risk_types
         ]
+        if not enabled_types:
+            raise ValueError("普通秘境至少启用一个地图主题")
+        if not enabled_high_risk_types:
+            raise ValueError("高风险秘境至少启用一个地图主题")
+        normal_ids = set(normal_theme_ids)
+        high_risk_ids = set(high_risk_theme_ids)
         if not set(enabled_types) <= normal_ids:
             raise ValueError("enabled_types contains an unknown normal theme")
         if not set(enabled_high_risk_types) <= high_risk_ids:
             raise ValueError("enabled_high_risk_types contains an unknown high-risk theme")
         validated["enabled_types"] = enabled_types
         validated["enabled_high_risk_types"] = enabled_high_risk_types
+        return validated
+
+    def save_mystic_config(self, data: dict[str, Any]) -> dict[str, Any]:
+        validated = self.validate_mystic_theme_selections(data)
         config = self.load_config()
         current_mystic = config.get("mystic", {})
         preserved = dict(current_mystic) if isinstance(current_mystic, dict) else {}
@@ -589,6 +647,13 @@ def create_admin_app(
         if error is not None:
             return error
         assert data is not None
+        mystic_section = data.get("mystic", {})
+        if not isinstance(mystic_section, dict):
+            return _json_error("mystic config must be an object", 400)
+        try:
+            manager.validate_mystic_theme_selections(mystic_section)
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
         manager.save_config(data)
         manager.apply_config()
         return {"ok": True, "config": manager.load_config()}

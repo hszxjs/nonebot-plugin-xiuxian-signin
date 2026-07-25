@@ -1734,7 +1734,10 @@ class MysticDungeonService:
             key=lambda theme: theme.theme_id,
         )
         if not choices:
-            raise ValueError(f"catalog has no themes for risk {run.risk.value!r}")
+            risk_label = "普通" if run.risk is DungeonRisk.NORMAL else "高风险"
+            raise ValueError(
+                f"{risk_label}秘境没有启用任何地图主题，请在 Web 后台至少启用一个主题。"
+            )
         theme = choices[map_seed % len(choices)]
         try:
             template = self._catalog.templates[theme.template_id]

@@ -22,6 +22,7 @@ mystic = importlib.import_module(f"{PACKAGE_NAME}.mystic_dungeon")
 battle = importlib.import_module(f"{PACKAGE_NAME}.mystic_battle")
 cards = importlib.import_module(f"{PACKAGE_NAME}.mystic_cards")
 storage = importlib.import_module(f"{PACKAGE_NAME}.storage")
+menu = importlib.import_module(f"{PACKAGE_NAME}.mystic_menu")
 runtime = importlib.import_module(f"{PACKAGE_NAME}.mystic_runtime")
 
 UserRecord = domain.UserRecord
@@ -533,6 +534,38 @@ def test_parser_accepts_mystic_commands_without_stealing_unrelated_commands() ->
     assert parse_mystic_group_command("装备 青锋剑") is None
     assert parse_mystic_private_command("秘境配装 青锋剑") == "秘境配装 青锋剑"
     assert parse_mystic_private_command("装备 青锋剑") is None
+
+
+def test_mystic_menu_commands_return_current_dungeon_help(tmp_path: Path) -> None:
+    coordinator = _coordinator(tmp_path)
+
+    for command in ("秘境", "秘境帮助"):
+        parsed = parse_mystic_group_command(command)
+        assert parsed is not None
+        assert parsed.action.value == "help"
+
+        result = asyncio.run(
+            coordinator.handle_group("100", "leader", command)
+        )
+
+        assert result.error == ""
+        assert "【秘境副本菜单】" in result.message
+        assert "创建单人秘境 普通" in result.message
+        assert "创建秘境队伍 普通" in result.message
+        assert "投骰" in result.message
+        assert "确认配装" in result.message
+        assert "秘境救援 1000" in result.message
+
+
+def test_mystic_menu_metadata_uses_current_commands() -> None:
+    entry = menu.MYSTIC_PICMENU_ENTRY
+    help_summary = menu.MYSTIC_HELP_SUMMARY
+
+    assert entry["func"] == "秘境副本"
+    assert "秘境 / 秘境帮助" in entry["trigger_method"]
+    assert "投骰 1-6" not in entry["trigger_method"]
+    assert "群聊发送 秘境" in help_summary
+    assert "探索 1" not in help_summary
 
 
 def test_restart_expires_response_and_vote_using_original_deadline(

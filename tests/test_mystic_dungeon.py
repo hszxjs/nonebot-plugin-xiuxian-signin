@@ -185,6 +185,39 @@ def test_started_run_reads_latest_config_and_enabled_theme_provider(
     )
 
 
+@pytest.mark.parametrize(
+    ("risk", "risk_label"),
+    [
+        (DungeonRisk.NORMAL, "普通"),
+        (DungeonRisk.HIGH, "高风险"),
+    ],
+)
+def test_solo_start_reports_chinese_error_when_no_theme_is_enabled(
+    catalog: MysticTemplateCatalog,
+    risk: DungeonRisk,
+    risk_label: str,
+) -> None:
+    service = MysticDungeonService(
+        catalog,
+        now=lambda: NOW,
+        enabled_theme_ids_provider=lambda _risk: (),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=rf"{risk_label}秘境没有启用任何地图主题",
+    ):
+        service.create_solo_run(
+            "no-enabled-theme",
+            "100",
+            "leader",
+            risk,
+            boss_realm_index=4,
+            map_seed=7,
+            content_seed=11,
+        )
+
+
 def test_reward_multiplier_scales_numeric_dungeon_rewards(
     catalog: MysticTemplateCatalog,
 ) -> None:
