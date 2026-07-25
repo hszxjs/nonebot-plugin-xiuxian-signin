@@ -117,10 +117,27 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 ## __init__.py — 插件入口
 
 - `__plugin_meta__` / `__version__`：NoneBot 插件元数据（必须在此）
-- 单例实例化：`config`/`store`/`admin_manager`/`mystic_coordinator` + 6 个游戏状态字典
+- 单例：从 `state.py` 导入（`config`/`store`/`admin_manager`/`mystic_coordinator` + 6 个游戏状态字典）
 - 生命周期：`@driver.on_startup`（启动后台/恢复秘境/排行调度）、`@driver.on_shutdown`
-- 57 个 `on_message` matcher + handler：命令分发（签到/面板/突破/背包/…/秘境/御兽/交易）
+- 命令分发：`on_message` matcher + handler（签到/面板/突破/背包/…/秘境/御兽/交易）
 - 兜底 matcher：`chat_rank_counter`（p99，群聊统计）、`normal_duel_chat`（p8，斗法）
+
+## state.py — 共享单例
+
+集中持有所有命令子模块需要的共享对象，避免循环导入：
+- 单例：`config`/`store`/`admin_manager`/`mystic_coordinator`/`mystic_catalog`
+- 工具：`local_now`/`local_today`/`get_data_dir`/`load_config`
+- 可变游戏状态：6 个字典（`pending_fishing_users`/`doudizhu_tables` 等）
+- 生命周期句柄：`rank_scheduler_task`/`admin_http_server`
+
+命令子模块通过 `from ..state import store, config` 获取单例。
+
+## commands/ — 命令子包
+
+部分自包含的玩法已迁入子包，子模块在 import 时注册各自的 NoneBot matcher：
+- `commands/doudizhu.py`：斗地主完整子系统（触发词 + 卡牌引擎 + matcher + handler）
+
+子模块的外部 helper（`finish_panel`/`nickname_from_event` 等）经 `_g`（入口模块引用，由 `__init__.py` 注入）延迟访问；共享状态经 `state` 获取。后续可按相同模式继续迁移 normal_duel/divination/mystic 等功能。
 
 ## 添加新功能的指引
 
