@@ -10,9 +10,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 
-PACKAGE_NAME = "mystic_cards_test_package"
+PACKAGE_NAME = "nonebot_plugin_xiuxian_signin"
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin"
-if PACKAGE_NAME not in sys.modules:
+if PACKAGE_NAME not in sys.modules or not hasattr(sys.modules[PACKAGE_NAME], "__path__"):
     package = types.ModuleType(PACKAGE_NAME)
     package.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]
     package.__package__ = PACKAGE_NAME

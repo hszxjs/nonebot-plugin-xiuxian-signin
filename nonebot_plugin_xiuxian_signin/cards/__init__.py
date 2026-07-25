@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-from .domain import (
+from ..domain import (
     ATTRIBUTE_COLORS,
     CONSUMABLE_EXP_BASE,
     FOOD_CATEGORY,
@@ -37,14 +37,14 @@ from .domain import (
 )
 
 Color = tuple[int, int, int]
-FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+FONT_DIR = Path(__file__).parent.parent / "assets" / "fonts"
 BUNDLED_FONT_PATH = FONT_DIR / "HarmonyOS_Sans_SC.ttf"
-SIGNIN_UI_SPRITE_DIR = Path(__file__).parent / "assets" / "ui_sprite" / "signin" / "output" / "sprites"
+SIGNIN_UI_SPRITE_DIR = Path(__file__).parent.parent / "assets" / "ui_sprite" / "signin" / "output" / "sprites"
 SIGNIN_PANEL_BG = SIGNIN_UI_SPRITE_DIR / "signin_background_base.png"
 SIGNIN_PORTRAIT_FRAME = SIGNIN_UI_SPRITE_DIR / "portrait_frame_overlay.png"
 SIGNIN_EXPERIENCE_TROUGH = SIGNIN_UI_SPRITE_DIR / "experience_trough.png"
 SIGNIN_EXPERIENCE_LIQUID = SIGNIN_UI_SPRITE_DIR / "experience_trough_1.png"
-PANEL_BACKGROUND_DIR = Path(__file__).parent / "assets" / "panel_backgrounds"
+PANEL_BACKGROUND_DIR = Path(__file__).parent.parent / "assets" / "panel_backgrounds"
 ADVENTURE_PANEL_BG = PANEL_BACKGROUND_DIR / "adventure_background.png"
 FISHING_PANEL_BG = PANEL_BACKGROUND_DIR / "fishing_background.png"
 TEXT_PANEL_BACKGROUND_FILES = {
@@ -71,10 +71,10 @@ TEXT_PANEL_BACKGROUND_FILES = {
     "duel": "battle_background.png",
     "power": "battle_background.png",
 }
-ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
+ITEM_ICON_ROOT = Path(__file__).parent.parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
-SPIRIT_ROOT_ICON_DIR = Path(__file__).parent / "assets" / "spirit_root_icons"
-REALM_QUALITY_ICON_DIR = Path(__file__).parent / "assets" / "realm_quality_icons"
+SPIRIT_ROOT_ICON_DIR = Path(__file__).parent.parent / "assets" / "spirit_root_icons"
+REALM_QUALITY_ICON_DIR = Path(__file__).parent.parent / "assets" / "realm_quality_icons"
 SPIRIT_ROOT_ICON_FILES = {
     "金": "jin.png",
     "木": "mu.png",
