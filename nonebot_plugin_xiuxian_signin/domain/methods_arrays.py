@@ -436,3 +436,31 @@ def deduce_array(record: UserRecord, array_index: int) -> tuple[bool, str]:
             return True, f"阵纹重组，消耗 {reward_display_name(material)} 推演 {before}，当前为 {after} 第{_domain.array_layer(record, record.rewards[list_index])}层。"
     append_reward(record, material)
     return False, "没有找到可推演的目标阵盘。"
+
+
+def array_layer(record: UserRecord, array: Optional[dict[str, Any]]) -> int:
+    if not array:
+        return 0
+    key = reward_signature(array)
+    current = int((record.array_layers or {}).get(key, 0) or 0)
+    return max(1, min(array_layer_cap(array), current or 1))
+
+def array_proficiency_cap(array: Optional[dict[str, Any]], layer: Optional[int] = None) -> int:
+    if not array:
+        return 0
+    tier = str(array.get("tier", "凡品"))
+    current_layer = max(1, int(layer or 1))
+    if tier == "仙阶":
+        cap_multiplier = max(20.0, current_layer * 20.0)
+    else:
+        cap_multiplier = ARRAY_MULTIPLIER_CAP_BY_TIER.get(tier, 5.0)
+    return max(0, int((cap_multiplier - 1.0) * 100))
+
+def array_proficiency_value(record: UserRecord, array: Optional[dict[str, Any]] = None) -> int:
+    item = array or record.equipped_array
+    if not item:
+        return 0
+    ensure_array_tracking(record, item)
+    key = reward_signature(item)
+    value = int((record.array_proficiency or {}).get(key, 0) or 0)
+    return max(0, min(array_proficiency_cap(item, array_layer(record, item)), value))
