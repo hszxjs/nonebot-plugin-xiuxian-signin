@@ -2,23 +2,36 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import types
 import unittest
 from datetime import date
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin" / "admin_dashboard.py"
-SPEC = importlib.util.spec_from_file_location("admin_dashboard", MODULE_PATH)
+# 伪造轻量父包 nonebot_plugin_xiuxian_signin（不执行真实 __init__.py，避免触发 NoneBot 初始化）。
+PACKAGE_NAME = "nonebot_plugin_xiuxian_signin"
+PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin"
+if PACKAGE_NAME not in sys.modules or not hasattr(sys.modules[PACKAGE_NAME], "__path__"):
+    package = types.ModuleType(PACKAGE_NAME)
+    package.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]
+    package.__package__ = PACKAGE_NAME
+    sys.modules[PACKAGE_NAME] = package
+
+MODULE_PATH = PACKAGE_ROOT / "admin_dashboard.py"
+SPEC = importlib.util.spec_from_file_location(f"{PACKAGE_NAME}.admin_dashboard", MODULE_PATH)
 admin_dashboard = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
+sys.modules[f"{PACKAGE_NAME}.admin_dashboard"] = admin_dashboard
 SPEC.loader.exec_module(admin_dashboard)
 
-DOMAIN_PATH = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin" / "domain.py"
-DOMAIN_SPEC = importlib.util.spec_from_file_location("domain", DOMAIN_PATH)
-domain = importlib.util.module_from_spec(DOMAIN_SPEC)
-sys.modules["domain"] = domain
-assert DOMAIN_SPEC and DOMAIN_SPEC.loader
-DOMAIN_SPEC.loader.exec_module(domain)
+# domain 现为子包，按文件加载其入口以正确解析内部相对导入。
+_domain_spec = importlib.util.spec_from_file_location(
+    f"{PACKAGE_NAME}.domain", PACKAGE_ROOT / "domain" / "__init__.py"
+)
+assert _domain_spec is not None and _domain_spec.loader is not None
+domain = importlib.util.module_from_spec(_domain_spec)
+sys.modules[f"{PACKAGE_NAME}.domain"] = domain
+_domain_spec.loader.exec_module(domain)
 
 
 class AdminDashboardTests(unittest.TestCase):
