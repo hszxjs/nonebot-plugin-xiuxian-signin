@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 
 
-DOMAIN_PATH = Path(__file__).resolve().parents[1] / "domain.py"
+DOMAIN_PATH = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin" / "domain.py"
 DOMAIN_SPEC = importlib.util.spec_from_file_location("domain", DOMAIN_PATH)
 assert DOMAIN_SPEC is not None and DOMAIN_SPEC.loader is not None
 domain = importlib.util.module_from_spec(DOMAIN_SPEC)

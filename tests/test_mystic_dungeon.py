@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "mystic_dungeon.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin" / "mystic_dungeon.py"
 MODULE_SPEC = importlib.util.spec_from_file_location("mystic_dungeon", MODULE_PATH)
 assert MODULE_SPEC is not None and MODULE_SPEC.loader is not None
 mystic_dungeon = importlib.util.module_from_spec(MODULE_SPEC)
@@ -34,7 +34,7 @@ VoteKind = mystic_dungeon.VoteKind
 default_mystic_gameplay_config = mystic_dungeon.default_mystic_gameplay_config
 
 
-ASSET_ROOT = Path(__file__).resolve().parents[1] / "assets" / "mystic_maps"
+ASSET_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin" / "assets" / "mystic_maps"
 EXPECTED_NORMAL_THEMES = {
     "ancient_sect_ruins": "上古宗门遗址",
     "beast_tide": "兽潮",

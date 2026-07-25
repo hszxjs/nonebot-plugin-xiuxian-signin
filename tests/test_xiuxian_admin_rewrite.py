@@ -12,7 +12,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin"
 PACKAGE_NAME = "_xiuxian_admin_rewrite_package"
 
 package = types.ModuleType(PACKAGE_NAME)

@@ -7,13 +7,13 @@ from datetime import date
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "admin_dashboard.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin" / "admin_dashboard.py"
 SPEC = importlib.util.spec_from_file_location("admin_dashboard", MODULE_PATH)
 admin_dashboard = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(admin_dashboard)
 
-DOMAIN_PATH = Path(__file__).resolve().parents[1] / "domain.py"
+DOMAIN_PATH = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin" / "domain.py"
 DOMAIN_SPEC = importlib.util.spec_from_file_location("domain", DOMAIN_PATH)
 domain = importlib.util.module_from_spec(DOMAIN_SPEC)
 sys.modules["domain"] = domain

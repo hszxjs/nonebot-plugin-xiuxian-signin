@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import json
 import sys
 import types
@@ -10,7 +11,7 @@ from PIL import Image, ImageDraw
 
 
 PACKAGE_NAME = "mystic_cards_test_package"
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin"
 if PACKAGE_NAME not in sys.modules:
     package = types.ModuleType(PACKAGE_NAME)
     package.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]
@@ -19,9 +20,14 @@ if PACKAGE_NAME not in sys.modules:
 
 mystic = importlib.import_module(f"{PACKAGE_NAME}.mystic_dungeon")
 cards = importlib.import_module(f"{PACKAGE_NAME}.mystic_cards")
-backgrounds = importlib.import_module(
-    f"{PACKAGE_NAME}.tools.generate_mystic_map_backgrounds_gpt"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_bg_spec = importlib.util.spec_from_file_location(
+    "generate_mystic_map_backgrounds_gpt",
+    _REPO_ROOT / "tools" / "generate_mystic_map_backgrounds_gpt.py",
 )
+assert _bg_spec is not None and _bg_spec.loader is not None
+backgrounds = importlib.util.module_from_spec(_bg_spec)
+_bg_spec.loader.exec_module(backgrounds)
 
 MysticTemplateCatalog = mystic.MysticTemplateCatalog
 NodeKind = mystic.NodeKind

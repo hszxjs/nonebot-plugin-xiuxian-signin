@@ -27,6 +27,7 @@ group_members.json
 # IDE / OS
 .vscode/
 .idea/
+.zcode/
 .DS_Store
 Thumbs.db
 

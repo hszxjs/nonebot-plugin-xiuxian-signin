@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 
 PACKAGE_NAME = "nonebot_plugin_xiuxian_signin"
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin"
 
 
 def _load_admin_module() -> Any:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 PACKAGE_NAME = "mystic_integration_test_package"
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_signin"
 if PACKAGE_NAME not in sys.modules:
     package = types.ModuleType(PACKAGE_NAME)
     package.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]

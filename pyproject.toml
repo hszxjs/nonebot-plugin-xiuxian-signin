@@ -51,11 +51,11 @@ dev = [
 plugins = ["nonebot_plugin_xiuxian_signin"]
 
 [tool.setuptools]
-packages = ["nonebot_plugin_xiuxian_signin"]
 include-package-data = true
 
-[tool.setuptools.package-dir]
-nonebot_plugin_xiuxian_signin = "."
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nonebot_plugin_xiuxian_signin*"]
 
 [tool.setuptools.package-data]
 nonebot_plugin_xiuxian_signin = [
@@ -91,12 +91,12 @@ line-ending = "lf"
 [tool.mypy]
 python_version = "3.12"
 files = [
-    "mystic_battle.py",
-    "mystic_cards.py",
-    "mystic_dungeon.py",
-    "mystic_runtime.py",
-    "storage.py",
-    "admin.py",
+    "nonebot_plugin_xiuxian_signin/mystic_battle.py",
+    "nonebot_plugin_xiuxian_signin/mystic_cards.py",
+    "nonebot_plugin_xiuxian_signin/mystic_dungeon.py",
+    "nonebot_plugin_xiuxian_signin/mystic_runtime.py",
+    "nonebot_plugin_xiuxian_signin/storage.py",
+    "nonebot_plugin_xiuxian_signin/admin.py",
 ]
 follow_imports = "skip"
 check_untyped_defs = true
