@@ -187,6 +187,14 @@ from .mystic_runtime import (
     parse_mystic_group_command,
 )
 from .storage import JsonStore, MysticRescueRequest
+from . import state as _state  # 共享单例（config/store/admin_manager/mystic_coordinator 等）
+from .state import (  # noqa: F401
+    config, store, admin_manager, mystic_coordinator, mystic_catalog,
+    local_now, local_today, get_data_dir,
+    pending_fishing_users, pending_divinations,
+    normal_duel_queue, normal_duel_sessions,
+    doudizhu_tables, beast_realm_tables, beast_realm_private_routes,
+)
 
 __version__ = "0.5.1"
 
@@ -503,35 +511,12 @@ async def send_divination_timeout_notice(
         logger.exception("\u53d1\u9001\u5929\u673a\u5360\u535c\u8d85\u65f6\u63d0\u793a\u5931\u8d25")
 
 
-def load_config() -> Config:
-    data = driver.config.model_dump() if hasattr(driver.config, "model_dump") else driver.config.dict()
-    if hasattr(Config, "model_validate"):
-        return Config.model_validate(data)
-    return Config.parse_obj(data)
 
 
-config = load_config()
-set_font_paths(config.xiuxian_signin_font_path, config.xiuxian_signin_bold_font_path)
 
 
-def get_data_dir() -> Path:
-    if config.xiuxian_signin_data_dir:
-        return Path(config.xiuxian_signin_data_dir)
-    base_data_dir = getattr(localstore, "BASE_DATA_DIR", None)
-    if base_data_dir is None:
-        return localstore.get_plugin_data_dir()
-    data_dir = Path(base_data_dir) / "nonebot_plugin_xiuxian_signin"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    return data_dir
 
 
-store = JsonStore(get_data_dir())
-admin_manager = AdminManager(
-    store,
-    get_data_dir(),
-    config.xiuxian_signin_admin_token or "",
-    config.xiuxian_signin_timezone,
-)
 
 
 def normalized_plain_text(event: MessageEvent) -> str:
@@ -572,34 +557,10 @@ def parse_fishing_arg(text: str) -> Optional[str]:
     return None
 
 
-def local_now() -> datetime:
-    try:
-        return datetime.now(ZoneInfo(config.xiuxian_signin_timezone))
-    except Exception:
-        return datetime.now()
 
 
-def local_today() -> date:
-    return local_now().date()
 
 
-mystic_catalog = MysticTemplateCatalog.from_files()
-mystic_coordinator = MysticCommandCoordinator(
-    store=store,
-    dungeon_service=MysticDungeonService(
-        mystic_catalog,
-        now=local_now,
-        config_provider=active_mystic_gameplay_config,
-        enabled_theme_ids_provider=active_mystic_theme_ids,
-    ),
-    battle_service=MysticBattleService(
-        default_mystic_gameplay_config(),
-        now=local_now,
-        config_provider=active_mystic_gameplay_config,
-    ),
-    renderer=MysticMapRenderer(allow_placeholder_background=True),
-    now=local_now,
-)
 
 
 async def fetch_avatar(user_id: str) -> Optional[bytes]:
