@@ -12,18 +12,21 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+PKG_NAME = "nonebot_plugin_xiuxian_signin"
 
-import beast_realm as br  # noqa: E402
+import importlib
+_pkg = types.ModuleType(PKG_NAME)
+_pkg.__path__ = [str(ROOT / PKG_NAME)]
+sys.modules.setdefault(PKG_NAME, _pkg)
+br = importlib.import_module(f"{PKG_NAME}.beast_realm")
 
 OUT_PATH = ROOT / "build" / "previews" / "beast_realm_preview_latest.png"
 OUT_ALL_CARDS_PATH = ROOT / "build" / "previews" / "beast_realm_all_cards_preview.png"
-PORTRAIT_DIR = ROOT / "assets" / "character_portraits" / "portraits"
-SPELL_ICON_DIR = ROOT / "assets" / "beast_realm_spell_icons"
-FONT_PATH = ROOT / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf"
-BG_PATH = ROOT / "assets" / "panel_backgrounds" / "beast_realm_background.png"
-REPORT_BG_PATH = ROOT / "assets" / "panel_backgrounds" / "beast_realm_background_vertical.png"
+PORTRAIT_DIR = ROOT / PKG_NAME / "assets" / "character_portraits" / "portraits"
+SPELL_ICON_DIR = ROOT / PKG_NAME / "assets" / "beast_realm_spell_icons"
+FONT_PATH = ROOT / PKG_NAME / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf"
+BG_PATH = ROOT / PKG_NAME / "assets" / "panel_backgrounds" / "beast_realm_background.png"
+REPORT_BG_PATH = ROOT / PKG_NAME / "assets" / "panel_backgrounds" / "beast_realm_background_vertical.png"
 CARD_ART_RATIO = 0.70
 
 W, H = 1680, 1080
@@ -350,7 +353,7 @@ def draw_card(canvas: Image.Image, card: dict, box: tuple[int, int, int, int], s
         draw_beast_card(canvas, card, box, selected=selected)
 
 
-PLAYER_AVATAR_PATH = ROOT / "assets" / "ui_sprite" / "signin" / "output" / "html" / "sample_avatar.png"
+PLAYER_AVATAR_PATH = ROOT / PKG_NAME / "assets" / "ui_sprite" / "signin" / "output" / "html" / "sample_avatar.png"
 OUT_JOIN_PATH = ROOT / "build" / "previews" / "beast_realm_join_preview.png"
 OUT_TASK_HALL_PATH = ROOT / "build" / "previews" / "beast_realm_task_hall_preview.png"
 OUT_BATTLE_REPORT_PATH = ROOT / "build" / "previews" / "beast_realm_battle_report_preview.png"
@@ -678,18 +681,15 @@ def runtime_modules() -> tuple[Any, Any]:
     pkg = sys.modules.get(_RUNTIME_PACKAGE)
     if pkg is None:
         pkg = types.ModuleType(_RUNTIME_PACKAGE)
-        pkg.__path__ = [str(ROOT)]
+        pkg.__path__ = [str(ROOT / PKG_NAME)]
         sys.modules[_RUNTIME_PACKAGE] = pkg
     for mod_name in ["domain", "cards", "beast_realm", "beast_realm_cards"]:
         full_name = f"{_RUNTIME_PACKAGE}.{mod_name}"
         if full_name in sys.modules:
             continue
-        spec = importlib.util.spec_from_file_location(full_name, ROOT / f"{mod_name}.py")
-        if spec is None or spec.loader is None:
-            raise RuntimeError(f"cannot load runtime module: {mod_name}")
-        module = importlib.util.module_from_spec(spec)
+        module = importlib.import_module(f"{PKG_NAME}.{mod_name}")
+        module.__name__ = full_name
         sys.modules[full_name] = module
-        spec.loader.exec_module(module)
     return sys.modules[f"{_RUNTIME_PACKAGE}.beast_realm"], sys.modules[f"{_RUNTIME_PACKAGE}.beast_realm_cards"]
 
 

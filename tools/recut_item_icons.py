@@ -8,7 +8,8 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-ICON_ROOT = ROOT / "assets" / "item_icons"
+PKG_NAME = "nonebot_plugin_xiuxian_signin"
+ICON_ROOT = ROOT / PKG_NAME / "assets" / "item_icons"
 ITEM_DIR = ICON_ROOT / "items"
 GRID_PATH = ICON_ROOT / "sheet_grid_detection.json"
 RECORD_PATH = ICON_ROOT / "item_icon_records.json"

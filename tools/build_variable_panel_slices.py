@@ -8,7 +8,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BACKGROUND_DIR = ROOT / "assets" / "panel_backgrounds"
+PKG_NAME = "nonebot_plugin_xiuxian_signin"
+BACKGROUND_DIR = ROOT / PKG_NAME / "assets" / "panel_backgrounds"
 UI_SPRITE_DIR = ROOT / "build" / "ui_sprite"
 
 

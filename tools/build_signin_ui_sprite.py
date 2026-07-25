@@ -10,9 +10,10 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BG_PATH = ROOT / "assets" / "panel_backgrounds" / "signin_background.png"
-FONT_PATH = ROOT / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf"
-OUT_ROOT = ROOT / "assets" / "ui_sprite" / "signin" / "output"
+PKG_NAME = "nonebot_plugin_xiuxian_signin"
+BG_PATH = ROOT / PKG_NAME / "assets" / "panel_backgrounds" / "signin_background.png"
+FONT_PATH = ROOT / PKG_NAME / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf"
+OUT_ROOT = ROOT / PKG_NAME / "assets" / "ui_sprite" / "signin" / "output"
 BUILD_ROOT = ROOT / "build" / "ui_sprite" / "signin"
 SPEC_DIR = BUILD_ROOT / "spec"
 SHEET_DIR = BUILD_ROOT / "spritesheet"

@@ -6,13 +6,13 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BG_PATH = ROOT / "assets/panel_backgrounds/signin_background.png"
-SIGNIN_PANEL_BG = ROOT / "assets/ui_sprite/signin/output/sprites/signin_background_base.png"
-PORTRAIT_FRAME_PATH = ROOT / "assets/ui_sprite/signin/output/sprites/portrait_frame_overlay.png"
+BG_PATH = ROOT / "nonebot_plugin_xiuxian_signin/assets/panel_backgrounds/signin_background.png"
+SIGNIN_PANEL_BG = ROOT / "nonebot_plugin_xiuxian_signin/assets/ui_sprite/signin/output/sprites/signin_background_base.png"
+PORTRAIT_FRAME_PATH = ROOT / "nonebot_plugin_xiuxian_signin/assets/ui_sprite/signin/output/sprites/portrait_frame_overlay.png"
 OLD_PATH = Path(
     r"C:\Users\hszxjs\Documents\Tencent Files\3305167706\nt_qq\nt_data\Pic\2026-06\Ori\6013980e9e6913183936ee99485ced48.png"
 )
-FONT_PATH = ROOT / "assets/fonts/HarmonyOS_Sans_SC.ttf"
+FONT_PATH = ROOT / "nonebot_plugin_xiuxian_signin/assets/fonts/HarmonyOS_Sans_SC.ttf"
 OUT_DIR = ROOT / "build/previews"
 OUT_PATH = OUT_DIR / "signin_preview_native_bg_v2.png"
 

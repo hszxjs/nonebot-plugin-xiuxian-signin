@@ -11,7 +11,8 @@ from typing import Any
 from PIL import Image, UnidentifiedImageError
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = ROOT / "assets" / "mystic_maps" / "manifest.json"
+PKG_NAME = "nonebot_plugin_xiuxian_signin"
+MANIFEST_PATH = ROOT / PKG_NAME / "assets" / "mystic_maps" / "manifest.json"
 RUN_ROOT = ROOT / "ui-sprite-runs" / "2026-07-16-mystic-backgrounds"
 SKILL_IMAGE_SCRIPT = Path("C:/Users/hszxjs/.codex/skills/ui-sprite-generator/scripts/openai_image.py")
 IMAGE_ENV_FILE = RUN_ROOT.parent / ".env"

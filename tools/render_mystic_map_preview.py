@@ -8,10 +8,10 @@ from collections import deque
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_NAME = "mystic_map_preview_package"
-if PACKAGE_NAME not in sys.modules:
+PACKAGE_NAME = "nonebot_plugin_xiuxian_signin"
+if PACKAGE_NAME not in sys.modules or not hasattr(sys.modules[PACKAGE_NAME], "__path__"):
     package = types.ModuleType(PACKAGE_NAME)
-    package.__path__ = [str(ROOT)]  # type: ignore[attr-defined]
+    package.__path__ = [str(ROOT / PACKAGE_NAME)]  # type: ignore[attr-defined]
     package.__package__ = PACKAGE_NAME
     sys.modules[PACKAGE_NAME] = package
 

@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 PKG_NAME = "nonebot_plugin_xiuxian_signin"
-OUT_DIR = ROOT / "assets" / "character_portraits"
+OUT_DIR = ROOT / PKG_NAME / "assets" / "character_portraits"
 PORTRAIT_DIR = OUT_DIR / "portraits"
 CATALOG_DIR = ROOT / "build" / "character_portraits"
 CARD_SIZE = (288, 416)
@@ -23,16 +23,11 @@ RENDER_SCALE = 1
 
 
 def load_domain_module() -> Any:
+    import importlib
     pkg = types.ModuleType(PKG_NAME)
-    pkg.__path__ = [str(ROOT)]
+    pkg.__path__ = [str(ROOT / PKG_NAME)]
     sys.modules.setdefault(PKG_NAME, pkg)
-    spec = importlib.util.spec_from_file_location(f"{PKG_NAME}.domain", ROOT / "domain.py")
-    if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load domain.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[f"{PKG_NAME}.domain"] = module
-    spec.loader.exec_module(module)
-    return module
+    return importlib.import_module(f"{PKG_NAME}.domain")
 
 
 domain = load_domain_module()
@@ -83,7 +78,7 @@ def stable_int(seed: str) -> int:
 
 def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates = [
-        ROOT / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf",
+        ROOT / PKG_NAME / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf",
     ]
     for path in candidates:
         if path.is_file():

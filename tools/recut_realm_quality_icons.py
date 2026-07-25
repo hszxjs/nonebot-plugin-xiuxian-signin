@@ -10,8 +10,9 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-ICON_ROOT = ROOT / "assets" / "realm_quality_icons"
-DEFAULT_RUN_DIR = ROOT / "assets" / "ui_sprite_runs" / "2026-07-01-realm-quality-icons"
+PKG_NAME = "nonebot_plugin_xiuxian_signin"
+ICON_ROOT = ROOT / PKG_NAME / "assets" / "realm_quality_icons"
+DEFAULT_RUN_DIR = ROOT / PKG_NAME / "assets" / "ui_sprite_runs" / "2026-07-01-realm-quality-icons"
 REPORT_PATH = ROOT / "build" / "reports" / "realm_quality" / "realm_quality_recut_report.json"
 PREVIEW_PATH = ROOT / "build" / "reports" / "realm_quality" / "realm_quality_recut_preview.png"
 CELL_RE = re.compile(
@@ -149,7 +150,7 @@ def edge_opaque_pixels(image: Image.Image) -> int:
 
 
 def load_font(size: int) -> ImageFont.ImageFont:
-    font_path = ROOT / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf"
+    font_path = ROOT / PKG_NAME / "assets" / "fonts" / "HarmonyOS_Sans_SC.ttf"
     if font_path.exists():
         try:
             return ImageFont.truetype(str(font_path), size=size)

@@ -9,17 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PKG_NAME = "nonebot_plugin_xiuxian_signin"
 
+import importlib
 pkg = types.ModuleType(PKG_NAME)
-pkg.__path__ = [str(ROOT)]
+pkg.__path__ = [str(ROOT / PKG_NAME)]
 sys.modules[PKG_NAME] = pkg
-for mod_name in ["domain", "cards"]:
-    spec = importlib.util.spec_from_file_location(f"{PKG_NAME}.{mod_name}", ROOT / f"{mod_name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[f"{PKG_NAME}.{mod_name}"] = mod
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-
-cards = sys.modules[f"{PKG_NAME}.cards"]
+importlib.import_module(f"{PKG_NAME}.domain")
+cards = importlib.import_module(f"{PKG_NAME}.cards")
 def fetch_player_avatar(user_id: str) -> bytes | None:
     if not user_id or not user_id.isdigit():
         return None
