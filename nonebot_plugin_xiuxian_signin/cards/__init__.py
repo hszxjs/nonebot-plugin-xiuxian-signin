@@ -64,6 +64,8 @@ TEXT_PANEL_BACKGROUND_FILES = {
     "realm": "catalog_background.png",
     "breakthrough": "catalog_background.png",
     "mystic": "mystic_background.png",
+    "mystic_list_normal": "mystic_list_normal_background.png",
+    "mystic_list_high": "mystic_list_high_background.png",
     "divination": "mystic_background.png",
     "beast_realm": "beast_realm_background.png",
     "fishing": "fishing_guide_background.png",

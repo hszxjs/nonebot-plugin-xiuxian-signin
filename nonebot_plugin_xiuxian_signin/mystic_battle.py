@@ -862,11 +862,9 @@ def _combat_state_from_dict(value: Any) -> CombatRuntimeState:
             for name, turns in cooldowns_raw.items()
         },
         turn=_integer(data["turn"], "combat runtime state.turn"),
-        triggered_abilities=tuple(
-            _string_list(
-                data["triggered_abilities"],
-                "combat runtime state.triggered_abilities",
-            )
+        triggered_abilities=_dedup_triggered_abilities(
+            data["triggered_abilities"],
+            "combat runtime state.triggered_abilities",
         ),
     )
     if (
@@ -966,6 +964,28 @@ def _string_list(value: Any, label: str) -> list[str]:
     if len(set(items)) != len(items):
         raise ValueError(f"{label} must contain unique strings")
     return items
+
+
+def _dedup_triggered_abilities(value: Any, label: str) -> tuple[str, ...]:
+    """读取战斗状态时对 triggered_abilities 做顺序去重。
+
+    该字段的写入端（combat._merge_triggered_abilities）现已保证不重复，但早期
+    存档可能已落盘了含重复项的脏数据，恢复时若直接交给 ``_string_list`` 会抛
+    ValueError 导致整个秘境副本恢复失败。这里在读取端兜底去重，保持首次触发
+    顺序，兼容历史数据。
+    """
+    items = [
+        _string(item, f"{label}[{index}]")
+        for index, item in enumerate(_list(value, label))
+    ]
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return tuple(deduped)
 
 
 def _exact_keys(data: dict[str, Any], expected: set[str], label: str) -> None:

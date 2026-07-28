@@ -7,8 +7,22 @@ from typing import Final
 
 from PIL import Image, ImageDraw, ImageOps
 
-from .cards import load_font
+from .cards import (
+    draw_panel_icon,
+    draw_weighted_text,
+    fit_font,
+    hex_to_rgb,
+    load_font,
+    make_xiuxian_background,
+    png_bytes,
+    text_size,
+    wrap_panel_text,
+)
 from .mystic_dungeon import NodeKind
+
+_NO_TOKEN_BG_PATH = Path(__file__).parent / "assets" / "mystic_dungeon_ui" / "no_token_background.png"
+_TOKEN_NORMAL_ICON_PATH = Path(__file__).parent / "assets" / "mystic_dungeon_ui" / "token_normal.png"
+_TOKEN_HIGH_ICON_PATH = Path(__file__).parent / "assets" / "mystic_dungeon_ui" / "token_high.png"
 
 
 @dataclass(frozen=True)
@@ -69,6 +83,8 @@ class MysticMapRenderModel:
     current_node_id: str
     team_size: int
     temporary_reward_summary: str
+    footer_prompt: str = ""
+    footer_notice: str = ""
 
     def __post_init__(self) -> None:
         if not self.nodes:
@@ -246,6 +262,38 @@ class MysticMapRenderer:
         draw.text((38, 60), model.subtitle, font=subtitle_font, fill=(205, 214, 220, 235))
         reward_text = f"临时收获  {model.temporary_reward_summary or '无'}"
         draw.text((36, 855), reward_text, font=reward_font, fill=(233, 236, 226, 245))
+        # 底部右侧：下一步命令提示（醒目）+ 次要信息（骰子点数等）。
+        # 这两段原本只在 result.message 文本里，但图片发送成功后文本被丢弃，
+        # 玩家看不到“该发什么命令/掷了多少点”，故烤进图片底部。
+        if model.footer_prompt:
+            prompt_font = fit_font(draw, model.footer_prompt, 820, 28, bold=True, min_size=18)
+            prompt_width = text_size(draw, model.footer_prompt, prompt_font)[0]
+            prompt_x = 1564  # 右边界，anchor="ra" 右对齐
+            draw.text(
+                (prompt_x, 852),
+                model.footer_prompt,
+                font=prompt_font,
+                fill=(232, 176, 74, 255),
+                anchor="ra",
+            )
+            if model.footer_notice:
+                notice_font = load_font(21)
+                notice_x = prompt_x - prompt_width - 24
+                draw.text(
+                    (notice_x, 855),
+                    model.footer_notice,
+                    font=notice_font,
+                    fill=(205, 214, 220, 230),
+                    anchor="ra",
+                )
+        elif model.footer_notice:
+            draw.text(
+                (1564, 855),
+                model.footer_notice,
+                font=load_font(21),
+                fill=(205, 214, 220, 230),
+                anchor="ra",
+            )
         image.alpha_composite(overlay)
 
     def _draw_edge(
@@ -449,3 +497,184 @@ class MysticMapRenderer:
             (source_x - left) / (right - left) * self.OUTPUT_SIZE[0],
             (source_y - top) / (bottom - top) * self.OUTPUT_SIZE[1],
         )
+
+
+def _load_token_icon(path: Path, size: int) -> Image.Image:
+    """加载令牌图标并缩放到指定尺寸,失败时返回占位图。"""
+    try:
+        with Image.open(path) as source:
+            icon = source.convert("RGBA")
+    except (FileNotFoundError, OSError):
+        icon = Image.new("RGBA", (128, 128), (90, 140, 150, 255))
+    if icon.size != (size, size):
+        icon = icon.resize((size, size), Image.Resampling.LANCZOS)
+    return icon
+
+
+def render_no_token_panel(
+    *,
+    normal_count: int,
+    high_count: int,
+    normal_theme_names: tuple[str, ...] = (),
+    high_theme_names: tuple[str, ...] = (),
+    width: int = 1180,
+) -> bytes:
+    """渲染“缺少秘境令牌”专属提示图。
+
+    参数:
+        normal_count: 普通秘境令牌持有数
+        high_count: 高风险秘境令牌持有数
+        normal_theme_names: 普通令牌本可进入的秘境主题名(用于提示“错过了什么”)
+        high_theme_names: 高风险令牌本可进入的秘境主题名
+        width: 面板宽度
+
+    返回 PNG bytes。当两种令牌都为 0 时,整图强调“无法进入任何秘境”;
+    当仅其中一种为 0 时,只提示该种令牌不足。
+    """
+    accent = "#c8613a"  # 赤金/铜色,呼应“禁入/警示”
+    width = max(width, 1180)
+
+    measure = Image.new("RGBA", (width, 120), (0, 0, 0, 0))
+    measure_draw = ImageDraw.Draw(measure)
+    title_text = "令牌不足"
+    title_font = fit_font(measure_draw, title_text, width - 280, 64, bold=True, min_size=42)
+    subtitle_font = load_font(30, bold=True)
+    body_font = load_font(34, bold=True)
+    hint_font = load_font(30, bold=True)
+    small_font = load_font(28, bold=True)
+    max_text_width = width - 260
+
+    # 构造内容行
+    rows: list[tuple[str, str, str]] = []  # (kind, text, token_type)
+    if normal_count <= 0:
+        rows.append(("token", "普通秘境令牌 ×0", "normal"))
+    if high_count <= 0:
+        rows.append(("token", "高风险秘境令牌 ×0", "high"))
+    # 获取途径
+    rows.append(("hint", "每日签到概率掉落 · 完成带令牌的每日任务必得(每日1个)", ""))
+    # 可进入的秘境
+    if normal_count <= 0 and normal_theme_names:
+        names = "、".join(normal_theme_names[:6])
+        if len(normal_theme_names) > 6:
+            names += "等"
+        rows.append(("themes", f"普通秘境可进入: {names}", "normal"))
+    if high_count <= 0 and high_theme_names:
+        names = "、".join(high_theme_names[:6])
+        if len(high_theme_names) > 6:
+            names += "等"
+        rows.append(("themes", f"高风险秘境可进入: {names}", "high"))
+
+    # 预排版文本以计算高度
+    layout: list[tuple[str, str, list[str], str, int, int]] = []  # (kind, raw, wrapped, token_type, block_h, gap)
+    content_height = 0
+    for kind, text, token_type in rows:
+        if kind == "token":
+            wrapped = [text]
+            block_h = 110  # 留出图标空间
+            gap = 16
+        elif kind == "hint":
+            wrapped = wrap_panel_text(measure_draw, text, hint_font, max_text_width - 86)
+            block_h = max(62, 42 * len(wrapped) + 20)
+            gap = 14
+        else:  # themes
+            wrapped = wrap_panel_text(measure_draw, text, body_font, max_text_width - 86)
+            block_h = max(62, 42 * len(wrapped) + 20)
+            gap = 14
+        layout.append((kind, text, wrapped, token_type, block_h, gap))
+        content_height += block_h + gap
+
+    content_start_y = 268
+    content_bottom_padding = 64
+    height = max(560, content_start_y + content_height + content_bottom_padding + 58)
+
+    # 背景:优先加载专属底图,失败回退到程序化水墨背景
+    image: Image.Image
+    themed_background = False
+    try:
+        with Image.open(_NO_TOKEN_BG_PATH) as source:
+            bg = source.convert("RGBA")
+        image = bg.resize((width, height), Image.Resampling.LANCZOS)
+        themed_background = True
+    except (FileNotFoundError, OSError):
+        image = make_xiuxian_background(width, height, accent)
+
+    draw = ImageDraw.Draw(image)
+
+    # 卡片底框:主题背景存在时用高不透明度米白卷轴蒙版(让文字落在干净底色上,
+    # AI 背景只从卡片外缘透出烘托氛围);否则用半透明蒙版配程序化背景。
+    card_fill = (255, 250, 238, 218) if themed_background else (255, 250, 238, 92)
+    draw.rounded_rectangle(
+        (58, 62, width - 58, height - 58),
+        radius=28,
+        fill=card_fill,
+        outline=(234, 218, 184, 200),
+        width=2,
+    )
+
+    # 标题栏图标(warning) + 标题(米白底用深色文字,程序化背景用浅色文字)
+    title_color = "#7a2a1a" if themed_background else "#fff3e6"
+    subtitle_color = "#8a5a3a" if themed_background else "#e8d9c2"
+    title_stroke = (255, 240, 220, 0) if themed_background else (60, 20, 12, 200)
+    draw_panel_icon(draw, (104, 112, 208, 216), "warning", accent)
+    draw_weighted_text(draw, (238, 112), title_text, title_font, title_color, weight=4,
+                       stroke_width=0 if themed_background else 2,
+                       stroke_fill=title_stroke)
+    draw_weighted_text(draw, (242, 184), "无对应令牌,无法开启秘境", subtitle_font, subtitle_color, weight=2)
+
+    # 内容行
+    y = content_start_y
+    left = 104
+    right = width - 104
+    for kind, raw, wrapped, token_type, block_h, gap in layout:
+        if kind == "token":
+            # 令牌行:左侧大图标 + 右侧文字
+            draw.rounded_rectangle(
+                (left, y, right, y + block_h),
+                radius=18, fill=(255, 255, 255, 210), outline="#eee2ca", width=2,
+            )
+            icon_size = 78
+            icon_path = _TOKEN_NORMAL_ICON_PATH if token_type == "normal" else _TOKEN_HIGH_ICON_PATH
+            icon = _load_token_icon(icon_path, icon_size)
+            icon_x = left + 18
+            icon_y = y + (block_h - icon_size) // 2
+            image.alpha_composite(icon, (icon_x, icon_y))
+            # 文字
+            label_color = "#8a4a2a" if token_type == "normal" else "#7a2a3a"
+            draw_weighted_text(draw, (left + 112, y + 20), wrapped[0], body_font, label_color, weight=3)
+            draw_weighted_text(
+                draw, (left + 112, y + 62),
+                "玄阶·中品" if token_type == "normal" else "地阶·上品",
+                small_font, "#9a8a70", weight=1,
+            )
+        elif kind == "hint":
+            draw.rounded_rectangle(
+                (left, y, right, y + block_h),
+                radius=18, fill=(252, 247, 232, 220), outline="#eadfca", width=2,
+            )
+            draw_panel_icon(draw, (left + 16, y + 12, left + 58, y + 54), "scroll", accent)
+            text_y = y + 14
+            for part in wrapped:
+                draw_weighted_text(draw, (left + 78, text_y), part, hint_font, "#5a4a36", weight=2)
+                text_y += 42
+        else:  # themes
+            draw.rounded_rectangle(
+                (left, y, right, y + block_h),
+                radius=18, fill=(255, 255, 255, 200), outline="#eee2ca", width=2,
+            )
+            theme_accent = "#3a7a8a" if token_type == "normal" else "#8a3a5a"
+            draw_panel_icon(draw, (left + 16, y + 12, left + 58, y + 54), "mystic", theme_accent)
+            text_y = y + 14
+            for part in wrapped:
+                draw_weighted_text(draw, (left + 78, text_y), part, body_font, "#344054", weight=2)
+                text_y += 42
+        y += block_h + gap
+
+    # 底部引导
+    footer_font = fit_font(draw, "发送 秘境 可随时查看可进入的秘境列表", width - 208, 26, bold=True, min_size=18)
+    footer_color = "#9a8a6a" if themed_background else "#d8c8a8"
+    draw_weighted_text(
+        draw, (104, height - 108),
+        "获取令牌后,发送 秘境 查看可进入的秘境列表",
+        footer_font, footer_color, weight=1,
+    )
+    return png_bytes(image)

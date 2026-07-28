@@ -338,7 +338,7 @@ def apply_admin_config(config: dict[str, Any]) -> None:
             pass
         for config_key, global_name in token_count_keys.items():
             try:
-                globals()[global_name] = max(0, min(10, int(mystic_config.get(config_key, 0))))
+                globals()[global_name] = max(0, min(MYSTIC_TOKEN_MAX_COUNT, int(mystic_config.get(config_key, 0))))
             except (TypeError, ValueError):
                 globals()[global_name] = 0
         enabled_types = mystic_config.get("enabled_types", list(MYSTIC_REALM_TYPES))
@@ -371,19 +371,35 @@ def apply_admin_config(config: dict[str, Any]) -> None:
         except (TypeError, ValueError):
             pass
 
+MYSTIC_TOKEN_MAX_COUNT = 3
+
+
 def grant_mystic_tokens(
     record: UserRecord,
     normal_count: int,
     high_risk_count: int,
 ) -> dict[str, int]:
+    """发放秘境令牌,考虑当前持有量,使每种令牌总数不超过 MYSTIC_TOKEN_MAX_COUNT。"""
+    current_normal = _count_token(record, "普通秘境令牌")
+    current_high = _count_token(record, "高风险秘境令牌")
+    cap = MYSTIC_TOKEN_MAX_COUNT
     granted = {
-        "普通秘境令牌": max(0, min(10, int(normal_count))),
-        "高风险秘境令牌": max(0, min(10, int(high_risk_count))),
+        "普通秘境令牌": max(0, min(cap - current_normal, int(normal_count))),
+        "高风险秘境令牌": max(0, min(cap - current_high, int(high_risk_count))),
     }
     for name, count in granted.items():
         for _ in range(count):
             append_reward(record, mystic_token_reward(name))
     return granted
+
+
+def _count_token(record: UserRecord, name: str) -> int:
+    """统计玩家当前持有的某种令牌数量(不消耗)。"""
+    return sum(
+        1
+        for reward in (record.rewards or [])
+        if reward_name(reward) == name
+    )
 
 def tianji_mystic_available(record: UserRecord, today: date) -> tuple[bool, str]:
     cooldown = TIANJI_COOLDOWN_DAYS.get(record.faction_identity or "")

@@ -545,7 +545,7 @@ def breakthrough_reward_candidates(
         score = _domain.breakthrough_effective_quality_score(item, target_index)
         quality = _domain.breakthrough_quality_label_from_score(score, target_index)
         candidates.append((list_index, item, score, quality))
-    candidates.sort(key=lambda entry: _domain._breakthrough_candidate_sort_key(entry, name_order), reverse=True)
+    candidates.sort(key=lambda entry: _domain.breakthrough_candidate_sort_key(entry, name_order), reverse=True)
     return candidates
 
 def consume_best_breakthrough_reward(

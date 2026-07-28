@@ -19,6 +19,20 @@ class DungeonRisk(StrEnum):
     HIGH = "high"
 
 
+class MysticTokenMissingError(ValueError):
+    """尝试创建秘境但队长缺少对应秘境令牌时抛出。
+
+    携带 risk 信息以便上层渲染专属“令牌不足”提示图,
+    而非原样输出英文报错文本。定义在最底层的 mystic_dungeon,
+    使 storage 与 mystic_runtime 均可导入而不会循环依赖。
+    """
+
+    def __init__(self, risk: DungeonRisk, token_name: str) -> None:
+        self.risk = risk
+        self.token_name = token_name
+        super().__init__(f"缺少 {token_name},无法开启秘境。")
+
+
 class DungeonMode(StrEnum):
     SOLO = "solo"
     TEAM = "team"
@@ -270,6 +284,7 @@ class DungeonRewardLedger:
 @dataclass(frozen=True)
 class NodeRewardResult:
     rewards_by_user: dict[str, list[dict[str, Any]]]
+    description: str = ""
 
 
 @dataclass
@@ -300,6 +315,7 @@ class MysticDungeonRun:
     settled_reward_node_keys: list[str] = field(default_factory=list)
     revision: int = 0
     active_vote: DungeonVote | None = None
+    selected_theme_id: str = ""
 
     @property
     def member_ids(self) -> tuple[str, ...]:
@@ -339,6 +355,7 @@ class MysticDungeonRun:
             "settled_reward_node_keys": sorted(set(self.settled_reward_node_keys)),
             "revision": self.revision,
             "active_vote": self.active_vote.to_dict() if self.active_vote is not None else None,
+            "selected_theme_id": self.selected_theme_id,
         }
 
     @classmethod
@@ -372,7 +389,7 @@ class MysticDungeonRun:
         _require_keys(
             data,
             required_keys,
-            {"active_vote", "node_contents", "settled_reward_node_keys"},
+            {"active_vote", "node_contents", "settled_reward_node_keys", "selected_theme_id"},
             "dungeon run",
         )
 
@@ -466,6 +483,10 @@ class MysticDungeonRun:
             settled_reward_node_keys=settled_reward_node_keys,
             revision=_as_int(data["revision"], "dungeon run.revision"),
             active_vote=active_vote,
+            selected_theme_id=_as_string_allow_empty(
+                data.get("selected_theme_id", ""),
+                "dungeon run.selected_theme_id",
+            ),
         )
         run._validate_persistent_state()
         return run
@@ -789,16 +810,16 @@ def default_mystic_gameplay_config() -> MysticGameplayConfig:
         normal_node_weights={
             NodeKind.RANDOM.value: 0.28,
             NodeKind.COMBAT.value: 0.26,
-            NodeKind.RESOURCE.value: 0.22,
+            NodeKind.RESOURCE.value: 0.32,
             NodeKind.TRAP.value: 0.10,
-            NodeKind.REST.value: 0.14,
+            NodeKind.REST.value: 0.04,
         },
         high_risk_node_weights={
             NodeKind.RANDOM.value: 0.20,
-            NodeKind.COMBAT.value: 0.36,
-            NodeKind.RESOURCE.value: 0.15,
+            NodeKind.COMBAT.value: 0.34,
+            NodeKind.RESOURCE.value: 0.24,
             NodeKind.TRAP.value: 0.18,
-            NodeKind.REST.value: 0.11,
+            NodeKind.REST.value: 0.04,
         },
         normal_branch_density=0.18,
         high_risk_branch_density=0.30,
@@ -1627,6 +1648,8 @@ class MysticDungeonService:
         group_id: str,
         leader_id: str,
         risk: DungeonRisk,
+        *,
+        selected_theme_id: str = "",
     ) -> MysticDungeonRun:
         parsed_risk = self._validate_risk(risk)
         self._validate_identifier(run_id, "run id")
@@ -1644,6 +1667,7 @@ class MysticDungeonService:
             risk=parsed_risk,
             leader_id=leader_id,
             members={leader_id: leader},
+            selected_theme_id=selected_theme_id,
         )
 
     def join_lobby(
@@ -1836,6 +1860,18 @@ class MysticDungeonService:
             return NodeRewardResult(rewards_by_user={})
 
         granted: dict[str, list[dict[str, Any]]] = {}
+        # 节点事件文案：尝试从事件库选取一条描述。命中时 RESOURCE/TRAP/REST 都用
+        # 事件文案；RESOURCE 还会用事件绑定的具体奖励替代原有的随机逻辑（兜底走原逻辑）。
+        event_description = ""
+        try:
+            from . import mystic_events as _mystic_events
+
+            event_pick = _mystic_events.pick_node_event(run, node_id, kind.value)
+            if event_pick is not None:
+                event_description = event_pick.text
+        except Exception:
+            event_pick = None
+
         if kind is NodeKind.RESOURCE:
             ledger = DungeonRewardLedger(
                 rewards_by_user={
@@ -1845,7 +1881,14 @@ class MysticDungeonService:
                 settled_node_keys=set(run.settled_reward_node_keys),
             )
             for user_id in run.member_ids:
-                reward = self._personal_node_reward(run, node_id, user_id)
+                # 事件命中时用事件绑定的具体奖励；否则兜底走原随机逻辑。
+                if event_pick is not None and event_pick.reward is not None:
+                    reward = _mystic_events.event_reward_to_payload(
+                        event_pick.reward,
+                        reward_multiplier=self.config.reward_multiplier,
+                    )
+                else:
+                    reward = self._personal_node_reward(run, node_id, user_id)
                 if ledger.add_personal(user_id, node_id, reward):
                     granted[user_id] = [dict(reward)]
             run.temporary_rewards_by_user = ledger.rewards_by_user
@@ -1859,7 +1902,10 @@ class MysticDungeonService:
         run.cleared_node_ids.append(node_id)
         run.phase = DungeonPhase.READY_TO_ROLL
         run.revision += 1
-        return NodeRewardResult(rewards_by_user=granted)
+        return NodeRewardResult(
+            rewards_by_user=granted,
+            description=event_description,
+        )
     def grant_encounter_rewards(
         self,
         run: MysticDungeonRun,

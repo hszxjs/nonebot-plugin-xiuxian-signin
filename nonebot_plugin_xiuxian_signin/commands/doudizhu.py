@@ -10,7 +10,7 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent
 from nonebot.matcher import Matcher
 from nonebot.rule import Rule
 
-from ..state import store
+from ..state import store, doudizhu_tables, normal_duel_sessions
 
 # 插件入口模块引用（由 commands/__init__.py 注入），用于延迟访问 finish_panel 等 helper。
 _g = None

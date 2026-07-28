@@ -12,6 +12,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable
 
+from nonebot import logger
+
 from .mystic_battle import (
     DungeonEncounter,
     EncounterKind,
@@ -25,11 +27,14 @@ from .mystic_dungeon import (
     DungeonRisk,
     MysticDungeonRun,
     MysticDungeonService,
+    MysticTokenMissingError,
     NodeKind,
     MovementResult,
+    active_mystic_theme_ids,
 )
 from .mystic_menu import mystic_menu_text
 from .domain import UserRecord, combat_max_hp
+from .domain.rewards import reward_count_by_names
 from .storage import (
     JsonStore,
     MysticEncounterConflict,
@@ -37,10 +42,25 @@ from .storage import (
     MysticSettlement,
 )
 
+# 玩家“正忙于秘境战斗”的阶段集合。处于这些阶段时，私聊里发其它插件的指令
+# 会被预处理器拦截，避免战斗中途被签到/装备等指令打断造成状态错乱。
+_MYSTIC_BATTLE_PHASES = frozenset(
+    {
+        DungeonPhase.AWAITING_ENCOUNTER_RESPONSE,
+        DungeonPhase.PREPARING_BATTLE,
+        DungeonPhase.BATTLE_TURN,
+        DungeonPhase.AWAITING_RESCUE,
+        DungeonPhase.AWAITING_BOSS_VOTE,
+    }
+)
+
 
 class MysticGroupAction(StrEnum):
     HELP = "help"
     STATUS = "status"
+    LIST_THEMES = "list_themes"
+    SELECT_SOLO = "select_solo"
+    SELECT_TEAM = "select_team"
     CREATE_SOLO = "create_solo"
     CREATE_TEAM = "create_team"
     JOIN = "join"
@@ -67,7 +87,8 @@ class _GroupCommandParser:
 
     def parse(self, normalized: str) -> MysticParsedCommand | None:
         exact = {
-            "秘境": MysticParsedCommand(MysticGroupAction.HELP),
+            "秘境": MysticParsedCommand(MysticGroupAction.LIST_THEMES),
+            "多人秘境": MysticParsedCommand(MysticGroupAction.LIST_THEMES, "team"),
             "秘境帮助": MysticParsedCommand(MysticGroupAction.HELP),
             "秘境状态": MysticParsedCommand(MysticGroupAction.STATUS),
             "秘境地图": MysticParsedCommand(MysticGroupAction.MAP),
@@ -91,6 +112,8 @@ class _GroupCommandParser:
         patterns = (
             (rf"^创建单人秘境\s+({self._RISK})$", MysticGroupAction.CREATE_SOLO),
             (rf"^创建秘境队伍\s+({self._RISK})$", MysticGroupAction.CREATE_TEAM),
+            (r"^秘境\s+(\d+)$", MysticGroupAction.SELECT_SOLO),
+            (r"^多人秘境\s+(\d+)$", MysticGroupAction.SELECT_TEAM),
             (r"^选择分支\s+(.+)$", MysticGroupAction.CHOOSE_BRANCH),
             (r"^应战\s+(.+)$", MysticGroupAction.RESPOND),
             (r"^转让队长\s+(\S+)$", MysticGroupAction.VOTE_TRANSFER),
@@ -160,6 +183,8 @@ class MysticCommandResult:
     vote_created: bool = False
     vote_passed: bool = False
     error: str = ""
+    token_missing_risk: DungeonRisk | None = None
+    panel_icon: str = ""
 
 
 @dataclass(frozen=True)
@@ -467,6 +492,19 @@ class MysticCommandCoordinator:
                 return
             except (MysticRunConflict, MysticEncounterConflict):
                 await asyncio.sleep(0)
+            except Exception:
+                # 非冲突异常（数据校验、IO 错误等）绝不能让截止任务静默死亡，
+                # 否则秘境会永久卡在当前阶段直到进程重启。这里记录日志并按
+                # 退避策略重建一个短延迟重试，给瞬时故障恢复时间。
+                logger.exception(
+                    f"秘境截止时间处理失败，已安排重试 run={run_id} key={task_key}"
+                )
+                self._schedule_deadline(
+                    run_id,
+                    task_key[1],
+                    self._now() + timedelta(seconds=30),
+                )
+                return
         self._schedule_deadline(
             run_id,
             task_key[1],
@@ -480,6 +518,21 @@ class MysticCommandCoordinator:
         if parse_mystic_private_command(text) is None:
             return False
         return await self.resolve_private_context(user_id) is not None
+
+    async def is_in_mystic_battle(self, user_id: str) -> bool:
+        """判断该玩家是否正处于秘境战斗相关阶段。
+
+        用于在战斗期间屏蔽其它插件对私聊指令的响应，避免战斗中途发别的指令
+        （签到、背包、装备等）造成状态错乱或响应冲突。战斗态包括：准备阶段、
+        战斗回合、等待救援、各种投票/遭遇响应态——总之玩家“正忙于秘境”。
+        """
+        route = await self.store.resolve_mystic_private_route(user_id)
+        if route is None:
+            return False
+        run = await self.store.get_mystic_run(route.run_id)
+        if run is None:
+            return False
+        return run.phase in _MYSTIC_BATTLE_PHASES
 
     async def resolve_private_context(self, user_id: str) -> MysticPrivateRoute | None:
         route = await self.store.resolve_mystic_private_route(user_id)
@@ -545,6 +598,13 @@ class MysticCommandCoordinator:
             encounter.encounter_id,
             encounter.revision,
             encounter_updater,
+        )
+        # 救援遭遇进入 PREPARING 后必须调度截止时间，否则救援者不发“确认配装”
+        # 就没有任何超时任务推进，秘境会永久卡在战斗准备阶段。
+        self._schedule_deadline(
+            request.run_id,
+            f"encounter:{rescue_encounter.encounter_id}:{EncounterPhase.PREPARING.value}",
+            rescue_encounter.phase_deadline,
         )
         return MysticCommandResult(
             message="救援委托已接取，请私聊确认配装。",
@@ -665,11 +725,18 @@ class MysticCommandCoordinator:
                 len(rewards)
                 for rewards in getattr(node_result, "rewards_by_user", {}).values()
             )
-            message = f"资源节点结算完成，队伍获得 {reward_count} 项临时收获。"
+            # 优先用事件库的叙事文案；未命中兜底回原模板话。
+            event_text = getattr(node_result, "description", "") or ""
+            if event_text:
+                message = f"{event_text}\n队伍获得 {reward_count} 项临时收获。"
+            else:
+                message = f"资源节点结算完成，队伍获得 {reward_count} 项临时收获。"
         elif resolved_kind is NodeKind.TRAP:
-            message = "触发陷阱：每位成员至多损失一项临时收获。"
+            event_text = getattr(node_result, "description", "") or ""
+            message = event_text or "触发陷阱：每位成员至多损失一项临时收获。"
         else:
-            message = "休整完成，队伍可以继续投骰。"
+            event_text = getattr(node_result, "description", "") or ""
+            message = event_text or "休整完成，队伍可以继续投骰。"
         if content.kind is NodeKind.RANDOM:
             message = f"随机事件揭示为{resolved_kind.value}。{message}"
         return self._map_result(saved_run, message=message)
@@ -757,6 +824,11 @@ class MysticCommandCoordinator:
             return MysticCommandResult(
                 error="秘境状态已发生变化，请重新发送指令。"
             )
+        except MysticTokenMissingError as exc:
+            return MysticCommandResult(
+                error=self._error_text(exc),
+                token_missing_risk=exc.risk,
+            )
         except (LookupError, PermissionError, ValueError) as exc:
             return MysticCommandResult(error=self._error_text(exc))
 
@@ -820,6 +892,11 @@ class MysticCommandCoordinator:
             return MysticCommandResult(
                 error="秘境状态已发生变化，请重新发送指令。"
             )
+        except MysticTokenMissingError as exc:
+            return MysticCommandResult(
+                error=self._error_text(exc),
+                token_missing_risk=exc.risk,
+            )
         except (LookupError, PermissionError, ValueError) as exc:
             return MysticCommandResult(error=self._error_text(exc))
 
@@ -830,6 +907,12 @@ class MysticCommandCoordinator:
         user_id: str,
     ) -> MysticCommandResult:
         if encounter.phase is not EncounterPhase.PREPARING:
+            if encounter.phase is EncounterPhase.ACTIVE:
+                # 准备阶段已超时，系统已按当前配装自动确认并进入战斗回合。
+                # 玩家此时发“确认配装”多半是没赶上，给一条友好引导而不是生硬报错。
+                raise ValueError(
+                    "配装准备阶段已结束，战斗已开始。请发送“普通攻击”“秘境技能 名字”或“自动战斗”参战。"
+                )
             raise ValueError("当前不在配装准备阶段。")
         record = await self.store.get_user(user_id)
         record_data = record.to_dict()
@@ -1087,13 +1170,51 @@ class MysticCommandCoordinator:
                 )
 
         return MysticCommandResult(
-            message=(
-                f"造成 {action_result.get('damage', 0)} 点伤害，"
-                f"剩余生命 {action_result.get('player_hp', 0)}。"
+            message=self._format_action_feedback(
+                action_result, saved_encounter, completed
             ),
             run=saved_run,
             updated_revision=saved_run.revision,
         )
+
+    def _format_action_feedback(
+        self,
+        action_result: dict[str, object],
+        encounter: DungeonEncounter,
+        completed: bool,
+    ) -> str:
+        """格式化玩家出招后的战斗反馈。
+
+        之前只回复“造成 X 点伤害，剩余生命 Y”，既看不到自己使了什么招式，
+        也看不到怪物的反击和剩余血量，玩家无法判断战斗进展。这里把招式日志、
+        双方伤害与剩余生命、战斗是否结束都汇总出来。
+        """
+        logs = action_result.get("logs") or []
+        damage = int(action_result.get("damage", 0) or 0)
+        retaliation = int(action_result.get("retaliation_damage", 0) or 0)
+        player_hp = int(action_result.get("player_hp", 0) or 0)
+        target_hp = int(action_result.get("target_hp", 0) or 0)
+        parts: list[str] = []
+        if logs:
+            parts.extend(str(log) for log in logs)
+        parts.append(f"你对敌方造成 {damage} 点伤害，敌方剩余 {target_hp} 点生命。")
+        if retaliation > 0:
+            parts.append(f"敌方反击对你造成 {retaliation} 点伤害，你剩余 {player_hp} 点生命。")
+        else:
+            parts.append(f"你当前剩余 {player_hp} 点生命。")
+        if completed:
+            parts.append("战斗已结束。")
+        elif encounter.kind is EncounterKind.BOSS:
+            # Boss 战按 segment 结算，提示总进度
+            segments = encounter.boss_segments
+            total = sum(seg.initial_hp for seg in segments.values())
+            remaining = sum(seg.hp for seg in segments.values())
+            cleared = sum(1 for seg in segments.values() if seg.cleared)
+            parts.append(
+                f"Boss 进度：已击破 {cleared}/{len(segments)} 段，"
+                f"剩余总生命 {remaining}/{total}。"
+            )
+        return "\n".join(parts)
 
     async def _dispatch_group(
         self,
@@ -1103,6 +1224,12 @@ class MysticCommandCoordinator:
     ) -> MysticCommandResult:
         if parsed.action is MysticGroupAction.HELP:
             return MysticCommandResult(message=mystic_menu_text())
+        if parsed.action is MysticGroupAction.LIST_THEMES:
+            return await self._list_themes(group_id, user_id, parsed.argument)
+        if parsed.action is MysticGroupAction.SELECT_SOLO:
+            return await self._select_solo(group_id, user_id, parsed.argument)
+        if parsed.action is MysticGroupAction.SELECT_TEAM:
+            return await self._select_team(group_id, user_id, parsed.argument)
         if parsed.action is MysticGroupAction.CREATE_SOLO:
             return await self._create_solo(group_id, user_id, parsed.argument)
         if parsed.action is MysticGroupAction.CREATE_TEAM:
@@ -1400,6 +1527,164 @@ class MysticCommandCoordinator:
             run=saved_run,
             updated_revision=saved_run.revision,
         )
+
+    # ---- 秘境列表与按主题选择(新版进入流程) ----
+
+    @staticmethod
+    def _token_name_for(risk: DungeonRisk) -> str:
+        return "普通秘境令牌" if risk is DungeonRisk.NORMAL else "高风险秘境令牌"
+
+    def _enabled_themes(self, risk: DungeonRisk) -> list:
+        """返回某风险等级下已启用的主题列表(按 theme_id 排序)。"""
+        enabled_ids = active_mystic_theme_ids(risk)
+        themes = sorted(
+            (
+                theme
+                for theme in self.dungeon_service.catalog.themes.values()
+                if theme.risk is risk
+            ),
+            key=lambda theme: theme.theme_id,
+        )
+        if not enabled_ids:
+            return themes
+        enabled_set = set(enabled_ids)
+        return [theme for theme in themes if theme.theme_id in enabled_set]
+
+    def _collect_selectable_themes(
+        self,
+        record: UserRecord,
+    ) -> list[tuple[DungeonRisk, str, str]]:
+        """按用户持有令牌收集可进入的秘境(混合编号基础)。
+
+        返回 [(risk, theme_id, display_name), ...],普通在前、高风险在后,
+        各自按 theme_id 排序。只纳入用户“持有对应令牌”的风险等级。
+        """
+        normal_count = reward_count_by_names(record, ["普通秘境令牌"])
+        high_count = reward_count_by_names(record, ["高风险秘境令牌"])
+        selectable: list[tuple[DungeonRisk, str, str]] = []
+        if normal_count > 0:
+            for theme in self._enabled_themes(DungeonRisk.NORMAL):
+                selectable.append((DungeonRisk.NORMAL, theme.theme_id, theme.display_name))
+        if high_count > 0:
+            for theme in self._enabled_themes(DungeonRisk.HIGH):
+                selectable.append((DungeonRisk.HIGH, theme.theme_id, theme.display_name))
+        return selectable
+
+    async def _list_themes(
+        self,
+        group_id: str,
+        user_id: str,
+        argument: str,
+    ) -> MysticCommandResult:
+        """列出用户持有令牌可进入的秘境主题(混合编号)。"""
+        if await self.store.find_active_mystic_run_id(user_id) is not None:
+            raise ValueError("你已经在进行中的秘境中,请先完成或放弃当前秘境。")
+        record = await self.store.get_user(user_id)
+        selectable = self._collect_selectable_themes(record)
+        if not selectable:
+            # 一张令牌都没有:触发缺少令牌提示图(以“最缺少的”风险呈现)
+            raise MysticTokenMissingError(DungeonRisk.NORMAL, "普通秘境令牌")
+        mode = "组队" if argument == "team" else "单人"
+        # 根据列表是否含高风险主题,选择对应背景图
+        has_high = any(r is DungeonRisk.HIGH for r, _, _ in selectable)
+        has_normal = any(r is DungeonRisk.NORMAL for r, _, _ in selectable)
+        if has_high and not has_normal:
+            panel_icon = "mystic_list_high"
+        elif has_normal and not has_high:
+            panel_icon = "mystic_list_normal"
+        else:
+            # 混合列表:用高风险背景(氛围更足)
+            panel_icon = "mystic_list_high"
+        lines = [f"【可进入的秘境 · {mode}选择】"]
+        for index, (_risk, _theme_id, display_name) in enumerate(selectable, start=1):
+            tag = "普通" if _risk is DungeonRisk.NORMAL else "高风险"
+            lines.append(f"{index}. {display_name}【{tag}】")
+        if mode == "单人":
+            lines.append("")
+            lines.append("发送 秘境 编号 进入单人秘境")
+            lines.append("发送 多人秘境 切换为组队列表")
+        else:
+            lines.append("")
+            lines.append("发送 多人秘境 编号 创建组队秘境")
+            lines.append("发送 秘境 切换为单人列表")
+        return MysticCommandResult(message="\n".join(lines), panel_icon=panel_icon)
+
+    async def _select_solo(
+        self,
+        group_id: str,
+        user_id: str,
+        argument: str,
+    ) -> MysticCommandResult:
+        """秘境 N:按编号选择并直接进入单人秘境(锁定主题)。"""
+        if await self.store.find_active_mystic_run_id(user_id) is not None:
+            raise ValueError("你已经在进行中的秘境中,请先完成或放弃当前秘境。")
+        record = await self.store.get_user(user_id)
+        selectable = self._collect_selectable_themes(record)
+        if not selectable:
+            raise MysticTokenMissingError(DungeonRisk.NORMAL, "普通秘境令牌")
+        try:
+            index = int(argument) - 1
+        except (TypeError, ValueError):
+            raise ValueError("请在“秘境”后填写列表中的编号。")
+        if not 0 <= index < len(selectable):
+            raise ValueError("编号超出范围,请发送 秘境 查看可进入的秘境列表。")
+        risk, theme_id, _display_name = selectable[index]
+        # 用 theme 在该 risk 启用列表中的下标作为 map_seed,锁定主题(同 create_from_offer)
+        risk_theme_ids = [t.theme_id for t in self._enabled_themes(risk)]
+        run_id = self._id_factory(group_id, user_id)
+        run, charge = self.dungeon_service.create_solo_run(
+            run_id=run_id,
+            group_id=group_id,
+            user_id=user_id,
+            risk=risk,
+            boss_realm_index=record.realm_index,
+            map_seed=risk_theme_ids.index(theme_id),
+            content_seed=_seed(run_id, "content"),
+        )
+        saved = await self.store.create_mystic_run(run, charge.payer_id, charge.token_name)
+        await self.store.bind_mystic_private_routes(saved)
+        return self._map_result(saved, message="单人秘境已开启。")
+
+    async def _select_team(
+        self,
+        group_id: str,
+        user_id: str,
+        argument: str,
+    ) -> MysticCommandResult:
+        """多人秘境 N:按编号选择主题并创建组队大厅(令牌在开始秘境时才扣)。"""
+        if await self._team_group_run(group_id) is not None:
+            raise ValueError("本群已经有进行中的秘境队伍。")
+        if await self.store.find_active_mystic_run_id(user_id) is not None:
+            raise ValueError("你已经在进行中的秘境中。")
+        record = await self.store.get_user(user_id)
+        selectable = self._collect_selectable_themes(record)
+        if not selectable:
+            raise MysticTokenMissingError(DungeonRisk.NORMAL, "普通秘境令牌")
+        try:
+            index = int(argument) - 1
+        except (TypeError, ValueError):
+            raise ValueError("请在“多人秘境”后填写列表中的编号。")
+        if not 0 <= index < len(selectable):
+            raise ValueError("编号超出范围,请发送 多人秘境 查看可进入的秘境列表。")
+        risk, theme_id, display_name = selectable[index]
+        run = self.dungeon_service.create_lobby(
+            run_id=self._id_factory(group_id, user_id),
+            group_id=group_id,
+            leader_id=user_id,
+            risk=risk,
+            selected_theme_id=theme_id,
+        )
+        saved = await self.store.create_mystic_lobby(run)
+        token_tag = "普通" if risk is DungeonRisk.NORMAL else "高风险"
+        return MysticCommandResult(
+            message=(
+                f"{display_name}【{token_tag}】组队秘境已创建,等待队员加入。\n"
+                f"队员发送 加入秘境队伍 / 秘境准备,全队准备后队长发送 开始秘境。"
+            ),
+            run=saved,
+            updated_revision=saved.revision,
+        )
+
     async def _create_solo(
         self,
         group_id: str,
@@ -1519,10 +1804,20 @@ class MysticCommandCoordinator:
         if run.leader_id != user_id:
             raise PermissionError("只有队长可以开始秘境。")
         record = await self.store.get_user(user_id)
+        # 若大厅记录了队长选定的主题,用其在启用列表中的下标锁定主题(同 create_from_offer);
+        # 否则保持原随机 seed 行为,向后兼容旧版“创建秘境队伍”入口。
+        if run.selected_theme_id:
+            risk_theme_ids = [t.theme_id for t in self._enabled_themes(run.risk)]
+            if run.selected_theme_id in risk_theme_ids:
+                map_seed = risk_theme_ids.index(run.selected_theme_id)
+            else:
+                map_seed = _seed(run.run_id, "map")
+        else:
+            map_seed = _seed(run.run_id, "map")
         charge = self.dungeon_service.start_run(
             run,
             boss_realm_index=record.realm_index,
-            map_seed=_seed(run.run_id, "map"),
+            map_seed=map_seed,
             content_seed=_seed(run.run_id, "content"),
         )
         saved = await self.store.create_mystic_run(run, charge.payer_id, charge.token_name)
@@ -1554,7 +1849,11 @@ class MysticCommandCoordinator:
                 resolved,
                 message=f"{movement_message}\n{resolved.message}".strip(),
             )
-        return self._map_result(saved, message=movement_message)
+        return self._map_result(
+            saved,
+            message=movement_message,
+            footer_notice=f"掷出 {dice_value} 点",
+        )
     async def _choose_branch(
         self,
         run: MysticDungeonRun,
@@ -1620,8 +1919,9 @@ class MysticCommandCoordinator:
         run: MysticDungeonRun,
         *,
         message: str = "",
+        footer_notice: str = "",
     ) -> MysticCommandResult:
-        model = self._render_model(run)
+        model = self._render_model(run, footer_notice=footer_notice)
         image = self.renderer.render(model)
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
@@ -1635,7 +1935,12 @@ class MysticCommandCoordinator:
             map_required=True,
         )
 
-    def _render_model(self, run: MysticDungeonRun) -> MysticMapRenderModel:
+    def _render_model(
+        self,
+        run: MysticDungeonRun,
+        *,
+        footer_notice: str = "",
+    ) -> MysticMapRenderModel:
         if run.phase in {DungeonPhase.LOBBY, DungeonPhase.CREATING}:
             raise ValueError("秘境尚未生成地图。")
         template = self.dungeon_service.catalog.templates[run.template_id]
@@ -1684,6 +1989,7 @@ class MysticCommandCoordinator:
             for edge in graph.edges
         )
         reward_count = sum(len(rewards) for rewards in run.temporary_rewards_by_user.values())
+        prompt, default_notice = self._footer_prompt_for_run(run)
         return MysticMapRenderModel(
             title=theme.display_name,
             subtitle=f"{run.map_size} 格秘境 · {run.risk.value}",
@@ -1693,7 +1999,36 @@ class MysticCommandCoordinator:
             current_node_id=run.current_node_id,
             team_size=len(run.members),
             temporary_reward_summary=f"{reward_count} 项临时收获",
+            footer_prompt=prompt,
+            footer_notice=footer_notice or default_notice,
         )
+
+    def _footer_prompt_for_run(self, run: MysticDungeonRun) -> tuple[str, str]:
+        """根据秘境当前阶段推导底部命令提示词与次要信息。
+
+        投骰/选择分支的提示原本只写在 result.message 文本里，但图片发送成功后
+        该文本被丢弃，玩家不知道下一步该发什么命令。这里把提示词烤进地图图片
+        底部，让玩家直接照着发即可。
+        """
+        phase = run.phase
+        if phase is DungeonPhase.READY_TO_ROLL:
+            notice = f"还剩 {run.remaining_steps} 步" if run.remaining_steps else ""
+            return "队长发送「投骰」", notice
+        if phase is DungeonPhase.AWAITING_BRANCH and run.pending_branch_choices:
+            choices = run.pending_branch_choices
+            indices = "/".join(str(index + 1) for index in range(len(choices)))
+            return f"队长发送「选择分支 {indices}」", f"可选节点：{'、'.join(choices)}"
+        if phase is DungeonPhase.MOVING:
+            return "等待节点结算…", ""
+        if phase in {
+            DungeonPhase.AWAITING_ENCOUNTER_RESPONSE,
+            DungeonPhase.PREPARING_BATTLE,
+            DungeonPhase.BATTLE_TURN,
+            DungeonPhase.AWAITING_RESCUE,
+            DungeonPhase.AWAITING_BOSS_VOTE,
+        }:
+            return "按提示应对当前遭遇", ""
+        return "", ""
 
     def _boss_portrait_path(
         self,

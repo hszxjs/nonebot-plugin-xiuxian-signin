@@ -478,7 +478,7 @@ def _breakthrough_target_index_for_record(record: UserRecord) -> Optional[int]:
         return None
     return breakthrough_target_realm_index(key)
 
-def _breakthrough_candidate_sort_key(entry: tuple[int, dict[str, Any], int, str], name_order: dict[str, int]) -> tuple[int, int, int, int, int]:
+def breakthrough_candidate_sort_key(entry: tuple[int, dict[str, Any], int, str], name_order: dict[str, int]) -> tuple[int, int, int, int, int]:
     list_index, item, score, _quality = entry
     name = reward_name(item)
     return (

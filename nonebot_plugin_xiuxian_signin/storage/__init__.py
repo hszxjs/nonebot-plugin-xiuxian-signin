@@ -15,7 +15,7 @@ from ..domain import (
     sanitize_user_record_data,
 )
 from ..mystic_battle import DungeonEncounter, EncounterPhase
-from ..mystic_dungeon import DungeonPhase, MysticDungeonRun
+from ..mystic_dungeon import DungeonPhase, MysticDungeonRun, MysticTokenMissingError
 
 
 MYSTIC_TERMINAL_PHASES = {
@@ -821,7 +821,7 @@ class JsonStore:
                 else:
                     runs[run.run_id] = existing_lobby_payload
                 self._write_json(self.mystic_file_path, state)
-                raise ValueError(f"payer does not have required mystic token {token_name!r}")
+                raise MysticTokenMissingError(run.risk, token_name)
 
             entry_id = f"entry:{run.run_id}"
             payer.mystic_settlement_ids = normalize_mystic_settlement_ids(

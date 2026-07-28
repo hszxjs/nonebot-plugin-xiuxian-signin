@@ -121,11 +121,10 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
         fishing_gain += 1
     record.fishing_chances += fishing_gain
     record.pending_fishing = record.fishing_chances
-    grant_mystic_tokens(
-        record,
-        _mystic_drops_module.SIGNIN_NORMAL_MYSTIC_TOKEN_COUNT,
-        _mystic_drops_module.SIGNIN_HIGH_RISK_MYSTIC_TOKEN_COUNT,
-    )
+    # 签到概率掉落秘境令牌:50% 普通令牌,30% 高风险令牌(独立判定)。
+    signin_normal = 1 if random.random() < 0.50 else 0
+    signin_high = 1 if random.random() < 0.30 else 0
+    grant_mystic_tokens(record, signin_normal, signin_high)
 
     return SigninResult(
         record=record,

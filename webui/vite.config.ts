@@ -11,7 +11,10 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "../assets/admin_web",
+    // 运行时由 admin.py 的 ADMIN_WEB_ROOT 加载：
+    // nonebot_plugin_xiuxian_signin/assets/admin_web/。
+    // webui/ 与 nonebot_plugin_xiuxian_signin/ 同级，故需回退一层再进入包目录。
+    outDir: "../nonebot_plugin_xiuxian_signin/assets/admin_web",
     emptyOutDir: true,
     rollupOptions: {
       output: {

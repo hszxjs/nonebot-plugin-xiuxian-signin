@@ -222,6 +222,27 @@ def _combat_action_baseline(record: UserRecord) -> dict[str, Any]:
         "talisman_power": equipped_talisman_power,
     }
 
+def _merge_triggered_abilities(
+    existing: Sequence[str], newly_triggered: Any
+) -> tuple[str, ...]:
+    """合并本回合新触发的技能，保持首次触发顺序并去重。
+
+    triggered_abilities 的语义是“本次战斗已触发过的技能集合”，多处仅以
+    ``ability in triggered_abilities`` 判断是否曾触发，不依赖重复计数。
+    但战斗状态序列化（mystic_battle._string_list）要求元素唯一，故在此从
+    写入端保证不出现重复，避免同一技能跨回合重复触发后恢复存档时报错。
+    """
+    merged: list[str] = list(existing)
+    seen = set(existing)
+    for item in newly_triggered or []:
+        name = str(item)
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        merged.append(name)
+    return tuple(merged)
+
+
 def _evaluate_one_combat_action(
     record: UserRecord,
     action_text: str,
@@ -419,9 +440,8 @@ def resolve_combat_action(
         max_mana=state.max_mana,
         cooldowns={str(key): int(value) for key, value in dict(result["cooldowns"]).items()},
         turn=state.turn + int(action_is_effective),
-        triggered_abilities=(
-            *state.triggered_abilities,
-            *(str(item) for item in result["triggered"]),
+        triggered_abilities=_merge_triggered_abilities(
+            state.triggered_abilities, result["triggered"]
         ),
     )
     return CombatActionOutcome(

@@ -260,6 +260,10 @@ def generate_daily_tasks(record: UserRecord, today: date) -> list[dict[str, Any]
         stones = 15 + max(1, record.realm_index + 1) * rng.randint(5, 12)
         fishing = 1 if rng.random() < 0.16 else 0
         tasks.append({"title": template.format(realm=realm_label), "exp": exp, "stones": stones, "fishing": fishing, "done": False})
+    # 随机选 1 个任务作为“令牌任务”:完成后奖励 1 枚普通秘境令牌。
+    token_index = rng.randrange(len(tasks))
+    tasks[token_index]["token_normal"] = 1
+    tasks[token_index]["title"] += "（秘境令牌）"
     record.daily_tasks = {"date": today.isoformat(), "tasks": tasks}
     return tasks
 
@@ -277,6 +281,10 @@ def daily_tasks_text(record: UserRecord, today: Optional[date] = None) -> str:
         reward = f"修为+{int(task.get('exp', 0))}，灵石+{spirit_stone_text(int(task.get('stones', 0)))}"
         if int(task.get("fishing", 0)):
             reward += f"，垂钓+{int(task.get('fishing', 0))}"
+        if int(task.get("token_normal", 0)):
+            reward += f"，普通秘境令牌+{int(task.get('token_normal', 0))}"
+        if int(task.get("token_high", 0)):
+            reward += f"，高风险秘境令牌+{int(task.get('token_high', 0))}"
         lines.append(f"{index}. {task.get('title')} | {status} | {reward}")
     lines.append("发送“完成任务 编号”领取对应奖励。")
     return "\n".join(lines)
@@ -300,8 +308,8 @@ def complete_daily_task(record: UserRecord, task_index: int, today: date) -> tup
     record.fishing_chances += fishing
     token_grants = _domain.grant_mystic_tokens(
         record,
-        _mystic_drops_module.DAILY_TASK_NORMAL_MYSTIC_TOKEN_COUNT,
-        _mystic_drops_module.DAILY_TASK_HIGH_RISK_MYSTIC_TOKEN_COUNT,
+        int(task.get("token_normal", 0)),
+        int(task.get("token_high", 0)),
     )
     record.daily_tasks = {"date": today.isoformat(), "tasks": tasks}
     extra = f"，连破{leveled}境" if leveled else ""

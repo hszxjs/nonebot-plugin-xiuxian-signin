@@ -25,8 +25,9 @@ from nonebot import get_bot, get_driver, logger, on_message, require
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as localstore
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent, MessageSegment, PrivateMessageEvent
-from nonebot.exception import ActionFailed, NetworkError
+from nonebot.exception import ActionFailed, IgnoredException, NetworkError
 from nonebot.matcher import Matcher
+from nonebot.message import event_preprocessor
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 
@@ -169,7 +170,7 @@ from .domain import (
 )
 from .admin import AdminManager, start_admin_server
 from .mystic_battle import MysticBattleService
-from .mystic_cards import MysticMapRenderer
+from .mystic_cards import MysticMapRenderer, render_no_token_panel
 from .mystic_dungeon import (
     DungeonMode,
     DungeonPhase,
@@ -180,12 +181,14 @@ from .mystic_dungeon import (
     active_mystic_theme_ids,
     default_mystic_gameplay_config,
 )
+from .domain.rewards import reward_count_by_names
 from .mystic_menu import MYSTIC_HELP_SUMMARY, MYSTIC_PICMENU_ENTRY
 from .mystic_runtime import (
     DungeonEntryOffer,
     MysticCommandCoordinator,
     MysticCommandResult,
     parse_mystic_group_command,
+    parse_mystic_private_command,
 )
 from .storage import JsonStore, MysticRescueRequest
 from . import state as _state  # 共享单例（config/store/admin_manager/mystic_coordinator 等）
@@ -461,6 +464,7 @@ beast_realm_tables: dict[str, dict[str, Any]] = {}
 beast_realm_private_routes: dict[str, str] = {}
 BEAST_REALM_ICON = "beast_realm"
 rank_scheduler_task: Optional[asyncio.Task] = None
+mystic_recovery_task: Optional[asyncio.Task] = None
 admin_http_server = None
 
 
@@ -1538,6 +1542,193 @@ async def send_normal_duel_prepare_messages(session: dict[str, Any]) -> None:
     )
 
 
+def mystic_prepare_cards(
+    record, nickname: str, prepare_hint: str = "", monster_info: str = ""
+) -> list[tuple[str, str, str]]:
+    """秘境战备面板，结构与斗法战备一致，文案适配秘境战斗。
+
+    之前 boss 战/遭遇战进入准备阶段时只给玩家发了“秘境配装”四个字，
+    没有任何战斗信息。这里复用斗法战备的渲染逻辑，让玩家在秘境里也能
+    看到自己的修为、战技、阵盘、符箓配置，再决定是否调整装备并确认配装。
+
+    prepare_hint 为准备阶段的倒计时提示（如“剩余 45 秒”），为空则不显示。
+    """
+    ensure_combat_profile(record)
+    techniques = available_battle_techniques(record)
+    technique_lines = []
+    for index, tech in enumerate(techniques[:6], start=1):
+        technique_lines.append(
+            f"{index}. {tech}：耗灵{technique_mana_cost(record, tech)}，CD{technique_cooldown(tech)}息"
+        )
+    if not technique_lines:
+        technique_lines.append("暂无战技，可发表情或即兴台词尝试牵动基础术式。")
+    abilities = "、".join(record.special_abilities or []) or "暂无显化"
+    talismans = available_talismans(record)
+    talisman_lines = []
+    for index, talisman in enumerate(talismans[:6], start=1):
+        talisman_lines.append(f"{index}. {reward_display_name(talisman)}")
+    if not talisman_lines:
+        talisman_lines.append("暂无可用符箓；本场可依靠战技、神通、体质和体质特性。")
+    equipped_talisman = (
+        reward_display_name(record.equipped_talisman)
+        if record.equipped_talisman
+        else "未装备符箓"
+    )
+    array_text = (
+        reward_display_name(record.equipped_array)
+        if record.equipped_array
+        else "未布置阵盘"
+    )
+    intro_lines = [
+        f"{nickname or '宿主'}，秘境战斗已进入准备阶段，请检查配装后私聊发送“确认配装”。"
+    ]
+    if prepare_hint:
+        # 倒计时放在最显眼的第一行之后，让玩家知道还剩多少时间调整装备。
+        intro_lines.append(prepare_hint)
+    intro_lines.extend(
+        [
+            f"境界：{record.realm if record.root else '未入门'}",
+            f"境界品相：{record.realm_quality}",
+            f"战力：{battle_power(record)}",
+            f"灵力上限：{combat_max_mana(record)}",
+            f"灵根：{record.root_summary}",
+            f"种族：{record.combat_race or '未记录'}",
+            f"体质：{record.physique or '未记录'}",
+        ]
+    )
+    cards = [
+        (
+            "秘境战备·修为确认",
+            "\n".join(intro_lines),
+            "realm",
+        ),
+        (
+            "秘境战备·战技配置",
+            "\n".join(
+                [
+                    f"当前功法：{reward_display_name(record.equipped_method) if record.equipped_method else '未参悟功法'}",
+                    "可用战技：",
+                    *technique_lines,
+                    f"神通：{abilities}",
+                    "战技会消耗灵力并进入CD；未命中的发言会作为即兴术式。",
+                ]
+            ),
+            "method",
+        ),
+        (
+            "秘境战备·阵盘配置",
+            "\n".join(
+                [
+                    f"当前阵盘：{array_text}",
+                    f"阵法倍率：{array_multiplier(record):.1f}x",
+                    "阵盘会影响功法收益与部分战斗面板计算；熟练度越高越稳定。",
+                ]
+            ),
+            "array",
+        ),
+        (
+            "秘境战备·符箓准备",
+            "\n".join(
+                [
+                    f"当前符箓栏：{equipped_talisman}",
+                    "可用符箓：",
+                    *talisman_lines,
+                    "发送“装备符箓 编号”可放入符箓栏；普通战法生效且不消耗。",
+                    "发送“使用符箓 编号”仍会作为一次性符箓激发并消耗。",
+                ]
+            ),
+            "talisman",
+        ),
+    ]
+    if monster_info:
+        # 神识探查：敌方信息。原本战备面板只有己方配置，玩家不知道要面对什么，
+        # 这里补一张敌方情报卡（境界/灵根/战力/血量等），便于针对性配装。
+        cards.append(
+            (
+                "秘境战备·神识探查",
+                monster_info,
+                "mystic",
+            )
+        )
+    return cards
+
+
+async def send_mystic_prepare_cards(
+    user_id: str, record, nickname: str, prepare_hint: str = "", monster_info: str = ""
+) -> None:
+    """把秘境战备面板逐张私聊发给指定玩家。"""
+    bot = get_bot()
+    for title, content, icon in mystic_prepare_cards(
+        record, nickname, prepare_hint, monster_info
+    ):
+        try:
+            await bot.send_private_msg(
+                user_id=int(user_id),
+                message=panel_segment(title, content, record, icon=icon),
+            )
+        except Exception as exc:
+            logger.debug(f"发送秘境战备私聊失败: {user_id} {exc}")
+
+
+async def _mystic_prepare_info(run) -> tuple[str, str]:
+    """读取秘境遭遇信息，返回 (倒计时提示, 神识探查敌方情报)。
+
+    倒计时：准备阶段默认仅 60 秒，玩家很容易没赶上就被自动确认。把剩余时间
+    显示在战备面板上，让玩家知道得抓紧。
+    神识探查：战备面板原本只有己方配置，补上敌方情报（境界/灵根/战力/血量），
+    让玩家能针对性配装。任一项解析失败返回空串（不显示）。
+    """
+    hint = ""
+    monster_info = ""
+    if run is None or not getattr(run, "active_encounter_id", None):
+        return hint, monster_info
+    try:
+        encounter = await store.get_mystic_encounter(run.active_encounter_id)
+    except Exception:
+        return hint, monster_info
+    if encounter is None:
+        return hint, monster_info
+
+    # 倒计时
+    deadline_raw = getattr(encounter, "phase_deadline", None)
+    if deadline_raw:
+        try:
+            deadline = datetime.fromisoformat(str(deadline_raw))
+            remaining = int((deadline - datetime.now(deadline.tzinfo)).total_seconds())
+            if remaining > 0:
+                minutes, seconds = divmod(remaining, 60)
+                if minutes > 0:
+                    hint = f"⏰ 准备阶段剩余 {minutes} 分 {seconds} 秒，超时将按当前配装自动开战。"
+                else:
+                    hint = f"⏰ 准备阶段剩余 {seconds} 秒，超时将按当前配装自动开战。"
+        except ValueError:
+            pass
+
+    # 神识探查：解析怪物存档，构造敌方情报
+    try:
+        monster_record_data = encounter.monster_record or {}
+        if monster_record_data:
+            from .domain import UserRecord, combat_max_hp
+
+            monster = UserRecord.from_dict(monster_record_data)
+            kind_label = "Boss" if encounter.kind.value == "boss" else "秘境怪物"
+            lines = [
+                f"敌方：{kind_label}",
+                f"境界：{monster.realm if monster.root else '未知'}",
+                f"灵根：{monster.root_summary}",
+                f"推测战力：{battle_power(monster)}",
+                f"生命上限：{combat_max_hp(monster)}",
+                f"灵力上限：{combat_max_mana(monster)}",
+                f"种族：{monster.combat_race or '未记录'}",
+                f"体质：{monster.physique or '未记录'}",
+            ]
+            monster_info = "\n".join(lines)
+    except Exception:
+        logger.debug("神识探查敌方情报构造失败")
+
+    return hint, monster_info
+
+
 async def build_normal_duel_image(result: dict[str, Any]) -> bytes:
     left = result.get("left", {})
     right = result.get("right", {})
@@ -2333,9 +2524,24 @@ async def recover_mystic_dungeons() -> None:
         logger.exception("秘境状态恢复失败")
 
 
+async def mystic_recovery_sweep() -> None:
+    """周期性巡检进行中的秘境，兜底重建丢失的截止时间任务。
+
+    秘境的截止时间建在内存 asyncio task 上，进程异常或任务抛出非冲突异常
+    时可能丢失，导致秘境卡在某个阶段不推进。recover_active_runs 本身幂等
+    （deadline 在未来就重建 task，已过期就立即推进），故可安全地周期调用。
+    """
+    while True:
+        try:
+            await mystic_coordinator.recover_active_runs()
+        except Exception:
+            logger.exception("秘境周期巡检失败")
+        await asyncio.sleep(60)
+
+
 @driver.on_startup
 async def start_rank_scheduler() -> None:
-    global admin_http_server, rank_scheduler_task
+    global admin_http_server, rank_scheduler_task, mystic_recovery_task
     if config.xiuxian_signin_admin_enabled:
         try:
             admin_http_server = start_admin_server(
@@ -2357,14 +2563,18 @@ async def start_rank_scheduler() -> None:
         admin_manager.apply_config()
     await recover_mystic_dungeons()
     rank_scheduler_task = asyncio.create_task(rank_scheduler())
+    mystic_recovery_task = asyncio.create_task(mystic_recovery_sweep())
 
 
 @driver.on_shutdown
 async def stop_admin_http_server() -> None:
-    global admin_http_server
+    global admin_http_server, mystic_recovery_task
     if admin_http_server is not None:
         admin_http_server.stop()
         admin_http_server = None
+    if mystic_recovery_task is not None:
+        mystic_recovery_task.cancel()
+        mystic_recovery_task = None
 
 
 def beast_realm_group_key_from_event(event: GroupMessageEvent) -> str:
@@ -2564,6 +2774,38 @@ async def is_mystic_private_message(event: MessageEvent) -> bool:
         event.get_user_id(),
         normalized_plain_text(event),
     )
+
+
+@event_preprocessor
+async def block_other_plugins_during_mystic_battle(event: MessageEvent) -> None:
+    """秘境战斗进行时，屏蔽其它插件对该玩家私聊指令的响应。
+
+    NoneBot 没有“全局暂停其它插件”的 API，这里用事件预处理器实现：在所有
+    matcher 运行前检查——若该玩家正处于秘境战斗相关阶段，且本次私聊不是秘境
+    自己的指令，就给一条提示并抛 IgnoredException 终止事件传播，避免签到、
+    装备、炼化等指令在战斗中途打断状态。秘境自己的指令正常放行。
+    """
+    if not isinstance(event, PrivateMessageEvent):
+        return
+    user_id = event.get_user_id()
+    if not await mystic_coordinator.is_in_mystic_battle(user_id):
+        return
+    text = normalized_plain_text(event)
+    # 是秘境自己的私聊指令 → 放行，交给 mystic_private_cmd 处理
+    if parse_mystic_private_command(text) is not None:
+        return
+    try:
+        await get_bot().send_private_msg(
+            user_id=int(user_id),
+            message=panel_segment(
+                "秘境战斗中",
+                "你正在进行秘境战斗，请先完成当前战斗（确认配装 / 普通攻击 / 秘境技能 / 自动战斗）。\n如需查看状态，发送“秘境状态”。",
+                icon="mystic",
+            ),
+        )
+    except (ActionFailed, NetworkError, RuntimeError, ValueError):
+        logger.debug(f"秘境战斗拦截提示发送失败: {user_id}")
+    raise IgnoredException("玩家正在进行秘境战斗，已拦截其它私聊指令")
 
 
 async def is_divination_message(event: MessageEvent) -> bool:
@@ -2806,21 +3048,72 @@ chat_rank_counter = on_message(rule=Rule(is_group_chat_for_rank), priority=99, b
 
 
 
+def _collect_theme_display_names(risk: DungeonRisk) -> tuple[str, ...]:
+    """收集某风险等级下已启用主题的展示名(按 theme_id 排序),用于缺令牌提示图。"""
+    enabled_ids = active_mystic_theme_ids(risk)
+    themes = sorted(
+        (t for t in mystic_catalog.themes.values() if t.risk is risk),
+        key=lambda t: t.theme_id,
+    )
+    if enabled_ids:
+        enabled_set = set(enabled_ids)
+        themes = [t for t in themes if t.theme_id in enabled_set]
+    return tuple(t.display_name for t in themes)
+
+
 async def finish_mystic_command_result(
     matcher: Matcher,
     user_id: str,
     result: MysticCommandResult,
 ) -> None:
     record = await store.get_user(user_id)
+    if result.token_missing_risk is not None:
+        # 缺少秘境令牌:渲染专属提示图(含令牌图标、持有数、获取途径、可进入秘境)
+        normal_count = reward_count_by_names(record, ["普通秘境令牌"])
+        high_count = reward_count_by_names(record, ["高风险秘境令牌"])
+        try:
+            image_bytes = render_no_token_panel(
+                normal_count=normal_count,
+                high_count=high_count,
+                normal_theme_names=_collect_theme_display_names(DungeonRisk.NORMAL),
+                high_theme_names=_collect_theme_display_names(DungeonRisk.HIGH),
+                width=config.xiuxian_signin_image_width,
+            )
+            await matcher.send(MessageSegment.image(BytesIO(image_bytes)))
+            await matcher.finish()
+            return
+        except (ActionFailed, NetworkError, OSError, RuntimeError, ValueError):
+            # 图片发送失败时回退到通用 warning 面板
+            await finish_panel(matcher, "秘境操作失败", result.error or "令牌不足", record, icon="warning")
+            return
     if result.error:
         await finish_panel(matcher, "秘境操作失败", result.error, record, icon="warning")
         return
+    # 准备阶段倒计时 + 神识探查敌方情报：从当前秘境遭遇读取，一并带进战备面板，
+    # 让玩家知道还剩多少秒调整装备、以及要面对什么样的敌人。仅计算一次。
+    prepare_hint = ""
+    monster_info = ""
+    if any(text == "秘境配装" for _, text in result.private_messages):
+        prepare_hint, monster_info = await _mystic_prepare_info(result.run)
     for target_user_id, private_text in result.private_messages:
         try:
-            await get_bot().send_private_msg(
-                user_id=int(target_user_id),
-                message=private_text,
-            )
+            if private_text == "秘境配装":
+                # 战斗准备阶段：原先只发“秘境配装”四个字，没有任何战斗信息。
+                # 这里加载目标玩家存档，发送与斗法一致的战备面板（修为/战技/阵盘/符箓），
+                # 让玩家在确认配装前能看到自己的配置。
+                target_record = await store.get_user(target_user_id)
+                await send_mystic_prepare_cards(
+                    target_user_id,
+                    target_record,
+                    "",
+                    prepare_hint,
+                    monster_info,
+                )
+            else:
+                await get_bot().send_private_msg(
+                    user_id=int(target_user_id),
+                    message=private_text,
+                )
         except (ActionFailed, NetworkError, RuntimeError, ValueError):
             logger.debug(f"发送秘境私聊提示失败: {target_user_id}")
     if result.image_bytes is not None:
@@ -2842,7 +3135,7 @@ async def finish_mystic_command_result(
         "秘境",
         result.message or "秘境状态已更新。",
         record,
-        icon="mystic",
+        icon=result.panel_icon or "mystic",
     )
 
 
