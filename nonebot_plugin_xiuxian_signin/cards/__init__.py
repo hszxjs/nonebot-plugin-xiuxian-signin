@@ -2587,7 +2587,7 @@ def render_adventure_card(
     command_slot(layout["cmd_6"], "\u4ea4\u6613", "\u4e07\u5b9d\u697c", "bag")
 
     footer_box = draw_region(layout["footer"], fill=(236, 246, 221, 88), radius=14)
-    footer = "\u5e38\u7528\uff1a\u88c5\u5907\u7075\u5668 1 \u4e3b\u624b / \u53c2\u609f\u529f\u6cd5 1 / \u5e03\u7f6e\u9635\u76d8 1 / \u88c5\u5907\u7b26\u7b93 1 / \u6218\u529b\u699c / \u4ea4\u6613\u5217\u8868"
+    footer = "\u53ef\u53d1\u9001\uff1a\u5386\u7ec3 / \u5386\u7ec3\u9762\u677f / \u6218\u529b / \u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u795e\u901a"
     panel_clamped(footer, (footer_box[0] + sp(22), footer_box[1] + sp(22)), small_font, dark, max(20, footer_box[2] - footer_box[0] - sp(44)), max_lines=1, line_gap=0, weight=3)
     return png_bytes(image)
 

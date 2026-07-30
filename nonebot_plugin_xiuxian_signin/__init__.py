@@ -296,6 +296,21 @@ PICMENU_NEXT_FUNCS = [
 ]
 
 
+def command_hint(func: str) -> str:
+    """根据功能分类名，返回底部命令提示文案。
+
+    从 PICMENU_NEXT_FUNCS 中查找对应分组的 trigger_method，统一加上“可发送：”
+    前缀，供查看类面板的 footer 使用，让玩家知道下一步可以发什么命令。
+    """
+    for entry in PICMENU_NEXT_FUNCS:
+        if entry.get("func") == func:
+            method = str(entry.get("trigger_method") or "").strip()
+            if method:
+                return f"可发送：{method}"
+            break
+    return ""
+
+
 __plugin_meta__ = PluginMetadata(
     name="修仙签到",
     description="以图片面板输出的修仙签到、境界突破、灵器战力、功法阵盘、神通、秘境探索、交易和后台管理插件。",
@@ -3190,9 +3205,9 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
     group_key = beast_realm_group_key_from_event(event)
 
     if text_value == "御兽秘境帮助" or (text_value == "御兽秘境" and group_key not in beast_realm_tables):
-        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon=BEAST_REALM_ICON)
+        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon=BEAST_REALM_ICON, footer=command_hint("御兽秘境"))
     if text_value in {"御兽秘境图鉴", "御兽卡牌", "御兽卡牌图鉴"}:
-        await finish_panel(matcher, "御兽秘境图鉴", beast_realm_game.catalog_text(), record, icon=BEAST_REALM_ICON)
+        await finish_panel(matcher, "御兽秘境图鉴", beast_realm_game.catalog_text(), record, icon=BEAST_REALM_ICON, footer=command_hint("御兽秘境"))
 
     table = beast_realm_tables.get(group_key)
     if table and table.get("phase") == "lobby" and float(table.get("expires_at", 0)) < time.monotonic():
@@ -3217,10 +3232,10 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
         await finish_panel(matcher, "御兽秘境开局", beast_realm_game.lobby_text(table) + hint, record, icon=BEAST_REALM_ICON)
 
     if not table:
-        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon=BEAST_REALM_ICON)
+        await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon=BEAST_REALM_ICON, footer=command_hint("御兽秘境"))
 
     if text_value in {"御兽秘境", "御兽秘境状态"}:
-        await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon=BEAST_REALM_ICON)
+        await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon=BEAST_REALM_ICON, footer=command_hint("御兽秘境"))
 
     if text_value == "加入御兽秘境":
         ok, message = beast_realm_game.add_player(table, user_id, nickname_from_event(event) or f"QQ {user_id}")
@@ -3269,7 +3284,7 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
             await send_beast_realm_recruit_panels(table)
         await matcher.finish()
 
-    await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon=BEAST_REALM_ICON)
+    await finish_panel(matcher, "御兽秘境状态", beast_realm_game.status_text(table), record, icon=BEAST_REALM_ICON, footer=command_hint("御兽秘境"))
 
 
 @beast_realm_private_cmd.handle()
@@ -3322,7 +3337,7 @@ async def handle_beast_realm_private(matcher: Matcher, event: PrivateMessageEven
 @help_cmd.handle()
 async def handle_help(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
-    await finish_panel(matcher, "\u4fee\u4ed9\u5e2e\u52a9", format_help_text(), icon="scroll")
+    await finish_panel(matcher, "\u4fee\u4ed9\u5e2e\u52a9", format_help_text(), icon="scroll", footer=command_hint("入门与状态"))
 
 @newbie_tutorial_cmd.handle()
 async def handle_newbie_tutorial(matcher: Matcher, event: PrivateMessageEvent) -> None:
@@ -3344,8 +3359,8 @@ async def handle_catalog(matcher: Matcher, event: MessageEvent) -> None:
     if text in SPECIAL_ABILITY_CATALOG_TEXTS:
         ensure_combat_profile(record)
         await store.save_user(record)
-        await finish_panel(matcher, "\u795e\u901a\u56fe\u9274", special_ability_catalog_text(record), record, icon="ability")
-    await finish_panel(matcher, "\u4fee\u4ed9\u56fe\u9274", format_catalog_text(text), record, icon="catalog")
+        await finish_panel(matcher, "\u795e\u901a\u56fe\u9274", special_ability_catalog_text(record), record, icon="ability", footer=command_hint("背包与图鉴"))
+    await finish_panel(matcher, "\u4fee\u4ed9\u56fe\u9274", format_catalog_text(text), record, icon="catalog", footer=command_hint("背包与图鉴"))
 
 
 @breakthrough_cmd.handle()
@@ -3375,28 +3390,28 @@ async def handle_breakthrough(matcher: Matcher, event: MessageEvent) -> None:
             record,
             icon="breakthrough" if success else "warning",
         )
-    await finish_panel(matcher, "\u7a81\u7834\u72b6\u6001", breakthrough_status(record), record, icon="breakthrough")
+    await finish_panel(matcher, "\u7a81\u7834\u72b6\u6001", breakthrough_status(record), record, icon="breakthrough", footer=command_hint("修为与突破"))
 
 
 @puppet_list.handle()
 async def handle_puppet_list(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "我的傀儡", format_puppet_list(record), record, icon="puppet")
+    await finish_panel(matcher, "我的傀儡", format_puppet_list(record), record, icon="puppet", footer=command_hint("背包与图鉴"))
 
 
 @plant_list.handle()
 async def handle_plant_list(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "我的灵植", format_plant_list(record), record, icon="plant")
+    await finish_panel(matcher, "我的灵植", format_plant_list(record), record, icon="plant", footer=command_hint("背包与图鉴"))
 
 
 @item_list.handle()
 async def handle_item_list(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "背包道具", format_item_list(record), record, icon="bag")
+    await finish_panel(matcher, "背包道具", format_item_list(record), record, icon="bag", footer=command_hint("背包与图鉴"))
 
 
 @acquired_root_cmd.handle()
@@ -3405,10 +3420,10 @@ async def handle_acquired_root(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(event.get_user_id())
     parsed = parse_acquired_root_command(normalized_plain_text(event))
     if parsed is None or parsed[0] == "status":
-        await finish_panel(matcher, "后天灵根", acquired_root_text(record), record, icon="realm")
+        await finish_panel(matcher, "后天灵根", acquired_root_text(record), record, icon="realm", footer=command_hint("修为与突破"))
     kind, index = parsed
     if index is None:
-        await finish_panel(matcher, "后天灵根", acquired_root_text(record), record, icon="realm")
+        await finish_panel(matcher, "后天灵根", acquired_root_text(record), record, icon="realm", footer=command_hint("修为与突破"))
     if kind == "dan":
         changed, message = refine_dan_root(record, int(index))
     else:
@@ -3433,9 +3448,9 @@ async def handle_special_ability(matcher: Matcher, event: MessageEvent) -> None:
     text = normalized_plain_text(event)
     if text in SPECIAL_ABILITY_CATALOG_TEXTS:
         await store.save_user(record)
-        await finish_panel(matcher, "神通图鉴", special_ability_catalog_text(record), record, icon="ability")
+        await finish_panel(matcher, "神通图鉴", special_ability_catalog_text(record), record, icon="ability", footer=command_hint("背包与图鉴"))
     await store.save_user(record)
-    await finish_panel(matcher, "我的神通", special_ability_list_text(record), record, icon="ability")
+    await finish_panel(matcher, "我的神通", special_ability_list_text(record), record, icon="ability", footer=command_hint("背包与图鉴"))
 
 
 @special_ability_learn_cmd.handle()
@@ -3457,11 +3472,11 @@ async def handle_route(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(event.get_user_id())
     text = normalized_plain_text(event)
     if text in ROUTE_TEXTS:
-        await finish_panel(matcher, "修炼路线", route_status_text(record), record, icon="token")
+        await finish_panel(matcher, "修炼路线", route_status_text(record), record, icon="token", footer=command_hint("路线与身份"))
     route_name = parse_prefixed_name(text, ROUTE_SELECT_PREFIXES)
     if route_name is not None:
         if not route_name:
-            await finish_panel(matcher, "修炼路线", route_status_text(record), record, icon="token")
+            await finish_panel(matcher, "修炼路线", route_status_text(record), record, icon="token", footer=command_hint("路线与身份"))
         success, message = choose_cultivation_route(record, route_name)
         if success:
             await store.save_user(record)
@@ -3469,7 +3484,7 @@ async def handle_route(matcher: Matcher, event: MessageEvent) -> None:
     identity_name = parse_prefixed_name(text, IDENTITY_SELECT_PREFIXES)
     if identity_name is not None:
         if not identity_name:
-            await finish_panel(matcher, "身份令牌", route_status_text(record), record, icon="token")
+            await finish_panel(matcher, "身份令牌", route_status_text(record), record, icon="token", footer=command_hint("路线与身份"))
         success, message = choose_faction_identity(record, identity_name)
         if success:
             await store.save_user(record)
@@ -3479,7 +3494,7 @@ async def handle_route(matcher: Matcher, event: MessageEvent) -> None:
         if success:
             await store.save_user(record)
         await finish_panel(matcher, "邪修路线", message, record, icon="token")
-    await finish_panel(matcher, "修炼路线", route_status_text(record), record, icon="token")
+    await finish_panel(matcher, "修炼路线", route_status_text(record), record, icon="token", footer=command_hint("路线与身份"))
 
 
 @task_cmd.handle()
@@ -3535,7 +3550,7 @@ async def handle_shop(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(event.get_user_id())
     text = normalized_plain_text(event)
     if text in SHOP_TEXTS:
-        await finish_panel(matcher, "\u6bcf\u65e5\u5546\u5e97", format_shop_panel(record, local_today().isoformat()), record, icon="shop")
+        await finish_panel(matcher, "\u6bcf\u65e5\u5546\u5e97", format_shop_panel(record, local_today().isoformat()), record, icon="shop", footer=command_hint("交易与商店"))
     buy_index = parse_shop_buy_index(text)
     if buy_index is not None:
         success, message = buy_shop_item(record, buy_index, local_today().isoformat())
@@ -3562,7 +3577,7 @@ async def handle_shop(matcher: Matcher, event: MessageEvent) -> None:
         if success:
             await store.save_user(record)
         await finish_panel(matcher, "\u6279\u91cf\u51fa\u552e" if success else "\u51fa\u552e\u5931\u8d25", message, record, icon=item_icon_for_category(category) if success else "warning")
-    await finish_panel(matcher, "\u6bcf\u65e5\u5546\u5e97", format_shop_panel(record, local_today().isoformat()), record, icon="shop")
+    await finish_panel(matcher, "\u6bcf\u65e5\u5546\u5e97", format_shop_panel(record, local_today().isoformat()), record, icon="shop", footer=command_hint("交易与商店"))
 
 
 @alchemy_cmd.handle()
@@ -3572,9 +3587,9 @@ async def handle_alchemy(matcher: Matcher, event: MessageEvent) -> None:
     text = normalized_plain_text(event)
     pill_name = parse_alchemy_name(text)
     if text in ALCHEMY_TEXTS or pill_name == "":
-        await finish_panel(matcher, "炼丹", alchemy_text(record), record, icon="alchemy")
+        await finish_panel(matcher, "炼丹", alchemy_text(record), record, icon="alchemy", footer=command_hint("炼丹炼器与符箓"))
     if pill_name is None:
-        await finish_panel(matcher, "炼丹", alchemy_text(record), record, icon="alchemy")
+        await finish_panel(matcher, "炼丹", alchemy_text(record), record, icon="alchemy", footer=command_hint("炼丹炼器与符箓"))
     success, message = refine_pill_by_recipe(record, pill_name)
     if success:
         await store.save_user(record)
@@ -3616,7 +3631,7 @@ async def handle_refining(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(event.get_user_id())
     name = parse_refining_name(normalized_plain_text(event))
     if name is None or name == "":
-        await finish_panel(matcher, "\u70bc\u5668", refining_text(record), record, icon="alchemy")
+        await finish_panel(matcher, "\u70bc\u5668", refining_text(record), record, icon="alchemy", footer=command_hint("炼丹炼器与符箓"))
     success, message = refine_artifact_by_recipe(record, name)
     await store.save_user(record)
     await finish_panel(matcher, "\u70bc\u5668\u6210\u529f" if success else "\u70bc\u5668\u5931\u8d25", message, record, icon="alchemy" if success else "warning")
@@ -3628,7 +3643,7 @@ async def handle_array_deduction(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(event.get_user_id())
     index = parse_array_deduction_index(normalized_plain_text(event))
     if not index:
-        await finish_panel(matcher, "\u9635\u6cd5\u63a8\u6f14", array_deduction_text(record), record, icon="array")
+        await finish_panel(matcher, "\u9635\u6cd5\u63a8\u6f14", array_deduction_text(record), record, icon="array", footer=command_hint("功法与阵盘"))
     success, message = deduce_array(record, index)
     await store.save_user(record)
     await finish_panel(matcher, "\u63a8\u6f14\u6210\u529f" if success else "\u63a8\u6f14\u5931\u8d25", message, record, icon="array" if success else "warning")
@@ -3653,7 +3668,7 @@ async def handle_immortal_seed(matcher: Matcher, event: MessageEvent) -> None:
     text = normalized_plain_text(event)
     index = parse_immortal_seed_equip_index(text)
     if index is None:
-        await finish_panel(matcher, "仙源", immortal_seed_text(record), record, icon="ability")
+        await finish_panel(matcher, "仙源", immortal_seed_text(record), record, icon="ability", footer=command_hint("炼丹炼器与符箓"))
     success, message = equip_immortal_seed(record, index)
     await store.save_user(record)
     await finish_panel(matcher, "仙源" if success else "纳入失败", message, record, icon="ability" if success else "warning")
@@ -3760,7 +3775,7 @@ async def handle_market(matcher: Matcher, event: MessageEvent) -> None:
             seller = offer.get("seller_name") or offer.get("seller_id")
             lines.append(f"{offer.get('id')}. {seller} 寄售 {reward_display_name(item)}｜{spirit_stone_text(int(offer.get('price', 0)))}")
         lines.append("挂售：万宝楼挂售 类别 编号；购买：万宝楼购买 编号；下架：万宝楼下架 编号。")
-        await finish_panel(matcher, "万宝楼", "\n".join(lines), record, icon="shop")
+        await finish_panel(matcher, "万宝楼", "\n".join(lines), record, icon="shop", footer=command_hint("交易与商店"))
     if buy_id is not None:
         offers = await store.list_trade_offers(group_id, market=True)
         preview = next((item for item in offers if str(item.get("id")) == str(buy_id)), None)
@@ -3795,7 +3810,7 @@ async def handle_market(matcher: Matcher, event: MessageEvent) -> None:
         await store.save_user(record)
         await finish_panel(matcher, "万宝楼下架", f"已下架 {reward_display_name(item)}。", record, icon="shop")
     if offer_data is None:
-        await finish_panel(matcher, "万宝楼", "格式：万宝楼挂售 类别 编号，例如：万宝楼挂售 灵器 1。", record, icon="shop")
+        await finish_panel(matcher, "万宝楼", "格式：万宝楼挂售 类别 编号，例如：万宝楼挂售 灵器 1。", record, icon="shop", footer=command_hint("交易与商店"))
     category, item_index = offer_data
     result = pop_reward_by_category_index(record, category, item_index)
     if result is None:
@@ -4312,7 +4327,7 @@ async def handle_power_rank(matcher: Matcher, event: GroupMessageEvent) -> None:
 async def handle_power_status(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "个人战力", format_power_status(record, nickname_from_event(event)), record, icon="power")
+    await finish_panel(matcher, "个人战力", format_power_status(record, nickname_from_event(event)), record, icon="power", footer=command_hint("灵器与战力"))
 
 
 @adventure.handle()
@@ -4331,14 +4346,14 @@ async def handle_adventure(matcher: Matcher, event: MessageEvent) -> None:
 async def handle_artifact_list(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "我的灵器", format_artifact_list(record), record, icon="artifact")
+    await finish_panel(matcher, "我的灵器", format_artifact_list(record), record, icon="artifact", footer=command_hint("灵器与战力"))
 
 
 @method_list.handle()
 async def handle_method_list(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "我的功法", format_method_list(record), record, icon="method")
+    await finish_panel(matcher, "我的功法", format_method_list(record), record, icon="method", footer=command_hint("功法与阵盘"))
 
 
 
@@ -4426,7 +4441,7 @@ async def handle_normal_duel_chat(event: GroupMessageEvent) -> None:
 async def handle_array_list(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    await finish_panel(matcher, "我的阵盘", format_array_list(record), record, icon="array")
+    await finish_panel(matcher, "我的阵盘", format_array_list(record), record, icon="array", footer=command_hint("功法与阵盘"))
 
 
 @equip_artifact_cmd.handle()
