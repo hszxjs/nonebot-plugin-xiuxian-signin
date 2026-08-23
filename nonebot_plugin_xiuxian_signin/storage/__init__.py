@@ -3,8 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
+
+from nonebot import logger
 
 from ..domain import (
     UserRecord,
@@ -1458,9 +1461,58 @@ class JsonStore:
         try:
             with path.open("r", encoding="utf-8") as fp:
                 data = json.load(fp)
-        except (OSError, json.JSONDecodeError):
+        except json.JSONDecodeError:
+            # 文件损坏（典型形态：历史并发写导致新旧内容拼接）。直接返回
+            # 空 dict 会让后续“读-改-写”把空状态写回、清空全部数据，因此
+            # 必须先自愈：解析出文件中最后一段完整的 JSON 根，备份损坏文件
+            # 后用干净数据重写，再返回。
+            recovered = self._recover_json_file(path)
+            if recovered is None:
+                return {}
+            data = recovered
+        except OSError:
             return {}
         return data if isinstance(data, dict) else {}
+
+    def _recover_json_file(self, path: Path) -> dict[str, Any] | None:
+        """从损坏的 JSON 文件中恢复最后一段完整内容。
+
+        损坏形态多为“完整 JSON + 旧内容残留”（写入未截断的历史遗留）。这里
+        用 raw_decode 逐段解析，取最后一段完整且为 dict 的内容；成功则备份
+        坏文件并把恢复结果原子写回。完全无法恢复时返回 None。
+        """
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        decoder = json.JSONDecoder()
+        last_good: dict[str, Any] | None = None
+        pos = 0
+        while pos < len(raw):
+            while pos < len(raw) and raw[pos] in " \t\r\n":
+                pos += 1
+            if pos >= len(raw):
+                break
+            try:
+                obj, end = decoder.raw_decode(raw, pos)
+            except json.JSONDecodeError:
+                break
+            if isinstance(obj, dict):
+                last_good = obj
+            pos = end
+        backup = path.with_name(
+            f"{path.name}.corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
+        )
+        try:
+            path.replace(backup)
+        except OSError:
+            pass
+        if last_good is None:
+            logger.error(f"存档文件损坏且无法恢复，已备份为 {backup.name}")
+            return None
+        logger.warning(f"存档文件损坏，已自动恢复最后完整段并备份为 {backup.name}")
+        self._write_json(path, last_good)
+        return last_good
 
     def _write_json(self, path: Path, data: dict[str, Any]) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
