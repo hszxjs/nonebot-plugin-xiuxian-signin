@@ -32,7 +32,7 @@ from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 
 from . import beast_realm as beast_realm_game
-from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_signin_card, render_text_panel, set_font_paths
+from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_signin_calendar_card, render_signin_card, render_text_panel, set_font_paths
 from .beast_realm_cards import render_beast_realm_panel
 from .config import Config
 from .domain import (
@@ -157,6 +157,10 @@ from .domain import (
     special_ability_catalog_text,
     special_ability_list_text,
     spirit_stone_text,
+    makeup_price,
+    makeup_sign,
+    makeup_used_this_month,
+    signin_streak,
     talisman_draw_text,
     tianji_divination_text,
     unequip_artifact,
@@ -347,6 +351,9 @@ driver = get_driver()
 
 SIGNIN_TEXTS = {"签到", "修仙签到", "每日签到"}
 STATUS_TEXTS = {"\u6211\u7684\u4fee\u4e3a", "\u4fee\u4e3a", "\u5883\u754c", "\u7075\u6839", "\u9762\u677f", "\u4e2a\u4eba\u9762\u677f"}
+# 签到日历：独立查询/翻月词组 + 补签词组（签到功能的延伸，不算新系统）
+SIGNIN_CALENDAR_TEXTS = {"签到日历", "签到日历表", "日历", "我的日历"}
+MAKEUP_SIGN_PREFIXES = ("补签",)
 HELP_TEXTS = {"\u5e2e\u52a9", "\u4fee\u4ed9\u5e2e\u52a9", "\u6307\u4ee4", "\u8bf4\u660e", "\u73a9\u6cd5", "\u83dc\u5355"}
 CATALOG_TEXTS = {
     "\u56fe\u9274",
@@ -1440,6 +1447,82 @@ async def build_signin_image(event: MessageEvent, result: SigninResult) -> bytes
     )
 
 
+async def build_signin_calendar_image(
+    user_id: str,
+    record,
+    nickname: str,
+    year: int,
+    month: int,
+) -> bytes:
+    """构造签到日历图（含头像）。"""
+    avatar = await fetch_avatar(user_id)
+    return render_signin_calendar_card(
+        history=record.sign_history or {},
+        nickname=nickname,
+        avatar_bytes=avatar,
+        year=year,
+        month=month,
+        today=local_today(),
+        width=config.xiuxian_signin_image_width,
+    )
+
+
+def parse_calendar_target(text: str) -> tuple[int, int] | None:
+    """解析日历翻月参数，返回 (year, month)；无参数返回当月，非法返回 None。"""
+    today = local_today()
+    normalized = text.strip()
+    for word in sorted(SIGNIN_CALENDAR_TEXTS, key=len, reverse=True):
+        if normalized.startswith(word):
+            normalized = normalized[len(word):].strip()
+            break
+    if not normalized:
+        return today.year, today.month
+    if normalized in {"上月", "上个月", "前一个月"}:
+        first = today.replace(day=1)
+        prev = first - timedelta(days=1)
+        return prev.year, prev.month
+    if normalized in {"下月", "下个月"}:
+        first = today.replace(day=1)
+        nxt = (first + timedelta(days=32)).replace(day=1)
+        return nxt.year, nxt.month
+    match = re.fullmatch(r"(\d{4})[-/年](\d{1,2})月?", normalized)
+    if match:
+        year, month = int(match.group(1)), int(match.group(2))
+        if 1 <= month <= 12:
+            return year, month
+    match = re.fullmatch(r"(\d{1,2})月?", normalized)
+    if match:
+        month = int(match.group(1))
+        if 1 <= month <= 12:
+            return today.year, month
+    return None
+
+
+def parse_makeup_target(text: str) -> date | None:
+    """解析补签目标日期：支持「补签 15」「补签 10月15」；非法返回 None。"""
+    normalized = text.strip()
+    for prefix in MAKEUP_SIGN_PREFIXES:
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):].strip()
+            break
+    today = local_today()
+    match = re.fullmatch(r"(\d{1,2})月(\d{1,2})日?", normalized)
+    if match:
+        month, day = int(match.group(1)), int(match.group(2))
+        try:
+            return date(today.year, month, day)
+        except ValueError:
+            return None
+    match = re.fullmatch(r"(\d{1,2})日?", normalized)
+    if match:
+        day = int(match.group(1))
+        try:
+            return date(today.year, today.month, day)
+        except ValueError:
+            return None
+    return None
+
+
 async def build_fishing_image(
     event: MessageEvent,
     record,
@@ -2478,6 +2561,17 @@ def format_rank_message(
     lines.append(format_power_rank(power_entries, "【群战力榜】"))
     return "\n".join(lines)
 
+
+def _is_likely_sent_despite_error(exc: Exception) -> bool:
+    """判断 ActionFailed 是否属于"消息实际已送达但 ACK 超时"的场景。
+
+    NapCat/QQ NT 内核发图时，sendMsg 的 ACK 可能慢于超时阈值，
+    导致 retcode=1200 ActionFailed，但消息实际已发出。
+    """
+    msg = str(getattr(exc, "wording", "") or getattr(exc, "message", "") or str(exc))
+    return "1200" in msg or "Timeout" in msg or "sendMsg" in msg
+
+
 async def settle_daily_chat_ranks() -> None:
     now = local_now()
     if not is_settle_time(now):
@@ -2513,9 +2607,18 @@ async def settle_daily_chat_ranks() -> None:
         try:
             bot = get_bot()
             await bot.send_group_msg(group_id=int(group_id), message=panel_segment("每日话痨榜", message, icon="rank"))
+        except Exception as exc:
+            logger.exception(f"发送群 {group_id} 每日话痨榜失败")
+            # NapCat/QQ 内核 ACK 超时（retcode=1200）时，消息实际往往已送达。
+            # 无论真假失败，都标记已结算，否则 get_unsettled_rank_groups 会反复
+            # 取到该群导致无限重发（群里疯狂刷屏话痨榜）。
+            if _is_likely_sent_despite_error(exc):
+                logger.warning("话痨榜发送超时但可能已送达（retcode=1200），标记已结算避免重复发送")
+        # 无论发送成功还是失败，都标记已结算（避免无限重发 > 单次失败的容错）
+        try:
             await store.mark_rank_group_settled(group_id, date_text)
         except Exception:
-            logger.exception(f"发送群 {group_id} 每日话痨榜失败")
+            logger.exception("标记话痨榜已结算失败")
 
 async def rank_scheduler() -> None:
     while True:
@@ -2691,6 +2794,17 @@ async def is_signin_message(event: MessageEvent) -> bool:
     return normalized_plain_text(event) in SIGNIN_TEXTS
 
 
+async def is_signin_calendar_message(event: MessageEvent) -> bool:
+    text = normalized_plain_text(event)
+    if text in SIGNIN_CALENDAR_TEXTS:
+        return True
+    return any(text.startswith(word) for word in SIGNIN_CALENDAR_TEXTS)
+
+
+async def is_makeup_sign_message(event: MessageEvent) -> bool:
+    return normalized_plain_text(event).startswith(MAKEUP_SIGN_PREFIXES)
+
+
 async def is_status_message(event: MessageEvent) -> bool:
     return normalized_plain_text(event) in STATUS_TEXTS
 
@@ -2803,7 +2917,12 @@ async def block_other_plugins_during_mystic_battle(event: MessageEvent) -> None:
     if not isinstance(event, PrivateMessageEvent):
         return
     user_id = event.get_user_id()
-    if not await mystic_coordinator.is_in_mystic_battle(user_id):
+    try:
+        in_battle = await mystic_coordinator.is_in_mystic_battle(user_id)
+    except Exception as exc:  # noqa: BLE001 — 预处理器异常会丢弃整条事件，必须失败放行
+        logger.warning(f"秘境战斗屏蔽检查失败，放行事件：{exc!r}")
+        return
+    if not in_battle:
         return
     text = normalized_plain_text(event)
     # 是秘境自己的私聊指令 → 放行，交给 mystic_private_cmd 处理
@@ -3011,6 +3130,8 @@ help_cmd = on_message(rule=Rule(is_help_message), priority=10, block=True)
 newbie_tutorial_cmd = on_message(rule=Rule(is_newbie_tutorial_message), priority=10, block=True)
 catalog_cmd = on_message(rule=Rule(is_catalog_message), priority=10, block=True)
 signin = on_message(rule=Rule(is_signin_message), priority=10, block=True)
+signin_calendar = on_message(rule=Rule(is_signin_calendar_message), priority=10, block=True)
+makeup_sign_cmd = on_message(rule=Rule(is_makeup_sign_message), priority=10, block=True)
 status = on_message(rule=Rule(is_status_message), priority=10, block=True)
 breakthrough_cmd = on_message(rule=Rule(is_breakthrough_message), priority=10, block=True)
 puppet_list = on_message(rule=Rule(is_puppet_list_message), priority=10, block=True)
@@ -4238,6 +4359,21 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
     image = await build_signin_image(event, result)
     await send_image(matcher, image)
 
+    if not result.already_signed:
+        # 签到成功后附上当月签到日历（仅当天首次签到发，重复签到不重发）
+        try:
+            today = local_today()
+            calendar_image = await build_signin_calendar_image(
+                user_id,
+                result.record,
+                nickname_from_event(event),
+                today.year,
+                today.month,
+            )
+            await send_image(matcher, calendar_image)
+        except (ActionFailed, NetworkError, OSError, RuntimeError, ValueError):
+            logger.debug(f"签到日历发送失败: {user_id}")
+
     if result.is_first and not result.already_signed and isinstance(event, PrivateMessageEvent):
         await send_panel(
             matcher,
@@ -4271,6 +4407,63 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
             result.record,
             icon="fishing",
         )
+
+
+@signin_calendar.handle()
+async def handle_signin_calendar(matcher: Matcher, event: MessageEvent) -> None:
+    user_id = event.get_user_id()
+    await remember_group_member(event)
+    record = await store.get_user(user_id)
+    target = parse_calendar_target(normalized_plain_text(event))
+    if target is None:
+        await finish_panel(
+            matcher,
+            "签到日历",
+            "月份格式不对，可用「签到日历」「签到日历 上月」「签到日历 2026-09」。",
+            record,
+            icon="warning",
+        )
+    year, month = target
+    image = await build_signin_calendar_image(
+        user_id,
+        record,
+        nickname_from_event(event),
+        year,
+        month,
+    )
+    await send_image(matcher, image)
+
+
+@makeup_sign_cmd.handle()
+async def handle_makeup_sign(matcher: Matcher, event: MessageEvent) -> None:
+    user_id = event.get_user_id()
+    await remember_group_member(event)
+    record = await store.get_user(user_id)
+    if record.root is None:
+        await finish_panel(matcher, "尚未入门", "尚未踏入修行路，发送“签到”即可抽取灵根。", record, icon="realm")
+    target = parse_makeup_target(normalized_plain_text(event))
+    if target is None:
+        await finish_panel(
+            matcher,
+            "补签",
+            "用法：补签 15（补本月 15 日）或 补签 10月15。",
+            record,
+            icon="warning",
+        )
+    today = local_today()
+    success, message = makeup_sign(record, target, today)
+    if success:
+        await store.save_user(record)
+    # 无论成败都回一张当月日历，让玩家直接看到结果（成功日会盖青色补签印）
+    await send_panel(matcher, "补签" if success else "补签失败", message, record, icon="realm" if success else "warning")
+    image = await build_signin_calendar_image(
+        user_id,
+        record,
+        nickname_from_event(event),
+        today.year,
+        today.month,
+    )
+    await send_image(matcher, image)
 
 
 @status.handle()

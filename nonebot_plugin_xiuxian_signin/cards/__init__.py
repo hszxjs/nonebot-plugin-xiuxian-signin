@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import calendar
 import json
+from datetime import date, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
@@ -2687,4 +2689,180 @@ def render_text_panel(
     if footer:
         footer_font = fit_font(draw, footer, width - 208, 26, bold=True, min_size=18)
         draw_weighted_text(draw, (104, height - 108), footer, footer_font, "#667085", weight=1)
+    return png_bytes(image)
+
+
+# ────────────────────────── 签到日历 ──────────────────────────
+
+_CALENDAR_ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "signin_calendar"
+_CALENDAR_SEAL_CACHE: dict[str, Image.Image] = {}
+
+
+def _recolor_seal(seal: Image.Image, rgb: tuple[int, int, int]) -> Image.Image:
+    """把印章基底按 alpha 通道整体换成目标颜色（补签用青色印）。"""
+    solid = Image.new("RGBA", seal.size, rgb + (255,))
+    solid.putalpha(seal.getchannel("A"))
+    return solid
+
+
+def _calendar_seal(kind: str, size: int) -> Image.Image:
+    if "base" not in _CALENDAR_SEAL_CACHE:
+        path = _CALENDAR_ASSETS_DIR / "seal_base.png"
+        base = Image.open(path).convert("RGBA").resize((128, 128), Image.Resampling.LANCZOS)
+        _CALENDAR_SEAL_CACHE["base"] = base
+        _CALENDAR_SEAL_CACHE["cyan"] = _recolor_seal(base, (36, 132, 156))
+    chosen = _CALENDAR_SEAL_CACHE["cyan"] if kind == "cyan" else _CALENDAR_SEAL_CACHE["base"]
+    return chosen.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def render_signin_calendar_card(
+    history: dict[str, Any],
+    nickname: str,
+    avatar_bytes: Optional[bytes],
+    year: int,
+    month: int,
+    today: date,
+    width: int = 1080,
+) -> bytes:
+    """签到日历卡片：月历网格 + 每日签到印章与修为角标 + 底部统计条。
+
+    布局参照用户提供的投喂日历参考图（周一开头、今日高亮、底部汇总），
+    视觉沿用插件的修仙米色风：背景为 AI 生成的宣纸底图，网格/印章/文字
+    全部由 PIL 叠加；正常签到盖朱砂「签」印 + 修为角标，补签盖青色「补」印。
+    """
+    width = max(int(width), 900)
+    height = int(width * 1536 / 1024)
+    bg_path = _CALENDAR_ASSETS_DIR / "background.png"
+    if bg_path.is_file():
+        image = Image.open(bg_path).convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
+    else:
+        image = Image.new("RGBA", (width, height), (248, 239, 223, 255))
+    draw = ImageDraw.Draw(image, "RGBA")
+
+    dark = "#4a3220"
+    muted = "#8a7a5f"
+    accent = "#b8543a"
+
+    history = {
+        str(key): dict(value)
+        for key, value in (history or {}).items()
+        if isinstance(value, dict)
+    }
+
+    # ── 头部：头像 + 标题 + 月份 ──
+    avatar_size = int(width * 0.10)
+    avatar = make_avatar(avatar_bytes, avatar_size, accent)
+    ax, ay = int(width * 0.075), int(height * 0.045)
+    image.alpha_composite(avatar, (ax, ay))
+    title = f"{nickname or '宿主'} 的签到日历"
+    title_font = fit_font(draw, title, int(width * 0.58), 52, bold=True, min_size=32)
+    title_w = text_size(draw, title, title_font)[0]
+    draw_weighted_text(draw, ((width - title_w) / 2, ay + avatar_size * 0.14), title, title_font, dark, weight=3)
+    sub = f"{year}年{month}月"
+    sub_font = load_font(30)
+    sub_w = text_size(draw, sub, sub_font)[0]
+    draw.text(((width - sub_w) / 2, ay + avatar_size * 0.14 + 64), sub, font=sub_font, fill=muted)
+
+    # ── 星期表头（周一开头，周末强调色）──
+    grid_left = int(width * 0.06)
+    col_w = (width - grid_left * 2) / 7
+    cell_w = col_w - 12
+    grid_top = int(height * 0.20)
+    first_weekday, days_in_month = calendar.monthrange(year, month)
+    rows = (first_weekday + days_in_month + 6) // 7
+    # 自适应格高：让网格尽量填满卡片中段，避免底部大片空白
+    target_bottom = int(height * 0.80)
+    cell_h = int(
+        min(
+            col_w * 1.16,
+            max(col_w * 0.86, (target_bottom - grid_top - rows * 12) / rows),
+        )
+    )
+    weekday_y = grid_top - 48
+    weekday_font = load_font(28, bold=True)
+    for idx, label in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
+        cx = grid_left + col_w * idx + col_w / 2
+        draw.text((cx, weekday_y), label, font=weekday_font, fill=("#b0503c" if idx >= 5 else "#6b5b45"), anchor="ma")
+
+    # ── 当月统计（渲染前先算，供底部统计条）──
+    month_prefix = f"{year:04d}-{month:02d}"
+    month_keys = [key for key in history if str(key).startswith(month_prefix)]
+    signed_days = len(month_keys)
+    makeup_days = sum(1 for key in month_keys if history[key].get("makeup"))
+    exp_sum = sum(int(history[key].get("exp", 0) or 0) for key in month_keys)
+    today_key = today.isoformat()
+    streak = 0
+    cursor = today if today_key in history else today - timedelta(days=1)
+    while cursor.isoformat() in history:
+        streak += 1
+        cursor -= timedelta(days=1)
+
+    # ── 月历网格 ──
+    number_font = load_font(26, bold=True)
+    sign_font = load_font(24, bold=True)
+    badge_font = load_font(16, bold=True)
+    seal_size = int(cell_w * 0.56)
+    today_visible = (today.year, today.month) == (year, month)
+
+    for day in range(1, days_in_month + 1):
+        row, col = divmod(first_weekday + day - 1, 7)
+        x1 = int(grid_left + col_w * col + 6)
+        y1 = int(grid_top + (cell_h + 12) * row)
+        x2 = int(x1 + cell_w)
+        y2 = y1 + cell_h
+        key = f"{year:04d}-{month:02d}-{day:02d}"
+        entry = history.get(key)
+        is_today = today_visible and today.day == day
+        is_future = (year, month, day) > (today.year, today.month, today.day)
+        if entry:
+            fill = (252, 247, 234, 215)
+        elif is_future:
+            fill = (250, 247, 240, 150)
+        else:
+            fill = (238, 230, 215, 185)
+        draw.rounded_rectangle((x1, y1, x2, y2), radius=16, fill=fill)
+        if is_today:
+            draw.rounded_rectangle((x1, y1, x2, y2), radius=16, outline="#c9973f", width=3)
+        num_color = "#4a3a28" if (entry or is_today) else ("#b8ad97" if is_future else "#a09279")
+        draw.text(((x1 + x2) / 2, y1 + 10), str(day), font=number_font, fill=num_color, anchor="ma")
+        if entry:
+            is_makeup = bool(entry.get("makeup"))
+            seal = _calendar_seal("cyan" if is_makeup else "red", seal_size)
+            sx = int((x1 + x2 - seal_size) / 2)
+            sy = y1 + 44
+            image.alpha_composite(seal, (sx, sy))
+            draw.text(
+                (sx + seal_size / 2, sy + seal_size * 0.26),
+                "补" if is_makeup else "签",
+                font=sign_font,
+                fill="#fffaf2",
+                anchor="ma",
+            )
+            if not is_makeup:
+                # 修为角标贴在印章右上角（参照参考图中图标与角标的组合方式）
+                exp = int(entry.get("exp", 0) or 0)
+                badge_r = 18
+                bx, by = sx + seal_size - 4, sy + 6
+                draw.ellipse((bx - badge_r, by - badge_r, bx + badge_r, by + badge_r), fill=(192, 57, 43, 235))
+                draw.text((bx, by), str(exp), font=badge_font, fill="#ffffff", anchor="mm")
+
+    grid_bottom = int(grid_top + (cell_h + 12) * rows - 12)
+
+    # ── 底部统计条 ──
+    stats = f"本月签到 {signed_days} 天（含补签 {makeup_days}），共获得 {exp_sum} 修为，连签 {streak} 天"
+    stats_font = fit_font(draw, stats, width - 220, 30, bold=True, min_size=22)
+    stats_w = text_size(draw, stats, stats_font)[0]
+    pill_h = 66
+    pill_w = stats_w + 76
+    pill_y = min(grid_bottom + 30, height - 224)
+    pill_x = (width - pill_w) / 2
+    draw.rounded_rectangle((pill_x, pill_y, pill_x + pill_w, pill_y + pill_h), radius=33, fill=(250, 233, 200, 225))
+    draw.text((width / 2, pill_y + pill_h / 2), stats, font=stats_font, fill="#9b3f1e", anchor="mm")
+
+    # ── 操作提示行 ──
+    hint = "发送「补签 日期」可补当月漏签（300+100×距离 灵石，每月3次）｜「签到日历 上月」翻看历史"
+    hint_font = fit_font(draw, hint, width - 180, 21, bold=False, min_size=15)
+    hint_w = text_size(draw, hint, hint_font)[0]
+    draw.text(((width - hint_w) / 2, pill_y + pill_h + 22), hint, font=hint_font, fill=muted)
+
     return png_bytes(image)

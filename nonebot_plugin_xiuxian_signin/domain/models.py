@@ -246,6 +246,9 @@ class UserRecord:
     equipped_immortal_seed: Optional[dict[str, Any]] = None
     immortal_conversion_days: int = 0
     last_immortal_conversion_date: Optional[str] = None
+    # 逐日签到记录：日期(ISO) -> {"exp": 当日实得修为, "makeup": 是否补签(可选)}
+    # 仅记录本功能上线后的签到，供签到日历渲染；补签日 exp 为 0。
+    sign_history: Optional[dict[str, dict[str, Any]]] = None
 
     def __post_init__(self) -> None:
         self.active_mystic_run_id = str(self.active_mystic_run_id) if self.active_mystic_run_id else None
@@ -379,6 +382,7 @@ class UserRecord:
             "equipped_immortal_seed": self.equipped_immortal_seed or None,
             "immortal_conversion_days": self.immortal_conversion_days,
             "last_immortal_conversion_date": self.last_immortal_conversion_date,
+            "sign_history": dict(self.sign_history or {}),
         }
 
     @classmethod
@@ -504,6 +508,11 @@ class UserRecord:
             equipped_immortal_seed=(dict(data["equipped_immortal_seed"]) if isinstance(data.get("equipped_immortal_seed"), dict) else None),
             immortal_conversion_days=int(data.get("immortal_conversion_days", 0)),
             last_immortal_conversion_date=(str(data["last_immortal_conversion_date"]) if data.get("last_immortal_conversion_date") else None),
+            sign_history={
+                str(key): dict(value) if isinstance(value, dict) else {"exp": int(value)}
+                for key, value in dict(data.get("sign_history") or {}).items()
+                if isinstance(value, (dict, int))
+            } or None,
         )
 @dataclass
 class SigninResult:

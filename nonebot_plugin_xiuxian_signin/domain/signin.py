@@ -8,6 +8,7 @@ import hashlib
 import random
 import re
 import uuid
+from datetime import date, timedelta
 from typing import Any, Optional
 
 from .constants import *  # noqa: F401,F403
@@ -110,6 +111,10 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
     if applied_exp:
         increase_array_proficiency(record, 1)
         increase_method_proficiency(record, 2)
+    # 逐日签到记录：供签到日历渲染（补签另行写入 makeup 标记）
+    history = dict(record.sign_history or {})
+    history[today_text] = {"exp": int(applied_exp)}
+    record.sign_history = history
     encounter = maybe_apply_encounter(record, today)
     breakthrough_reward = maybe_grant_breakthrough_item(record)
     record_identity_sign_day(record, today)
@@ -198,3 +203,54 @@ def fishing_count_from_text(text: str, chances: int) -> int:
     if "\u5341" in normalized or "10" in normalized:
         return min(10, chances)
     return 1
+
+def makeup_price(day: date, today: date) -> int:
+    """补签价格：300 灵石起步，每往前一天加 100，惩罚拖延。"""
+    distance = max(1, (today - day).days)
+    return 300 + 100 * distance
+
+def makeup_used_this_month(record: UserRecord, today: date) -> int:
+    """统计当月已补签次数（每月上限 3 次）。"""
+    prefix = today.strftime("%Y-%m")
+    return sum(
+        1
+        for key, value in (record.sign_history or {}).items()
+        if str(key).startswith(prefix) and isinstance(value, dict) and value.get("makeup")
+    )
+
+def makeup_sign(record: UserRecord, day: date, today: date) -> tuple[bool, str]:
+    """补签：扣灵石把当月漏掉的日子记入 sign_history。
+
+    规则（与玩家确认的设计一致）：
+    - 只能补当月内、严格早于今天、且尚无签到记录的日子
+    - 每月最多补 3 次
+    - 价格 = 300 + 100 × 距今天数
+    - 补签只改日历不发修为，但计入连签（渲染侧按 sign_history 统计）
+    """
+    if day >= today:
+        return False, "只能补过去的日子。"
+    if (day.year, day.month) != (today.year, today.month):
+        return False, "只能补本月内漏掉的日子。"
+    key = day.isoformat()
+    history = dict(record.sign_history or {})
+    if key in history:
+        return False, f"{day.month} 月 {day.day} 日已经有签到记录了。"
+    if makeup_used_this_month(record, today) >= 3:
+        return False, "本月补签次数已用完（每月限 3 次）。"
+    price = makeup_price(day, today)
+    if record.spirit_stones < price:
+        return False, f"灵石不足：补签 {day.month} 月 {day.day} 日需要 {spirit_stone_text(price)}。"
+    record.spirit_stones -= price
+    history[key] = {"exp": 0, "makeup": True}
+    record.sign_history = history
+    return True, f"已补签 {day.month} 月 {day.day} 日，消耗 {spirit_stone_text(price)}。"
+
+def signin_streak(record: UserRecord, today: date) -> int:
+    """连续签到天数：从今天（或昨天）往回逐日数 sign_history，补签日计入。"""
+    history = record.sign_history or {}
+    cursor = today if today.isoformat() in history else today - timedelta(days=1)
+    streak = 0
+    while cursor.isoformat() in history:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
