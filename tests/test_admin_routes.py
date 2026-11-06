@@ -38,9 +38,61 @@ def _load_admin_module() -> Any:
 admin = _load_admin_module()
 
 
+def _manager_client(app, manager, password: str = "Test-Password-0123456789"):
+    """真实 AdminManager 需要先初始化凭据并签发一个会话。"""
+    manager.auth.env_password = password
+    manager.auth.ensure_initialized()
+    return _client(app, manager.auth.issue_session())
+
+
+def _client(app, token: str = "secret"):
+    """带会话 Cookie 的测试客户端（Starlette 已不建议逐请求传 cookies）。"""
+    return TestClient(app, cookies={admin.SESSION_COOKIE_NAME: token})
+
+
+class FakeAuth:
+    """测试替身：用一个固定字符串代表"已登录会话"。"""
+
+    session_ttl = 7 * 24 * 3600
+
+    def __init__(self, token: str = "secret") -> None:
+        self._token = token
+
+    def ensure_initialized(self) -> None:
+        return None
+
+    def verify_session(self, token: str | None) -> bool:
+        return bool(token) and token == self._token
+
+    def must_change_password(self) -> bool:
+        return False
+
+    def username(self) -> str:
+        return "admin"
+
+    def issue_session(self) -> str:
+        return self._token
+
+    def authenticate(self, username: str, password: str) -> bool:
+        return username == "admin" and password == self._token
+
+    def change_password(self, old_password: str, new_password: str) -> str | None:
+        return None
+
+    def penalty_delay(self, key: str) -> float:
+        return 0.0
+
+    def record_failure(self, key: str) -> None:
+        return None
+
+    def reset_failures(self, key: str) -> None:
+        return None
+
+
 class FakeManager:
     def __init__(self, token: str = "secret") -> None:
         self.token = token
+        self.auth = FakeAuth(token)
         self.apply_config_calls = 0
         self.players: dict[str, dict[str, Any]] = {
             "42": {
@@ -201,7 +253,7 @@ class FakeDriver:
 def _http_request(port: int, path: str, *, method: str = "GET", token: str = "") -> tuple[int, str, bytes]:
     request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method)
     if token:
-        request.add_header("X-Xiuxian-Token", token)
+        request.add_header("Cookie", f"xiuxian_admin_session={token}")
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
             return response.status, response.headers.get("Content-Type", ""), response.read()
@@ -262,20 +314,22 @@ class AdminRouteTests(unittest.TestCase):
         unknown_route = driver.server_app.router.routes[route_index(unknown_path, "GET")]
         self.assertEqual(set(unknown_route.methods), {"GET", "POST", "PUT"})
 
-        client = TestClient(admin.create_admin_app(manager=manager))
-        unauthorized = client.get("/xiuxian-admin/api/missing")
+        app = admin.create_admin_app(manager=manager)
+        client = _manager_client(app, manager)
+        anonymous = TestClient(app)
+        unauthorized = anonymous.get("/xiuxian-admin/api/missing")
         self.assertEqual(unauthorized.status_code, 401)
         self.assertEqual(unauthorized.json()["error"], "unauthorized")
 
-        authorized = client.get("/xiuxian-admin/api/missing", headers={"X-Xiuxian-Token": "secret"})
+        authorized = client.get("/xiuxian-admin/api/missing")
         self.assertEqual(authorized.status_code, 404)
         self.assertEqual(authorized.json()["error"], "not found")
 
-        dashboard = client.get("/xiuxian-admin/api/dashboard", headers={"X-Xiuxian-Token": "secret"})
+        dashboard = client.get("/xiuxian-admin/api/dashboard")
         self.assertEqual(dashboard.status_code, 200)
         self.assertEqual(dashboard.json()["source"], "dashboard")
 
-        player_get = client.get("/xiuxian-admin/api/players/42", headers={"X-Xiuxian-Token": "secret"})
+        player_get = client.get("/xiuxian-admin/api/players/42")
         self.assertEqual(player_get.status_code, 200)
         self.assertEqual(player_get.json()["record"]["user_id"], "42")
         self.assertEqual(player_get.json()["meta"]["realms"][0]["name"], "炼气境")
@@ -284,7 +338,6 @@ class AdminRouteTests(unittest.TestCase):
 
         player_put = client.put(
             "/xiuxian-admin/api/players/42",
-            headers={"X-Xiuxian-Token": "secret"},
             json={"realm_index": 1, "root": {"attribute": "木"}},
         )
         self.assertEqual(player_put.status_code, 200)
@@ -293,11 +346,10 @@ class AdminRouteTests(unittest.TestCase):
         self.assertIn("cultivation_routes", player_put.json()["meta"])
 
     def test_put_config_rejects_malformed_json_with_json_error(self) -> None:
-        client = TestClient(admin.create_admin_app(manager=FakeManager()))
+        client = _client(admin.create_admin_app(manager=FakeManager()))
 
         response = client.put(
             "/xiuxian-admin/api/config",
-            headers={"X-Xiuxian-Token": "secret", "Content-Type": "application/json"},
             content=b"{",
         )
 
@@ -320,7 +372,7 @@ class AdminRouteTests(unittest.TestCase):
                 config = manager.load_config()
                 config["mystic"][field] = value
                 original_config = manager.config_path.read_text(encoding="utf-8")
-                client = TestClient(admin.create_admin_app(manager=manager))
+                client = _manager_client(admin.create_admin_app(manager=manager), manager)
 
                 response = client.put(
                     "/xiuxian-admin/api/config",
@@ -456,7 +508,7 @@ class AdminRouteTests(unittest.TestCase):
             original = manager.load_config()
             payload = manager.mystic_payload()
             payload["encounter_response_seconds"] = 45
-            client = TestClient(admin.create_admin_app(manager=manager))
+            client = _manager_client(admin.create_admin_app(manager=manager), manager)
 
             response = client.put("/xiuxian-admin/api/mystic", json=payload)
 
@@ -494,31 +546,31 @@ class AdminRouteTests(unittest.TestCase):
             admin.ADMIN_WEB_ROOT = root
             admin.ADMIN_WEB_INDEX = root / "index.html"
 
-            client = TestClient(admin.create_admin_app(manager=manager, static_root=root))
+            app = admin.create_admin_app(manager=manager, static_root=root)
+            client = _client(app)
+            anonymous = TestClient(app)
             for method in ("get", "post", "put"):
-                response = getattr(client, method)("/xiuxian-admin/api/missing")
+                response = getattr(anonymous, method)("/xiuxian-admin/api/missing")
                 self.assertEqual(response.status_code, 401)
                 self.assertEqual(response.json()["error"], "unauthorized")
 
                 response = getattr(client, method)(
                     "/xiuxian-admin/api/missing",
-                    headers={"X-Xiuxian-Token": "secret"},
                 )
                 self.assertEqual(response.status_code, 404)
                 self.assertEqual(response.json()["error"], "not found")
 
-            dashboard = client.get("/xiuxian-admin/api/dashboard", headers={"X-Xiuxian-Token": "secret"})
+            dashboard = client.get("/xiuxian-admin/api/dashboard")
             self.assertEqual(dashboard.status_code, 200)
             self.assertEqual(dashboard.json()["source"], "dashboard")
 
-            player_detail = client.get("/xiuxian-admin/api/players/42", headers={"X-Xiuxian-Token": "secret"})
+            player_detail = client.get("/xiuxian-admin/api/players/42")
             self.assertEqual(player_detail.status_code, 200)
             self.assertEqual(player_detail.json()["record"]["user_id"], "42")
             self.assertIn("realms", player_detail.json()["meta"])
 
             player_saved = client.put(
                 "/xiuxian-admin/api/players/42",
-                headers={"X-Xiuxian-Token": "secret"},
                 json={"realm_index": 1, "custom_note": "fallback"},
             )
             self.assertEqual(player_saved.status_code, 200)
@@ -534,7 +586,7 @@ class AdminRouteTests(unittest.TestCase):
                 "/xiuxian-admin/assets/character-portraits/beast_001.png",
                 "/xiuxian-admin/assets/beast-spell-icons/br_spell_001.png",
             ):
-                response = client.get(asset_path)
+                response = anonymous.get(asset_path)
                 self.assertEqual(response.status_code, 401)
                 self.assertEqual(response.json()["error"], "unauthorized")
 

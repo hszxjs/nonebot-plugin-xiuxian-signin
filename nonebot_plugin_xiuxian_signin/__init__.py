@@ -172,7 +172,7 @@ from .domain import (
     use_pills_batch,
     use_talisman,
 )
-from .admin import AdminManager, start_admin_server
+from .admin import AdminManager, install_admin_routes, start_admin_server
 from .mystic_battle import MysticBattleService
 from .mystic_cards import MysticMapRenderer, render_no_token_panel
 from .mystic_dungeon import (
@@ -2660,23 +2660,47 @@ async def mystic_recovery_sweep() -> None:
 @driver.on_startup
 async def start_rank_scheduler() -> None:
     global admin_http_server, rank_scheduler_task, mystic_recovery_task
+    admin_ready = False
     if config.xiuxian_signin_admin_enabled:
+        # fail-closed：账号初始化失败（数据目录不可写、凭据文件损坏）时
+        # 直接不启动后台，而不是启动一个没人能登录、或没人需要登录的后台。
         try:
-            admin_http_server = start_admin_server(
-                admin_manager,
-                config.xiuxian_signin_admin_host,
-                config.xiuxian_signin_admin_port,
-                config.xiuxian_signin_admin_path,
-            )
-            logger.info(
-                "修仙签到后台已启动："
-                f"http://{admin_http_server.host}:{admin_http_server.port}{admin_http_server.base_path}"
-            )
+            admin_manager.auth.ensure_initialized()
+            admin_ready = True
         except Exception:
             logger.exception(
-                f"修仙签到后台启动失败：{config.xiuxian_signin_admin_host}:{config.xiuxian_signin_admin_port}"
+                "后台账号初始化失败，本次不启动后台。"
+                "请检查数据目录写权限，或删除 admin_auth.json 后重启重建。"
             )
-            admin_manager.apply_config()
+    if admin_ready:
+        mounted = False
+        try:
+            # 首选：把后台路由挂到 NoneBot driver 的 FastAPI server_app 上。
+            # 这样后台与命令处理共用同一个事件循环，且不额外占用端口，
+            # 从结构上消除"主循环 + 独立 uvicorn 线程"两个写者的局面。
+            mounted = install_admin_routes(driver, admin_manager, config.xiuxian_signin_admin_path)
+        except Exception:
+            logger.exception("修仙签到后台挂载到 driver 失败，回退独立端口")
+            mounted = False
+        if mounted:
+            logger.info(f"修仙签到后台已挂载到 driver：{config.xiuxian_signin_admin_path}")
+        else:
+            try:
+                admin_http_server = start_admin_server(
+                    admin_manager,
+                    config.xiuxian_signin_admin_host,
+                    config.xiuxian_signin_admin_port,
+                    config.xiuxian_signin_admin_path,
+                )
+                logger.info(
+                    "修仙签到后台已启动："
+                    f"http://{admin_http_server.host}:{admin_http_server.port}{admin_http_server.base_path}"
+                )
+            except Exception:
+                logger.exception(
+                    f"修仙签到后台启动失败：{config.xiuxian_signin_admin_host}:{config.xiuxian_signin_admin_port}"
+                )
+                admin_manager.apply_config()
     else:
         admin_manager.apply_config()
     await recover_mystic_dungeons()
@@ -2686,13 +2710,23 @@ async def start_rank_scheduler() -> None:
 
 @driver.on_shutdown
 async def stop_admin_http_server() -> None:
-    global admin_http_server, mystic_recovery_task
+    global admin_http_server, mystic_recovery_task, rank_scheduler_task
     if admin_http_server is not None:
         admin_http_server.stop()
         admin_http_server = None
-    if mystic_recovery_task is not None:
-        mystic_recovery_task.cancel()
-        mystic_recovery_task = None
+    # 两个后台任务都必须取消并 await，否则停机后仍有协程在写存档。
+    pending = [task for task in (mystic_recovery_task, rank_scheduler_task) if task is not None]
+    for task in pending:
+        task.cancel()
+    for task in pending:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("后台任务在停机时抛出异常")
+    mystic_recovery_task = None
+    rank_scheduler_task = None
 
 
 def beast_realm_group_key_from_event(event: GroupMessageEvent) -> str:

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
+import tempfile
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +46,72 @@ class MysticEncounterConflict(RuntimeError):
 
 class MysticStateCorrupt(ValueError):
     """Raised when the persistent dungeon document cannot be validated."""
+
+
+class StorageCorruptError(RuntimeError):
+    """Raised when a storage document cannot be read, parsed or recovered.
+
+    绝不能退化为返回空 dict：调用方普遍是「读-改-写」，空 dict 会被写回，
+    等价于清空整份存档。宁可让单个功能报错暴露问题，也不能静默丢数据。
+    """
+
+    def __init__(self, path: Path, *, backup: Path | None = None, reason: str = "") -> None:
+        self.path = Path(path)
+        self.backup = backup
+        self.reason = reason
+        detail = str(self.path)
+        if backup is not None:
+            detail += f"（损坏副本：{backup}）"
+        if reason:
+            detail += f"：{reason}"
+        super().__init__(f"存档文件不可读或已损坏：{detail}")
+
+
+# 进程级文件锁：NoneBot 主事件循环与后台 HTTP 线程（无论是独立 uvicorn 线程，
+# 还是 driver 挂载后 Starlette 的同步线程池）都会读写同一批 JSON 文件。
+# asyncio.Lock 只在单个事件循环内有效，无法阻止上述跨线程并发写，因此所有
+# 落盘路径统一走这把可重入锁。
+_FILE_LOCK = threading.RLock()
+
+
+def _fsync_dir(directory: Path) -> None:
+    """尽力把目录项变更刷盘；Windows 不支持对目录 fsync，直接跳过。"""
+    if os.name == "nt":
+        return
+    fd = -1
+    try:
+        fd = os.open(str(directory), os.O_RDONLY)
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        if fd >= 0:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+
+
+def atomic_write_json(path: Path, data: Any) -> None:
+    """原子写 JSON 文件。
+
+    使用唯一临时文件名（``tempfile.mkstemp``）而非固定的 ``*.tmp``：两个写者
+    共用同一个临时文件时，交叉覆盖会产生「新旧内容拼接」的坏 JSON（本项目
+    已经发生过）。写入后 fsync 文件与目录，再用 ``os.replace`` 原子替换。
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fp:
+            json.dump(data, fp, ensure_ascii=False, indent=2)
+            fp.flush()
+            os.fsync(fp.fileno())
+        os.replace(temp_path, path)
+        _fsync_dir(path.parent)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            temp_path.unlink()
+        raise
 
 
 @dataclass(frozen=True)
@@ -1456,35 +1526,41 @@ class JsonStore:
         return changed
 
     def _read_json(self, path: Path) -> dict[str, Any]:
-        if not path.exists():
-            return {}
-        try:
-            with path.open("r", encoding="utf-8") as fp:
-                data = json.load(fp)
-        except json.JSONDecodeError:
-            # 文件损坏（典型形态：历史并发写导致新旧内容拼接）。直接返回
-            # 空 dict 会让后续“读-改-写”把空状态写回、清空全部数据，因此
-            # 必须先自愈：解析出文件中最后一段完整的 JSON 根，备份损坏文件
-            # 后用干净数据重写，再返回。
-            recovered = self._recover_json_file(path)
-            if recovered is None:
+        with _FILE_LOCK:
+            if not path.exists():
                 return {}
-            data = recovered
-        except OSError:
-            return {}
-        return data if isinstance(data, dict) else {}
+            try:
+                with path.open("r", encoding="utf-8") as fp:
+                    data = json.load(fp)
+            except json.JSONDecodeError:
+                # 文件损坏（典型形态：历史并发写导致新旧内容拼接）。直接返回
+                # 空 dict 会让后续“读-改-写”把空状态写回、清空全部数据，因此
+                # 必须先自愈：解析出文件中最后一段完整的 JSON 根，备份损坏文件
+                # 后用干净数据重写，再返回；确实无法恢复时抛错，绝不返回空 dict。
+                recovered, backup = self._recover_json_file(path)
+                if recovered is None:
+                    raise StorageCorruptError(path, backup=backup, reason="无法从残留内容中恢复出完整 JSON") from None
+                return recovered
+            except OSError as exc:
+                raise StorageCorruptError(path, reason=f"读取失败：{exc}") from exc
+            if not isinstance(data, dict):
+                raise StorageCorruptError(path, reason=f"根节点不是对象（实际为 {type(data).__name__}）")
+            return data
 
-    def _recover_json_file(self, path: Path) -> dict[str, Any] | None:
+    def _recover_json_file(self, path: Path) -> tuple[dict[str, Any] | None, Path]:
         """从损坏的 JSON 文件中恢复最后一段完整内容。
 
         损坏形态多为“完整 JSON + 旧内容残留”（写入未截断的历史遗留）。这里
         用 raw_decode 逐段解析，取最后一段完整且为 dict 的内容；成功则备份
-        坏文件并把恢复结果原子写回。完全无法恢复时返回 None。
+        坏文件并把恢复结果原子写回。返回 ``(恢复结果或 None, 损坏备份路径)``。
         """
+        backup = path.with_name(
+            f"{path.name}.corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
+        )
         try:
             raw = path.read_text(encoding="utf-8")
         except OSError:
-            return None
+            return None, backup
         decoder = json.JSONDecoder()
         last_good: dict[str, Any] | None = None
         pos = 0
@@ -1500,23 +1576,34 @@ class JsonStore:
             if isinstance(obj, dict):
                 last_good = obj
             pos = end
-        backup = path.with_name(
-            f"{path.name}.corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
-        )
         try:
             path.replace(backup)
         except OSError:
             pass
         if last_good is None:
             logger.error(f"存档文件损坏且无法恢复，已备份为 {backup.name}")
-            return None
+            return None, backup
         logger.warning(f"存档文件损坏，已自动恢复最后完整段并备份为 {backup.name}")
         self._write_json(path, last_good)
-        return last_good
+        return last_good, backup
 
     def _write_json(self, path: Path, data: dict[str, Any]) -> None:
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        temp_path = path.with_suffix(".tmp")
-        with temp_path.open("w", encoding="utf-8") as fp:
-            json.dump(data, fp, ensure_ascii=False, indent=2)
-        temp_path.replace(path)
+        with _FILE_LOCK:
+            atomic_write_json(path, data)
+
+    # --- 供后台（独立线程 / Starlette 线程池）使用的同步接口 -----------------
+    # 后台不能直接调用 _read_json/_write_json：那会绕开锁语义的封装边界。
+    # 以下三个方法共享同一把进程级可重入锁，与事件循环内的异步读写互斥。
+    def read_json_sync(self, path: Path) -> dict[str, Any]:
+        return self._read_json(path)
+
+    def write_json_sync(self, path: Path, data: dict[str, Any]) -> None:
+        self._write_json(path, data)
+
+    def update_json_sync(self, path: Path, mutator: Callable[[dict[str, Any]], Any]) -> Any:
+        """在同一把锁内完成「读-改-写」，消除跨线程 TOCTOU 丢更新。"""
+        with _FILE_LOCK:
+            data = self._read_json(path)
+            result = mutator(data)
+            self._write_json(path, data)
+            return result

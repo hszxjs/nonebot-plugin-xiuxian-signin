@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import shutil
 import threading
 from datetime import date, datetime
@@ -9,11 +11,13 @@ from typing import Any
 from urllib.parse import unquote
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from nonebot import logger
 from zoneinfo import ZoneInfo
 
 from . import beast_realm, domain, mystic_dungeon
+from .admin_auth import SESSION_COOKIE_NAME, AdminAuth
 from .admin_dashboard import build_dashboard_payload
 from .mystic_dungeon import (
     DungeonRisk,
@@ -21,7 +25,7 @@ from .mystic_dungeon import (
     MysticTemplateCatalog,
     default_mystic_gameplay_config,
 )
-from .storage import JsonStore
+from .storage import JsonStore, StorageCorruptError, atomic_write_json
 
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
@@ -241,7 +245,13 @@ class AdminManager:
         self.store = store
         self.data_dir = data_dir
         self.config_path = data_dir / "admin_config.json"
+        # 静态 token 已废弃：构造参数仍接收（避免破坏既有调用），但不再参与鉴权。
         self.token = token.strip()
+        self.auth = AdminAuth(
+            data_dir,
+            env_username=os.environ.get("XIUXIAN_ADMIN_USER", ""),
+            env_password=os.environ.get("XIUXIAN_ADMIN_PASSWORD", ""),
+        )
         self.timezone = str(timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
 
     def today(self) -> date:
@@ -264,10 +274,9 @@ class AdminManager:
         return merged
 
     def save_config(self, data: dict[str, Any]) -> None:
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        tmp = self.config_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(self.config_path)
+        # 与存档共用同一套原子写（唯一临时名 + fsync + os.replace），
+        # 避免后台线程与事件循环交叉覆盖同一个 .tmp 文件。
+        atomic_write_json(self.config_path, data)
 
     def apply_config(self) -> None:
         config = self.load_config()
@@ -287,8 +296,8 @@ class AdminManager:
         return {"ok": True, "path": str(dst)}
 
     def list_players(self, query: str = "") -> list[dict[str, Any]]:
-        users = self.store._read_json(self.store.user_file_path)
-        groups = self.store._read_json(self.store.group_file_path)
+        users = self.store.read_json_sync(self.store.user_file_path)
+        groups = self.store.read_json_sync(self.store.group_file_path)
         nicknames: dict[str, str] = {}
         for group in groups.values():
             if isinstance(group, dict):
@@ -317,18 +326,20 @@ class AdminManager:
         return players
 
     def get_player_record(self, user_id: str) -> dict[str, Any] | None:
-        raw = self.store._read_json(self.store.user_file_path).get(str(user_id))
+        raw = self.store.read_json_sync(self.store.user_file_path).get(str(user_id))
         return raw if isinstance(raw, dict) else None
 
     def save_player_record(self, user_id: str, data: dict[str, Any]) -> dict[str, Any]:
         saved = dict(data)
         saved["user_id"] = str(user_id)
         domain.UserRecord.from_dict(saved)
-        domain.sanitize_user_record_data(saved)
-        users = self.store._read_json(self.store.user_file_path)
-        users[str(user_id)] = saved
-        self.store._write_json(self.store.user_file_path, users)
-        return users[str(user_id)]
+        # 校验通过后再进锁：读-改-写在同一把锁内完成，避免与事件循环内的
+        # save_user 互相覆盖（原先的两次独立加锁存在丢更新窗口）。
+        def _merge(users: dict[str, Any]) -> dict[str, Any]:
+            users[str(user_id)] = domain.sanitize_user_record_data(saved)
+            return users[str(user_id)]
+
+        return self.store.update_json_sync(self.store.user_file_path, _merge)
 
     def player_meta(self) -> dict[str, Any]:
         realm_quality_titles = {str(key): list(value) for key, value in domain.REALM_QUALITY_TITLES.items()}
@@ -468,7 +479,7 @@ class AdminManager:
         }
 
     def dashboard_payload(self) -> dict[str, Any]:
-        users = self.store._read_json(self.store.user_file_path)
+        users = self.store.read_json_sync(self.store.user_file_path)
         realm_names = {
             int(item["index"]): str(item["name"])
             for item in self.equipment_meta().get("realms", [])
@@ -576,19 +587,6 @@ def _scoped_admin_index_html(index_bytes: bytes, base_path: str) -> str:
 scoped_admin_index_html = _scoped_admin_index_html
 
 
-def _token_from_parts(header_token: str | None, query_token: str | None) -> str:
-    return str(header_token or query_token or "").strip()
-
-
-def _authorized(manager: AdminManager, header_token: str | None, query_token: str | None) -> bool:
-    return not manager.token or _token_from_parts(header_token, query_token) == manager.token
-
-
-def _require_authorized(manager: AdminManager, header_token: str | None, query_token: str | None) -> None:
-    if not _authorized(manager, header_token, query_token):
-        raise HTTPException(status_code=401, detail="unauthorized")
-
-
 def _json_error(message: str, status_code: int) -> JSONResponse:
     return JSONResponse({"ok": False, "error": message}, status_code=status_code)
 
@@ -609,7 +607,9 @@ def create_admin_app(
     base_path: str = "/xiuxian-admin",
     static_root: Path | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Xiuxian Signin Admin", docs_url=None, redoc_url=None)
+    # openapi_url 必须显式关闭：默认会在 /openapi.json 暴露全部路由清单，
+    # 且该路径不受 token 保护（docs/redoc 已关闭，但 schema 未关）。
+    app = FastAPI(title="Xiuxian Signin Admin", docs_url=None, redoc_url=None, openapi_url=None)
     normalized_base_path = _normalize_base_path(base_path)
     root = _static_root(static_root)
 
@@ -617,32 +617,112 @@ def create_admin_app(
     async def _http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
         return _json_error(str(exc.detail or "error"), exc.status_code)
 
-    def authorize(x_xiuxian_token: str | None, token: str | None) -> None:
-        _require_authorized(manager, x_xiuxian_token, token)
+    @app.exception_handler(StorageCorruptError)
+    async def _storage_corrupt_handler(_request: Request, exc: StorageCorruptError) -> JSONResponse:
+        # 存档不可读时明确报错（含损坏副本路径），不做任何"回落为空"的兜底，
+        # 避免后台把空状态写回。
+        logger.error(f"后台读取存档失败：{exc}")
+        return _json_error(str(exc), 500)
+
+    def require_session(request: Request) -> None:
+        """所有 /api/* 的鉴权入口（座位：FastAPI 依赖，跨 app 挂载后仍生效）。"""
+        if not manager.auth.verify_session(request.cookies.get(SESSION_COOKIE_NAME)):
+            raise HTTPException(status_code=401, detail="unauthorized")
+        # 首次登录必须先改密：只放行改密、登出与会话状态查询。
+        if manager.auth.must_change_password() and not request.url.path.endswith(
+            ("/api/password", "/api/logout", "/api/session")
+        ):
+            raise HTTPException(status_code=403, detail="must_change_password")
+
+    def _client_key(request: Request) -> str:
+        return request.client.host if request.client else "unknown"
+
+    async def auth_session(request: Request) -> Any:
+        # 故意不抛 401：前端用它判断该显示登录页还是改密页。
+        if not manager.auth.verify_session(request.cookies.get(SESSION_COOKIE_NAME)):
+            return {"ok": True, "authenticated": False}
+        return {
+            "ok": True,
+            "authenticated": True,
+            "username": manager.auth.username(),
+            "must_change_password": manager.auth.must_change_password(),
+        }
+
+    async def login(request: Request) -> Any:
+        data, error = await _json_object_or_error(request, "credentials must be an object")
+        if error is not None:
+            return error
+        assert data is not None
+        username = str(data.get("username") or "")
+        password = str(data.get("password") or "")
+        client = _client_key(request)
+        delay = manager.auth.penalty_delay(client)
+        if delay > 0:
+            await asyncio.sleep(delay)
+        if not manager.auth.authenticate(username, password):
+            manager.auth.record_failure(client)
+            logger.warning(f"后台登录失败：ip={client} user={username!r}")
+            return _json_error("账号或密码不正确", 401)
+        manager.auth.reset_failures(client)
+        logger.info(f"后台登录成功：ip={client} user={username!r}")
+        response = JSONResponse(
+            {
+                "ok": True,
+                "username": manager.auth.username(),
+                "must_change_password": manager.auth.must_change_password(),
+            }
+        )
+        response.set_cookie(
+            SESSION_COOKIE_NAME,
+            manager.auth.issue_session(),
+            max_age=manager.auth.session_ttl,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        return response
+
+    async def logout() -> Any:
+        response = JSONResponse({"ok": True})
+        response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+        return response
+
+    async def change_password(request: Request) -> Any:
+        data, error = await _json_object_or_error(request, "passwords must be an object")
+        if error is not None:
+            return error
+        assert data is not None
+        message = manager.auth.change_password(
+            str(data.get("old_password") or ""),
+            str(data.get("new_password") or ""),
+        )
+        if message is not None:
+            return _json_error(message, 400)
+        logger.warning(f"后台密码已修改：ip={_client_key(request)}")
+        # 改密会轮换会话密钥，旧 Cookie 立即失效，因此重新下发一个。
+        response = JSONResponse({"ok": True, "must_change_password": False})
+        response.set_cookie(
+            SESSION_COOKIE_NAME,
+            manager.auth.issue_session(),
+            max_age=manager.auth.session_ttl,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        return response
 
     async def root_redirect() -> RedirectResponse:
         return RedirectResponse(normalized_base_path)
 
-    async def dashboard(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def dashboard() -> Any:
         return manager.dashboard_payload()
 
-    async def get_config(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def get_config() -> Any:
         return {"ok": True, "config": manager.load_config()}
 
     async def put_config(
         request: Request,
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         data, error = await _json_object_or_error(request, "config must be an object")
         if error is not None:
             return error
@@ -660,18 +740,12 @@ def create_admin_app(
 
     async def list_players(
         q: str = Query(default=""),
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         return {"ok": True, "players": manager.list_players(q)}
 
     async def get_player(
         user_id: str,
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         raw = manager.get_player_record(user_id)
         if not isinstance(raw, dict):
             return _json_error("player not found", 404)
@@ -680,50 +754,28 @@ def create_admin_app(
     async def put_player(
         user_id: str,
         request: Request,
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         data, error = await _json_object_or_error(request, "record must be an object")
         if error is not None:
             return error
         assert data is not None
         return {"ok": True, "record": manager.save_player_record(user_id, data), "meta": manager.player_meta()}
 
-    async def backup(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def backup() -> Any:
         return manager.backup_users()
 
-    async def items(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def items() -> Any:
         return manager.item_payload()
 
-    async def beast_cards(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def beast_cards() -> Any:
         return manager.beast_card_payload()
 
-    async def mystic(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def mystic() -> Any:
         return {"ok": True, "mystic": manager.mystic_payload()}
 
     async def put_mystic(
         request: Request,
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         data, error = await _json_object_or_error(request, "mystic config must be an object")
         if error is not None:
             return error
@@ -734,19 +786,12 @@ def create_admin_app(
             return _json_error(str(exc), 400)
         return {"ok": True, "mystic": payload}
 
-    async def equipment_rules(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def equipment_rules() -> Any:
         return {"ok": True, "rules": manager.equipment_rules(), "meta": manager.equipment_meta()}
 
     async def item_icon(
         icon_path: str,
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         path = safe_item_icon_path(unquote(icon_path))
         if path is None:
             return _json_error("icon not found", 404)
@@ -754,10 +799,7 @@ def create_admin_app(
 
     async def character_portrait(
         portrait_name: str,
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         path = safe_character_portrait_path(unquote(portrait_name))
         if path is None:
             return _json_error("portrait not found", 404)
@@ -765,10 +807,7 @@ def create_admin_app(
 
     async def beast_spell_icon(
         icon_name: str,
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
     ) -> Any:
-        authorize(x_xiuxian_token, token)
         path = safe_beast_spell_icon_path(unquote(icon_name))
         if path is None:
             return _json_error("spell icon not found", 404)
@@ -780,11 +819,7 @@ def create_admin_app(
             return _json_error("asset not found", 404)
         return FileResponse(asset)
 
-    async def spa_page(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def spa_page() -> Any:
         index = _static_index(root)
         if not index.is_file():
             return PlainTextResponse("Xiuxian admin WebUI has not been built.", status_code=503)
@@ -793,34 +828,66 @@ def create_admin_app(
             media_type="text/html; charset=utf-8",
         )
 
-    async def unknown_api(
-        token: str | None = Query(default=None),
-        x_xiuxian_token: str | None = Header(default=None, alias="X-Xiuxian-Token"),
-    ) -> Any:
-        authorize(x_xiuxian_token, token)
+    async def unknown_api() -> Any:
         return _json_error("not found", 404)
 
+    # 鉴权以 FastAPI 依赖实现，而不是 app 级中间件：install_admin_routes 会把
+    # 路由对象复制到 driver 的 server_app，依赖随路由一起生效，中间件不会。
+    auth_guard = [Depends(require_session)]
+
     app.add_api_route("/", root_redirect, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/dashboard", dashboard, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/config", get_config, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/config", put_config, methods=["PUT"])
-    app.add_api_route(f"{normalized_base_path}/api/players", list_players, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/players/{{user_id}}", get_player, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/players/{{user_id}}", put_player, methods=["PUT"])
-    app.add_api_route(f"{normalized_base_path}/api/backup", backup, methods=["POST"])
-    app.add_api_route(f"{normalized_base_path}/api/items", items, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/beast-realm/cards", beast_cards, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/mystic", mystic, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/mystic", put_mystic, methods=["PUT"])
-    app.add_api_route(f"{normalized_base_path}/api/equipment-rules", equipment_rules, methods=["GET"])
-    app.add_api_route(f"{normalized_base_path}/api/{{api_path:path}}", unknown_api, methods=["GET", "POST", "PUT"])
-    app.add_api_route(f"{normalized_base_path}/assets/item-icons/{{icon_path:path}}", item_icon, methods=["GET"])
+    # 登录相关端点不设鉴权（改密与登出仍要求已登录）。
+    app.add_api_route(f"{normalized_base_path}/api/session", auth_session, methods=["GET"])
+    app.add_api_route(f"{normalized_base_path}/api/login", login, methods=["POST"])
+    app.add_api_route(f"{normalized_base_path}/api/logout", logout, methods=["POST", "GET"], dependencies=auth_guard)
+    app.add_api_route(f"{normalized_base_path}/api/password", change_password, methods=["POST"], dependencies=auth_guard)
+    app.add_api_route(
+        f"{normalized_base_path}/api/dashboard", dashboard, methods=["GET"], dependencies=auth_guard
+    )
+    app.add_api_route(f"{normalized_base_path}/api/config", get_config, methods=["GET"], dependencies=auth_guard)
+    app.add_api_route(f"{normalized_base_path}/api/config", put_config, methods=["PUT"], dependencies=auth_guard)
+    app.add_api_route(f"{normalized_base_path}/api/players", list_players, methods=["GET"], dependencies=auth_guard)
+    app.add_api_route(
+        f"{normalized_base_path}/api/players/{{user_id}}", get_player, methods=["GET"], dependencies=auth_guard
+    )
+    app.add_api_route(
+        f"{normalized_base_path}/api/players/{{user_id}}", put_player, methods=["PUT"], dependencies=auth_guard
+    )
+    app.add_api_route(f"{normalized_base_path}/api/backup", backup, methods=["POST"], dependencies=auth_guard)
+    app.add_api_route(f"{normalized_base_path}/api/items", items, methods=["GET"], dependencies=auth_guard)
+    app.add_api_route(
+        f"{normalized_base_path}/api/beast-realm/cards", beast_cards, methods=["GET"], dependencies=auth_guard
+    )
+    app.add_api_route(f"{normalized_base_path}/api/mystic", mystic, methods=["GET"], dependencies=auth_guard)
+    app.add_api_route(f"{normalized_base_path}/api/mystic", put_mystic, methods=["PUT"], dependencies=auth_guard)
+    app.add_api_route(
+        f"{normalized_base_path}/api/equipment-rules", equipment_rules, methods=["GET"], dependencies=auth_guard
+    )
+    app.add_api_route(
+        f"{normalized_base_path}/api/{{api_path:path}}",
+        unknown_api,
+        methods=["GET", "POST", "PUT"],
+        dependencies=auth_guard,
+    )
+    # 图标资源同样受保护：浏览器请求会自动带同源 Cookie。
+    app.add_api_route(
+        f"{normalized_base_path}/assets/item-icons/{{icon_path:path}}",
+        item_icon,
+        methods=["GET"],
+        dependencies=auth_guard,
+    )
     app.add_api_route(
         f"{normalized_base_path}/assets/character-portraits/{{portrait_name}}",
         character_portrait,
         methods=["GET"],
+        dependencies=auth_guard,
     )
-    app.add_api_route(f"{normalized_base_path}/assets/beast-spell-icons/{{icon_name}}", beast_spell_icon, methods=["GET"])
+    app.add_api_route(
+        f"{normalized_base_path}/assets/beast-spell-icons/{{icon_name}}",
+        beast_spell_icon,
+        methods=["GET"],
+        dependencies=auth_guard,
+    )
     app.add_api_route(f"{normalized_base_path}/assets/{{asset_path:path}}", static_asset, methods=["GET"])
     app.add_api_route(normalized_base_path, spa_page, methods=["GET"])
     app.add_api_route(f"{normalized_base_path}/{{asset_path:path}}", spa_page, methods=["GET"])
