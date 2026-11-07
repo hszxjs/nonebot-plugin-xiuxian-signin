@@ -51,6 +51,7 @@ plugins = ["nonebot_plugin_xiuxian_signin"]
 | `xiuxian_signin_admin_port` | `8081` | 独立端口模式下的后台端口 |
 | `xiuxian_signin_asset_url` | 空 | 秘境资源包下载地址；留空用官方 Release，可指向自建镜像或本地 zip（离线部署） |
 | `xiuxian_signin_asset_auto_download` | `true` | 启动时自动下载缺失的秘境背景图资源包 |
+| `xiuxian_signin_storage_backend` | `sqlite` | 存储后端：`sqlite`（WAL）或 `json`（旧实现，应急回退）。首次以 sqlite 启动会自动迁移旧 JSON 存档并改名 `*.migrated.bak` 保留 |
 
 插件包内统一使用 `assets/fonts/HarmonyOS_Sans_SC.ttf`。如需覆盖字体，请使用上方字体路径配置。
 

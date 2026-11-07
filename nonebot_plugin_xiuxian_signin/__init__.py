@@ -2707,6 +2707,8 @@ async def start_rank_scheduler() -> None:
     await recover_mystic_dungeons()
     rank_scheduler_task = asyncio.create_task(rank_scheduler())
     mystic_recovery_task = asyncio.create_task(mystic_recovery_sweep())
+    global chat_flush_task
+    chat_flush_task = asyncio.create_task(chat_flush_loop())
 
     # 秘境背景图（202 MB）不进 wheel，启动后再后台拉取：先让机器人可用，
     # 下载期间出图用程序化占位背景，完成即切换到真图（resolve_background 每次解析）。
@@ -2727,17 +2729,37 @@ async def ensure_asset_pack(*, data_dir, url: Optional[str]) -> None:
     await ensure_pack(data_dir=data_dir, url=url)
 
 
+async def chat_flush_loop() -> None:
+    """R-17：每 30s 把内存中聚合的聊天计数批量落盘。"""
+    while True:
+        await asyncio.sleep(30)
+        try:
+            applied = await store.flush_chat_counts()
+            if applied:
+                logger.debug(f"聊天计数已批量落盘 {applied} 条")
+        except Exception:
+            logger.exception("聊天计数批量落盘失败")
+
+
 @driver.on_shutdown
 async def stop_admin_http_server() -> None:
-    global admin_http_server, mystic_recovery_task, rank_scheduler_task, asset_download_task
+    global admin_http_server, mystic_recovery_task, rank_scheduler_task, asset_download_task, chat_flush_task
+    # 停机前先冲掉未落盘的聊天计数，再取消任务。
+    try:
+        await store.flush_chat_counts()
+    except Exception:
+        logger.exception("停机时冲刷聊天计数失败")
     if admin_http_server is not None:
         admin_http_server.stop()
         admin_http_server = None
     await close_shared_http_client()
+    # SQLite 后端：关闭连接，清理 WAL/-shm 文件。
+    if hasattr(store, "close"):
+        store.close()
     # 后台任务都必须取消并 await，否则停机后仍有协程在写存档 / 下载资源。
     pending = [
         task
-        for task in (mystic_recovery_task, rank_scheduler_task, asset_download_task)
+        for task in (mystic_recovery_task, rank_scheduler_task, asset_download_task, chat_flush_task)
         if task is not None
     ]
     for task in pending:
@@ -2752,6 +2774,7 @@ async def stop_admin_http_server() -> None:
     mystic_recovery_task = None
     rank_scheduler_task = None
     asset_download_task = None
+    chat_flush_task = None
 
 
 def beast_realm_group_key_from_event(event: GroupMessageEvent) -> str:

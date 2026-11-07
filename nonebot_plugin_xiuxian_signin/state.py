@@ -72,7 +72,18 @@ def get_data_dir() -> Path:
     return data_dir
 
 
-store = JsonStore(get_data_dir())
+def _build_store():
+    """按配置选择存储后端（R-16）：sqlite（默认）| json（应急回退）。"""
+    data_dir = get_data_dir()
+    backend = str(config.xiuxian_signin_storage_backend or "sqlite").strip().lower()
+    if backend == "json":
+        return JsonStore(data_dir)
+    from .storage.migration import ensure_sqlite_backend  # 延迟导入，json 后端零开销
+
+    return ensure_sqlite_backend(data_dir)
+
+
+store = _build_store()
 # 登记数据目录，使秘境背景图优先从外置资源包解析（R-09）。
 configure_resource_pack(get_data_dir())
 admin_manager = AdminManager(
@@ -111,4 +122,5 @@ beast_realm_private_routes: dict[str, str] = {}
 
 # 生命周期任务句柄（由 __init__.py 的 startup/shutdown hook 赋值）。
 rank_scheduler_task: Optional[asyncio.Task] = None
+chat_flush_task: Optional[asyncio.Task] = None
 admin_http_server = None

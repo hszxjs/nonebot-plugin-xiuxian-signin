@@ -41,7 +41,6 @@ from .storage import (
     JsonStore,
     StorageCorruptError,
     atomic_write_json,
-    capture_before_write,
     read_snapshot,
 )
 
@@ -427,13 +426,8 @@ class AdminManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         backup_dir = self.data_dir / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
-        # 微秒精度：连点"创建备份"不会互相覆盖。
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        dst = backup_dir / f"users_{stamp}.json"
-        if self.store.user_file_path.exists():
-            shutil.copy2(self.store.user_file_path, dst)
-        else:
-            dst.write_text("{}", encoding="utf-8")
+        # 备份经 store 钩子：JSON 后端复制文件，SQLite 后端 VACUUM INTO（WAL 一致性快照）。
+        dst = self.store.backup_users_snapshot(backup_dir)
         pruned = self._prune_backups(backup_dir)
         self.audit("admin.backup", path=str(dst), pruned=pruned)
         return {"ok": True, "path": str(dst), "pruned": pruned}
@@ -450,8 +444,8 @@ class AdminManager:
         return len(stale)
 
     def list_players(self, query: str = "") -> list[dict[str, Any]]:
-        users = self.store.read_json_sync(self.store.user_file_path)
-        groups = self.store.read_json_sync(self.store.group_file_path)
+        users = self.store.read_users_sync()
+        groups = self.store.read_group_members_sync()
         nicknames: dict[str, str] = {}
         for group in groups.values():
             if isinstance(group, dict):
@@ -480,7 +474,7 @@ class AdminManager:
         return players
 
     def get_player_record(self, user_id: str) -> dict[str, Any] | None:
-        raw = self.store.read_json_sync(self.store.user_file_path).get(str(user_id))
+        raw = self.store.read_users_sync().get(str(user_id))
         return raw if isinstance(raw, dict) else None
 
     def save_player_record(self, user_id: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -488,8 +482,8 @@ class AdminManager:
         saved["user_id"] = str(user_id)
         domain.UserRecord.from_dict(saved)
         # 后台手工改存档前强制留一份快照（不受节流限制）：这是最容易造成
-        # 不可逆损失的操作，必须能逐次回退。
-        capture_before_write(self.store.user_file_path, reason="admin")
+        # 不可逆损失的操作，必须能逐次回退。经 store 钩子，双后端各自实现。
+        self.store.snapshot_users(reason="admin")
 
         # 校验通过后再进锁：读-改-写在同一把锁内完成，避免与事件循环内的
         # save_user 互相覆盖（原先的两次独立加锁存在丢更新窗口）。
@@ -497,7 +491,7 @@ class AdminManager:
             users[str(user_id)] = domain.sanitize_user_record_data(saved)
             return users[str(user_id)]
 
-        result = self.store.update_json_sync(self.store.user_file_path, _merge)
+        result = self.store.update_users_sync(_merge, [str(user_id)])
         self.audit("admin.save_player", user_id=str(user_id))
         return result
 
@@ -640,7 +634,7 @@ class AdminManager:
         }
 
     def dashboard_payload(self) -> dict[str, Any]:
-        users = self.store.read_json_sync(self.store.user_file_path)
+        users = self.store.read_users_sync()
         # 只需要境界名清单：直接取 domain.REALMS，避免顺带构建全量灵器目录。
         realm_names = dict(enumerate(domain.REALMS))
 

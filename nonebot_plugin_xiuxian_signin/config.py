@@ -19,3 +19,7 @@ class Config(BaseModel):
     # asset_url 可指向自建镜像或本地 zip；留空用内置的 GitHub Release 地址。
     xiuxian_signin_asset_url: Optional[str] = Field(default=None)
     xiuxian_signin_asset_auto_download: bool = Field(default=True)
+    # 存储后端（R-16）：sqlite（默认，WAL）| json（旧实现，应急回退）。
+    # 首次以 sqlite 启动且数据目录里有旧 JSON 存档时自动迁移，
+    # 原文件改名 *.migrated.bak 保留（切回 json 前手工改回原名即可）。
+    xiuxian_signin_storage_backend: str = Field(default="sqlite")

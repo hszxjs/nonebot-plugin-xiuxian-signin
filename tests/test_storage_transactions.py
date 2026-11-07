@@ -21,23 +21,31 @@ if PACKAGE_NAME not in sys.modules:
 storage = importlib.import_module(f"{PACKAGE_NAME}.storage")
 JsonStore = storage.JsonStore
 InsufficientSpiritStones = storage.InsufficientSpiritStones
+SqliteStore = importlib.import_module(f"{PACKAGE_NAME}.storage.sqlite_store").SqliteStore
 
 
-def _store(tmp_path: Path) -> JsonStore:
-    store = JsonStore(tmp_path)
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    return store
+@pytest.fixture(params=["json", "sqlite"])
+def make_store(request: pytest.FixtureRequest):
+    """R-16：同一套原子性用例对 JSON 与 SQLite 两个后端都成立。"""
+
+    def _make(tmp_path: Path):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        if request.param == "sqlite":
+            return SqliteStore(tmp_path)
+        return JsonStore(tmp_path)
+
+    return _make
 
 
-def _seed(store: JsonStore, user_id: str, stones: int) -> None:
+def _seed(store, user_id: str, stones: int) -> None:
     def _updater(records: dict[str, object]) -> None:
         records[user_id].spirit_stones = stones  # type: ignore[attr-defined]
 
     asyncio.run(store.apply_to_users([user_id], _updater))
 
 
-def test_transfer_moves_stones_atomically(tmp_path: Path) -> None:
-    store = _store(tmp_path)
+def test_transfer_moves_stones_atomically(tmp_path: Path, make_store) -> None:
+    store = make_store(tmp_path)
     _seed(store, "a", 100)
     _seed(store, "b", 20)
 
@@ -49,8 +57,8 @@ def test_transfer_moves_stones_atomically(tmp_path: Path) -> None:
     assert asyncio.run(store.get_user("b")).spirit_stones == 50
 
 
-def test_insufficient_stones_leaves_both_sides_untouched(tmp_path: Path) -> None:
-    store = _store(tmp_path)
+def test_insufficient_stones_leaves_both_sides_untouched(tmp_path: Path, make_store) -> None:
+    store = make_store(tmp_path)
     _seed(store, "a", 10)
     _seed(store, "b", 0)
 
@@ -64,14 +72,14 @@ def test_insufficient_stones_leaves_both_sides_untouched(tmp_path: Path) -> None
     assert asyncio.run(store.get_user("b")).spirit_stones == 0
 
 
-def test_transfer_rejects_non_positive_amount(tmp_path: Path) -> None:
-    store = _store(tmp_path)
+def test_transfer_rejects_non_positive_amount(tmp_path: Path, make_store) -> None:
+    store = make_store(tmp_path)
     with pytest.raises(ValueError):
         asyncio.run(store.transfer_spirit_stones("a", "b", 0))
 
 
-def test_concurrent_transfers_conserve_total(tmp_path: Path) -> None:
-    store = _store(tmp_path)
+def test_concurrent_transfers_conserve_total(tmp_path: Path, make_store) -> None:
+    store = make_store(tmp_path)
     _seed(store, "a", 500)
     _seed(store, "b", 0)
 
@@ -87,9 +95,9 @@ def test_concurrent_transfers_conserve_total(tmp_path: Path) -> None:
     assert payer + payee == 500
 
 
-def test_concurrent_transfers_never_overdraw(tmp_path: Path) -> None:
+def test_concurrent_transfers_never_overdraw(tmp_path: Path, make_store) -> None:
     """并发下不能把余额扣成负数（旧实现先校验后扣款，存在双花窗口）。"""
-    store = _store(tmp_path)
+    store = make_store(tmp_path)
     _seed(store, "a", 50)
     _seed(store, "b", 0)
 
@@ -108,8 +116,8 @@ def test_concurrent_transfers_never_overdraw(tmp_path: Path) -> None:
     assert asyncio.run(store.get_user("b")).spirit_stones == 50
 
 
-def test_reopen_trade_offer_restores_open_status(tmp_path: Path) -> None:
-    store = _store(tmp_path)
+def test_reopen_trade_offer_restores_open_status(tmp_path: Path, make_store) -> None:
+    store = make_store(tmp_path)
     created = asyncio.run(
         store.create_trade_offer("g1", "seller", "卖家", "", {"name": "青竹剑"}, 100)
     )

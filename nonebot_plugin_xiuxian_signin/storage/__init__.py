@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
 import tempfile
 import threading
 from dataclasses import dataclass, field
@@ -256,7 +257,76 @@ def apply_mystic_rewards(record: UserRecord, rewards: list[dict[str, Any]]) -> N
             append_reward(record, dict(reward))
 
 
-class JsonStore:
+class ChatCountAggregatorMixin:
+    """R-17：聊天计数内存聚合基座（两个存储后端共用）。
+
+    每条群消息原先要同步重写两个 JSON 文件；聚合后只在内存累加，
+    由 30s 周期任务批量落盘（``flush_chat_counts``）。所有读取
+    chat_rank 的入口先 flush，保证结算视图一致。
+    """
+
+    _chat_pending: dict[tuple[str, str, str], dict[str, Any]]
+    _chat_pending_lock: threading.Lock
+
+    def _init_chat_aggregator(self) -> None:
+        self._chat_pending = {}
+        self._chat_pending_lock = threading.Lock()
+
+    def _aggregate_chat_count(
+        self,
+        group_id: str,
+        user_id: str,
+        date_text: str,
+        nickname: str,
+    ) -> None:
+        with self._chat_pending_lock:
+            key = (str(group_id), str(user_id), str(date_text))
+            entry = self._chat_pending.get(key)
+            if entry is None:
+                self._chat_pending[key] = {
+                    "nickname": nickname or user_id,
+                    "count": 1,
+                }
+            else:
+                entry["count"] = int(entry["count"]) + 1
+                if nickname:
+                    entry["nickname"] = nickname
+
+    def _drain_chat_pending(self) -> dict[tuple[str, str, str], dict[str, Any]]:
+        with self._chat_pending_lock:
+            pending, self._chat_pending = self._chat_pending, {}
+            return pending
+
+    def _has_pending_chat_counts(self) -> bool:
+        return bool(self._chat_pending)
+
+    async def flush_chat_counts(self) -> int:
+        """把聚合中的计数批量落盘；返回本次落盘的消息条数。"""
+        pending = self._drain_chat_pending()
+        applied = 0
+        for (group_id, user_id, date_text), entry in pending.items():
+            await self._apply_chat_count(
+                group_id,
+                user_id,
+                date_text,
+                str(entry["nickname"]),
+                int(entry["count"]),
+            )
+            applied += int(entry["count"])
+        return applied
+
+    async def _apply_chat_count(
+        self,
+        group_id: str,
+        user_id: str,
+        date_text: str,
+        nickname: str,
+        count: int,
+    ) -> None:
+        raise NotImplementedError
+
+
+class JsonStore(ChatCountAggregatorMixin):
     def __init__(self, data_dir: Path) -> None:
         self.data_dir = data_dir
         self.user_file_path = data_dir / "users.json"
@@ -268,6 +338,7 @@ class JsonStore:
         self.rescue_file_path = data_dir / "mystic_rescue.json"
         self.mystic_file_path = data_dir / "mystic_dungeons.json"
         self._lock = asyncio.Lock()
+        self._init_chat_aggregator()
 
     # --- 快照与审计（R-05） ------------------------------------------------
     def snapshot_directory(self, path: Path) -> Path:
@@ -315,6 +386,17 @@ class JsonStore:
         date_text: str,
         nickname: str,
     ) -> None:
+        # R-17：只进内存聚合，30s 批量落盘（flush_chat_counts）。
+        self._aggregate_chat_count(group_id, user_id, date_text, nickname)
+
+    async def _apply_chat_count(
+        self,
+        group_id: str,
+        user_id: str,
+        date_text: str,
+        nickname: str,
+        count: int,
+    ) -> None:
         async with self._lock:
             data = self._read_json(self.rank_file_path)
             group_data = data.setdefault(group_id, {})
@@ -333,7 +415,7 @@ class JsonStore:
                 },
             )
             user_data["nickname"] = nickname or user_data.get("nickname") or user_id
-            user_data["count"] = int(user_data.get("count", 0)) + 1
+            user_data["count"] = int(user_data.get("count", 0)) + count
             self._write_json(self.rank_file_path, data)
             self._touch_group_member_locked(group_id, user_id, date_text, nickname)
 
@@ -473,6 +555,7 @@ class JsonStore:
             return result
 
     async def get_unsettled_rank_groups(self, date_text: str) -> dict[str, dict[str, Any]]:
+        await self.flush_chat_counts()
         async with self._lock:
             data = self._read_json(self.rank_file_path)
             result = {}
@@ -485,6 +568,7 @@ class JsonStore:
             return result
 
     async def mark_rank_group_settled(self, group_id: str, date_text: str) -> None:
+        await self.flush_chat_counts()
         async with self._lock:
             data = self._read_json(self.rank_file_path)
             group_data = data.get(group_id)
@@ -1713,3 +1797,37 @@ class JsonStore:
             result = mutator(data)
             self._write_json(path, data)
             return result
+
+    # --- 后端无关的同步契约（R-16）：admin 只依赖这四个方法 ------------------
+    def read_users_sync(self) -> dict[str, Any]:
+        return self._read_json(self.user_file_path)
+
+    def read_group_members_sync(self) -> dict[str, Any]:
+        return self._read_json(self.group_file_path)
+
+    def update_users_sync(
+        self,
+        mutator: Callable[[dict[str, Any]], Any],
+        user_ids: Iterable[str] | None = None,
+    ) -> Any:
+        with _FILE_LOCK:
+            data = self._read_json(self.user_file_path)
+            result = mutator(data)
+            self._write_json(self.user_file_path, data)
+            return result
+
+    def snapshot_users(self, reason: str = "admin") -> Path | None:
+        """后台改存档前留一份可回退版本（SQLite 后端下退化为 VACUUM INTO 备份）。"""
+        return capture_before_write(self.user_file_path, reason=reason)
+
+    def backup_users_snapshot(self, dest_dir: Path) -> Path:
+        dest_dir = Path(dest_dir)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        destination = dest_dir / f"users_{stamp}.json"
+        with _FILE_LOCK:
+            if self.user_file_path.exists():
+                shutil.copy2(self.user_file_path, destination)
+            else:
+                destination.write_text("{}", encoding="utf-8")
+        return destination
