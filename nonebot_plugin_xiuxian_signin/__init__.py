@@ -194,7 +194,7 @@ from .mystic_runtime import (
     parse_mystic_group_command,
     parse_mystic_private_command,
 )
-from .storage import JsonStore, MysticRescueRequest
+from .storage import InsufficientSpiritStones, JsonStore, MysticRescueRequest
 from . import state as _state  # 共享单例（config/store/admin_manager/mystic_coordinator 等）
 from .state import (  # noqa: F401
     config, store, admin_manager, mystic_coordinator, mystic_catalog,
@@ -3876,23 +3876,36 @@ async def handle_trade(matcher: Matcher, event: MessageEvent) -> None:
             await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", "\u4ea4\u6613\u5df2\u88ab\u63a5\u53d6\u3001\u53d6\u6d88\u6216\u8fc7\u671f\u3002", record, icon="warning")
         seller_id = str(offer.get("seller_id"))
         item = dict(offer.get("item") or {})
-        record.spirit_stones -= price
+        # 唯一道具归一化内部会取 store 锁，必须在原子事务之外完成。
         item, append_msg = await normalize_unique_reward_for_user(record, item, event)
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
 
-        def seller_gain(seller, gain=price):
-            seller.spirit_stones += gain
+        def settle_trade(records, buyer_id=user_id, seller_id=seller_id, price=price, item=item):
+            # 余额校验与双方改动在同一把锁内，杜绝并发接单的重复扣款/凭空灵石。
+            buyer = records[buyer_id]
+            if buyer.spirit_stones < price:
+                raise InsufficientSpiritStones(buyer_id, price, buyer.spirit_stones)
+            buyer.spirit_stones -= price
+            buyer.rewards = list(buyer.rewards or []) + [item]
+            records[seller_id].spirit_stones += price
 
-        await store.apply_to_user(seller_id, seller_gain)
+        try:
+            settled = await store.apply_to_users([user_id, seller_id], settle_trade)
+        except InsufficientSpiritStones:
+            await store.reopen_trade_offer(group_id, str(accept_id))
+            record = await store.get_user(user_id)
+            await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", f"\u7075\u77f3\u4e0d\u8db3\uff0c\u9700\u8981 {spirit_stone_text(price)}\u3002", record, icon="warning")
+        record = settled[user_id]
         await finish_panel(matcher, "\u4ea4\u6613\u5b8c\u6210", f"\u83b7\u5f97 {reward_display_name(item)}\uff0c\u652f\u4ed8 {spirit_stone_text(price)}\u3002{append_msg}", record, icon="shop")
     if cancel_id is not None:
         offer = await store.cancel_trade_offer(group_id, str(cancel_id), user_id)
         if not offer:
             await finish_panel(matcher, "\u64a4\u9500\u5931\u8d25", "\u6ca1\u6709\u627e\u5230\u53ef\u64a4\u9500\u7684\u672c\u4eba\u6302\u5355\u3002", record, icon="warning")
         item = dict(offer.get("item") or {})
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
+
+        def restore_item(rec, item=item):
+            rec.rewards = list(rec.rewards or []) + [item]
+
+        record = await store.apply_to_user(user_id, restore_item)
         await finish_panel(matcher, "\u4ea4\u6613\u64a4\u9500", f"\u5df2\u64a4\u56de {reward_display_name(item)}\u3002", record, icon="shop")
     if offer_data is None:
         await finish_panel(matcher, "\u73a9\u5bb6\u4ea4\u6613", "\u6302\u5355\u683c\u5f0f\uff1a\u4ea4\u6613 @\u5bf9\u65b9 \u7c7b\u522b \u7f16\u53f7 \u4ef7\u683c\uff0c\u4f8b\u5982\uff1a\u4ea4\u6613 @\u9053\u53cb \u7075\u5668 1 100\u3002", record, icon="shop")
@@ -3946,23 +3959,35 @@ async def handle_market(matcher: Matcher, event: MessageEvent) -> None:
             await finish_panel(matcher, "购买失败", "寄售已被购买、下架或状态变化。", record, icon="warning")
         seller_id = str(offer.get("seller_id"))
         item = dict(offer.get("item") or {})
-        record.spirit_stones -= price
+        # 唯一道具归一化内部会取 store 锁，必须在原子事务之外完成。
         item, append_msg = await normalize_unique_reward_for_user(record, item, event)
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
 
-        def seller_gain(seller, gain=price):
-            seller.spirit_stones += gain
+        def settle_market(records, buyer_id=user_id, seller_id=seller_id, price=price, item=item):
+            buyer = records[buyer_id]
+            if buyer.spirit_stones < price:
+                raise InsufficientSpiritStones(buyer_id, price, buyer.spirit_stones)
+            buyer.spirit_stones -= price
+            buyer.rewards = list(buyer.rewards or []) + [item]
+            records[seller_id].spirit_stones += price
 
-        await store.apply_to_user(seller_id, seller_gain)
+        try:
+            settled = await store.apply_to_users([user_id, seller_id], settle_market)
+        except InsufficientSpiritStones:
+            await store.reopen_trade_offer(group_id, str(buy_id))
+            record = await store.get_user(user_id)
+            await finish_panel(matcher, "购买失败", f"灵石不足，需要 {spirit_stone_text(price)}。", record, icon="warning")
+        record = settled[user_id]
         await finish_panel(matcher, "万宝楼成交", f"购得 {reward_display_name(item)}，支付 {spirit_stone_text(price)}。{append_msg}", record, icon="shop")
     if cancel_id is not None:
         offer = await store.cancel_trade_offer(group_id, str(cancel_id), user_id)
         if not offer or not offer.get("market"):
             await finish_panel(matcher, "下架失败", "没有找到可下架的本人寄售物。", record, icon="warning")
         item = dict(offer.get("item") or {})
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
+
+        def restore_market_item(rec, item=item):
+            rec.rewards = list(rec.rewards or []) + [item]
+
+        record = await store.apply_to_user(user_id, restore_market_item)
         await finish_panel(matcher, "万宝楼下架", f"已下架 {reward_display_name(item)}。", record, icon="shop")
     if offer_data is None:
         await finish_panel(matcher, "万宝楼", "格式：万宝楼挂售 类别 编号，例如：万宝楼挂售 灵器 1。", record, icon="shop", footer=command_hint("交易与商店"))

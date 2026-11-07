@@ -9,7 +9,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from nonebot import logger
 
@@ -39,9 +39,18 @@ MYSTIC_TERMINAL_PHASES = {
 }
 
 
+class InsufficientSpiritStones(ValueError):
+    """余额不足：事务型改动整体不落盘，调用方据此给出提示。"""
+
+    def __init__(self, user_id: str, required: int, available: int) -> None:
+        super().__init__(f"灵石不足：需要 {required}，仅有 {available}")
+        self.user_id = str(user_id)
+        self.required = int(required)
+        self.available = int(available)
+
+
 class MysticRunConflict(RuntimeError):
     """Raised when a persisted run revision changed before update."""
-
 
 class MysticRunNotFound(LookupError):
     """Raised when a requested persisted run does not exist."""
@@ -496,6 +505,55 @@ class JsonStore:
             self._write_json(self.user_file_path, data)
             return record
 
+    async def apply_to_users(self, user_ids: Iterable[str], updater) -> dict[str, UserRecord]:
+        """在一次读-改-写里同时处理多个用户（R-03 的双人原子操作基座）。
+
+        ``updater(records: dict[str, UserRecord])`` 在锁内被调用；抛异常时整批
+        不落盘，调用方据异常区分业务失败。**updater 内不得再调用本类的其它
+        异步方法**——``self._lock`` 是普通 ``asyncio.Lock``，不可重入。
+        """
+        unique_ids = [str(uid) for uid in dict.fromkeys(str(uid) for uid in user_ids)]
+        if not unique_ids:
+            raise ValueError("apply_to_users requires at least one user id")
+        async with self._lock:
+            data = self._read_json(self.user_file_path)
+            records: dict[str, UserRecord] = {}
+            for uid in unique_ids:
+                user_data = data.get(uid)
+                records[uid] = (
+                    UserRecord.from_dict(user_data)
+                    if isinstance(user_data, dict)
+                    else UserRecord(user_id=uid)
+                )
+            updater(records)
+            for uid in unique_ids:
+                data[uid] = sanitize_user_record_data(records[uid].to_dict())
+            self._write_json(self.user_file_path, data)
+            return records
+
+    async def transfer_spirit_stones(
+        self,
+        from_user_id: str,
+        to_user_id: str,
+        amount: int,
+    ) -> dict[str, UserRecord]:
+        """灵石转账：余额校验与双方改动在同一把锁内完成，余额不足则不落盘。"""
+        amount = int(amount)
+        if amount <= 0:
+            raise ValueError("transfer amount must be positive")
+
+        payer_id = str(from_user_id)
+        payee_id = str(to_user_id)
+
+        def _transfer(records: dict[str, UserRecord]) -> None:
+            payer = records[payer_id]
+            if payer.spirit_stones < amount:
+                raise InsufficientSpiritStones(payer_id, amount, payer.spirit_stones)
+            payer.spirit_stones -= amount
+            records[payee_id].spirit_stones += amount
+
+        return await self.apply_to_users([payer_id, payee_id], _transfer)
+
 
     async def get_unique_artifacts(self) -> dict[str, Any]:
         async with self._lock:
@@ -577,6 +635,23 @@ class JsonStore:
             data[str(group_id)] = group
             self._write_json(self.trade_file_path, data)
             return dict(offer)
+
+    async def reopen_trade_offer(self, group_id: str, offer_id: str) -> bool:
+        """把已接单的挂单放回市场（付款失败时回滚）。"""
+        async with self._lock:
+            data = self._read_json(self.trade_file_path)
+            group = data.get(str(group_id), {})
+            if not isinstance(group, dict):
+                return False
+            offer = group.get(str(offer_id))
+            if not isinstance(offer, dict) or offer.get("status") != "taken":
+                return False
+            offer["status"] = "open"
+            offer.pop("buyer_id", None)
+            group[str(offer_id)] = offer
+            data[str(group_id)] = group
+            self._write_json(self.trade_file_path, data)
+            return True
 
     async def cancel_trade_offer(self, group_id: str, offer_id: str, seller_id: str) -> dict[str, Any] | None:
         async with self._lock:
