@@ -143,7 +143,8 @@ def test_create_run_without_token_leaves_no_active_state(
     asyncio.run(store.save_user(UserRecord(user_id="member-2")))
     run = started_team_run(catalog)
 
-    with pytest.raises(ValueError, match="token"):
+    # 提示文案已本地化为中文（mystic_dungeon.py:33「缺少 {令牌名},无法开启秘境。」）
+    with pytest.raises(ValueError, match="令牌"):
         asyncio.run(store.create_mystic_run(run, payer_id="leader", token_name=NORMAL_TOKEN))
 
     assert asyncio.run(store.get_mystic_run("run-1")) is None
