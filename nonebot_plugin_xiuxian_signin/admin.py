@@ -19,6 +19,16 @@ from zoneinfo import ZoneInfo
 from . import beast_realm, domain, mystic_dungeon
 from .admin_auth import SESSION_COOKIE_NAME, AdminAuth
 from .admin_dashboard import build_dashboard_payload
+from .config_schema import (
+    CURRENT_CONFIG_VERSION,
+    RETIRED_MYSTIC_CONFIG_KEYS,  # noqa: F401  # 供外部脚本与测试引用，语义在 config_schema
+    ConfigConflictError,
+    ConfigValidationError,
+    ConfigVersionError,
+    migrate_config,
+    prune_unknown_config,
+    validate_config,
+)
 from .mystic_dungeon import (
     DungeonRisk,
     MysticGameplayConfig,
@@ -191,6 +201,8 @@ def _default_realm_tier_unlocks() -> dict[str, list[str]]:
 
 DEFAULT_ADMIN_CONFIG: dict[str, Any] = {
     "version": 1,
+    # 修订号：每次成功保存自增，供前端做乐观锁（R-07）。
+    "revision": 0,
     "equipment_rules": {
         "realm_tier_unlocks": _default_realm_tier_unlocks(),
         "tier_default_realm": {
@@ -226,15 +238,7 @@ DEFAULT_ADMIN_CONFIG: dict[str, Any] = {
 ITEM_OVERRIDE_TEXT_FIELDS = {"category", "required_realm", "required_attribute", "usage", "source", "story"}
 ITEM_OVERRIDE_LIST_FIELDS = {"tiers", "grades"}
 
-# 已退役的 mystic 配置键：a4a85d9 起秘境令牌改为签到概率掉落 / 每日任务固定 1 枚，
-# 这四个键不再有任何读取方。保留在代码里会让运营以为可以调节，故从默认值中移除，
-# 并在读取旧配置时裁掉（旧 admin_config.json 升级后自动失效）。
-RETIRED_MYSTIC_CONFIG_KEYS = (
-    "signin_normal_token_count",
-    "signin_high_risk_token_count",
-    "daily_task_normal_token_count",
-    "daily_task_high_risk_token_count",
-)
+# 已退役的 mystic 配置键与迁移链统一放在 config_schema.py（R-07），此处仅保留引用。
 
 # 手工备份只保留最近这么多份（R-05 备份轮转）；默认值与 storage/snapshots.py 一致。
 BACKUP_KEEP = 20
@@ -270,28 +274,63 @@ class AdminManager:
             return datetime.now().date()
 
     def load_config(self) -> dict[str, Any]:
+        """读取配置：补默认值 → 跑迁移 → 裁掉 schema 未定义的键。
+
+        读取侧刻意保持宽容（不跑 Pydantic 校验）：配置不合规只应在「保存」时
+        暴露，否则一份手改坏的 admin_config.json 会直接让后台打不开。
+        """
         if not self.config_path.exists():
-            self.save_config(DEFAULT_ADMIN_CONFIG)
-            return json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
+            config = json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
+            config["revision"] = 0
+            # 首次落盘不必留快照（没有「上一版」可言）。
+            atomic_write_json(self.config_path, config, snapshot_reason=None)
+            return config
         try:
             data = json.loads(self.config_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             data = {}
         merged = json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
         deep_update(merged, data if isinstance(data, dict) else {})
-        mystic_section = merged.get("mystic")
-        if isinstance(mystic_section, dict):
-            for retired_key in RETIRED_MYSTIC_CONFIG_KEYS:
-                mystic_section.pop(retired_key, None)
+        merged, _notes = migrate_config(merged)
+        merged = prune_unknown_config(merged)
         _normalize_mystic_theme_config(merged)
         return merged
 
-    def save_config(self, data: dict[str, Any]) -> None:
+    def save_config(self, data: dict[str, Any], *, if_revision: int | None = None) -> dict[str, Any]:
+        """校验并保存配置（R-07）。
+
+        写入路径是唯一的契约关口：先按 revision 做乐观锁、再校验结构版本，
+        最后用 Pydantic 全量校验。任何一项不过都整份不落盘，避免「保存成功但
+        运行时不生效」这类哑失败。
+        """
+        current = self.load_config()
+        current_revision = int(current.get("revision", 0) or 0)
+        if if_revision is None:
+            submitted = data.get("revision")
+            if isinstance(submitted, int) and not isinstance(submitted, bool):
+                if_revision = submitted
+        if if_revision is not None and if_revision != current_revision:
+            raise ConfigConflictError(current_revision)
+
+        version = data.get("version", CURRENT_CONFIG_VERSION)
+        if version != CURRENT_CONFIG_VERSION:
+            raise ConfigVersionError(version)
+
+        # 与默认值合并后校验并落盘：既容忍前端只提交部分字段，
+        # 也保证磁盘上永远是一份结构完整的配置。
+        merged = json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
+        deep_update(merged, data)
+        merged, _notes = migrate_config(merged)
+        merged = prune_unknown_config(merged)
+        _normalize_mystic_theme_config(merged)
+        merged["revision"] = current_revision + 1
+        validated = validate_config(merged)
         # 与存档共用同一套原子写（唯一临时名 + fsync + os.replace），
         # 避免后台线程与事件循环交叉覆盖同一个 .tmp 文件。
         # reason="config" 会强制留快照（不受 5 分钟节流限制），使后台每次改配置
         # 都能回到上一版，R-15 的一键回滚直接复用这批快照。
-        atomic_write_json(self.config_path, data, snapshot_reason="config")
+        atomic_write_json(self.config_path, validated, snapshot_reason="config")
+        return validated
 
     def audit(self, event: str, **fields: Any) -> None:
         """记录后台审计事件（R-05）：登录、改密、改配置、改存档、备份。"""
@@ -774,9 +813,28 @@ def create_admin_app(
             manager.validate_mystic_theme_selections(mystic_section)
         except ValueError as exc:
             return _json_error(str(exc), 400)
-        manager.save_config(data)
+        if_revision = data.get("if_revision")
+        if not isinstance(if_revision, int) or isinstance(if_revision, bool):
+            if_revision = None
+        try:
+            saved = manager.save_config(data, if_revision=if_revision)
+        except ConfigConflictError as exc:
+            return _json_error(str(exc), 409)
+        except ConfigVersionError as exc:
+            return _json_error(str(exc), 400)
+        except ConfigValidationError as exc:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": "配置校验未通过",
+                    "issues": exc.issues,
+                    "issue_count": exc.total,
+                },
+                status_code=400,
+            )
         manager.apply_config()
-        manager.audit("admin.save_config", ip=_client_key(request))
+        revision = saved.get("revision") if isinstance(saved, dict) else None
+        manager.audit("admin.save_config", ip=_client_key(request), revision=revision)
         return {"ok": True, "config": manager.load_config()}
 
     async def list_players(

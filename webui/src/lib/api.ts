@@ -58,6 +58,8 @@ export function assetUrl(path: string) {
 type ApiErrorPayload = {
   error?: unknown
   detail?: unknown
+  // 配置校验失败时后端返回字段级问题列表（R-07）。
+  issues?: unknown
 }
 
 class ApiRequestError extends Error {
@@ -75,14 +77,35 @@ function payloadMessage(payload: unknown) {
   if (!payload || typeof payload !== "object") {
     return ""
   }
-  const { error, detail } = payload as ApiErrorPayload
+  const { error, detail, issues } = payload as ApiErrorPayload
+  const detailText = formatIssues(issues)
   if (typeof error === "string" && error.trim()) {
-    return error
+    return detailText ? `${error}：${detailText}` : error
   }
   if (typeof detail === "string" && detail.trim()) {
-    return detail
+    return detailText ? `${detail}：${detailText}` : detail
   }
-  return ""
+  return detailText
+}
+
+/** 把「字段路径: 说明」拼成一句，最多三条，避免提示框被刷屏。 */
+function formatIssues(value: unknown) {
+  if (!Array.isArray(value)) {
+    return ""
+  }
+  return value
+    .slice(0, 3)
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return ""
+      }
+      const { path, message } = item as { path?: unknown; message?: unknown }
+      const pathText = typeof path === "string" ? path : ""
+      const messageText = typeof message === "string" ? message : ""
+      return pathText ? `${pathText}: ${messageText}` : messageText
+    })
+    .filter(Boolean)
+    .join("；")
 }
 
 function statusMessage(response: Response) {

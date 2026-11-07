@@ -215,6 +215,8 @@ export type MysticThemeBinding = {
 
 export type AdminConfig = {
   version: number
+  /** 修订号：每次保存自增，服务端用它拒绝陈旧页面的覆盖（R-07）。 */
+  revision?: number
   equipment_rules: EquipmentRules
   mystic: MysticConfig
   signin: {

@@ -111,7 +111,7 @@ class FakeManager:
     def load_config(self) -> dict[str, Any]:
         return json.loads(json.dumps(self.config, ensure_ascii=False))
 
-    def save_config(self, data: dict[str, Any]) -> None:
+    def save_config(self, data: dict[str, Any], *, if_revision: int | None = None) -> None:
         self.config = json.loads(json.dumps(data, ensure_ascii=False))
 
     def apply_config(self) -> None:

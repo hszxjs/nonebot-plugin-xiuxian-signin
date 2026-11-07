@@ -115,7 +115,7 @@ class FakeManager:
     def load_config(self) -> dict[str, Any]:
         return {}
 
-    def save_config(self, data: dict[str, Any]) -> None:
+    def save_config(self, data: dict[str, Any], *, if_revision: int | None = None) -> None:
         return None
 
     def list_players(self, query: str = "") -> list[dict[str, Any]]:

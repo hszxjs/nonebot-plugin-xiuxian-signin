@@ -21,6 +21,24 @@ describe("apiErrorMessage", () => {
     )
   })
 
+  it("appends field issues from config validation failures", async () => {
+    const response = new Response(
+      JSON.stringify({
+        ok: false,
+        error: "配置校验未通过",
+        issues: [
+          { path: "mystic.fishing_option_rate", message: "不能大于 1" },
+          { path: "signin.extra_fishing_chance_rate", message: "必须是数字" },
+        ],
+      }),
+      { status: 400, statusText: "Bad Request" },
+    )
+
+    await expect(apiErrorMessage(responseError(response))).resolves.toBe(
+      "配置校验未通过：mystic.fishing_option_rate: 不能大于 1；signin.extra_fishing_chance_rate: 必须是数字",
+    )
+  })
+
   it("uses the backend JSON detail field", async () => {
     const response = new Response(JSON.stringify({ detail: "unauthorized" }), {
       status: 401,
