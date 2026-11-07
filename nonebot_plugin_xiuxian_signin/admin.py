@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import os
 import shutil
 import threading
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import unquote
 
 import uvicorn
@@ -267,6 +268,25 @@ class AdminManager:
             env_password=os.environ.get("XIUXIAN_ADMIN_PASSWORD", ""),
         )
         self.timezone = str(timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+        # 重负载只读 payload 的缓存：键 = 配置 revision（保存配置时自增即失效）。
+        # 缓存值视为只读（调用方只序列化，不修改），避免每次请求重建 ~8000 条目录。
+        self._payload_cache: dict[str, tuple[int, Any]] = {}
+
+    def _config_revision(self) -> int:
+        revision = self.load_config().get("revision")
+        try:
+            return int(revision)
+        except (TypeError, ValueError):
+            return -1
+
+    def _cached_payload(self, key: str, builder: Callable[[], Any]) -> Any:
+        revision = self._config_revision()
+        cached = self._payload_cache.get(key)
+        if cached is not None and cached[0] == revision:
+            return cached[1]
+        value = builder()
+        self._payload_cache[key] = (revision, value)
+        return value
 
     def today(self) -> date:
         try:
@@ -536,6 +556,9 @@ class AdminManager:
         return self.load_config().get("equipment_rules", {})
 
     def equipment_meta(self) -> dict[str, Any]:
+        return self._cached_payload("equipment_meta", self._build_equipment_meta)
+
+    def _build_equipment_meta(self) -> dict[str, Any]:
         return {
             "realms": [{"index": index, "name": name} for index, name in enumerate(domain.REALMS)],
             "tiers": list(domain.ARTIFACT_REALM_BOUND_TIERS),
@@ -558,11 +581,8 @@ class AdminManager:
 
     def dashboard_payload(self) -> dict[str, Any]:
         users = self.store.read_json_sync(self.store.user_file_path)
-        realm_names = {
-            int(item["index"]): str(item["name"])
-            for item in self.equipment_meta().get("realms", [])
-            if isinstance(item, dict) and "index" in item and "name" in item
-        }
+        # 只需要境界名清单：直接取 domain.REALMS，避免顺带构建全量灵器目录。
+        realm_names = dict(enumerate(domain.REALMS))
 
         def battle_power_resolver(user_id: str, raw: dict[str, Any]) -> int:
             data = dict(raw)
@@ -615,6 +635,9 @@ class AdminManager:
         return items
 
     def item_payload(self) -> dict[str, Any]:
+        return self._cached_payload("item_payload", self._build_item_payload)
+
+    def _build_item_payload(self) -> dict[str, Any]:
         items = self.item_catalog()
         return {"ok": True, "items": items, "meta": self.item_meta(items)}
 
@@ -667,6 +690,21 @@ scoped_admin_index_html = _scoped_admin_index_html
 
 def _json_error(message: str, status_code: int) -> JSONResponse:
     return JSONResponse({"ok": False, "error": message}, status_code=status_code)
+
+
+# 超过该体积且客户端支持 gzip 时，路由内手动压缩后再回包。不能挂
+# GZipMiddleware：鉴权走路由级依赖，路由会被复制到 driver 的 server_app，
+# app 级中间件不会跟着路由走（见 install_admin_routes）。
+_GZIP_THRESHOLD_BYTES = 64 * 1024
+
+
+def _json_response_maybe_gzip(request: Request, payload: Any) -> Response:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Vary": "Accept-Encoding"}
+    if len(body) >= _GZIP_THRESHOLD_BYTES and "gzip" in str(request.headers.get("accept-encoding", "")).lower():
+        body = gzip.compress(body)
+        headers["Content-Encoding"] = "gzip"
+    return Response(content=body, media_type="application/json", headers=headers)
 
 
 async def _json_object_or_error(request: Request, object_error: str) -> tuple[dict[str, Any] | None, JSONResponse | None]:
@@ -866,8 +904,8 @@ def create_admin_app(
     async def backup() -> Any:
         return manager.backup_users()
 
-    async def items() -> Any:
-        return manager.item_payload()
+    async def items(request: Request) -> Any:
+        return _json_response_maybe_gzip(request, manager.item_payload())
 
     async def beast_cards() -> Any:
         return manager.beast_card_payload()
@@ -889,8 +927,11 @@ def create_admin_app(
         manager.audit("admin.save_mystic", ip=_client_key(request))
         return {"ok": True, "mystic": payload}
 
-    async def equipment_rules() -> Any:
-        return {"ok": True, "rules": manager.equipment_rules(), "meta": manager.equipment_meta()}
+    async def equipment_rules(request: Request) -> Any:
+        return _json_response_maybe_gzip(
+            request,
+            {"ok": True, "rules": manager.equipment_rules(), "meta": manager.equipment_meta()},
+        )
 
     async def item_icon(
         icon_path: str,

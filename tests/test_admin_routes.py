@@ -647,5 +647,83 @@ class AdminRouteTests(unittest.TestCase):
             admin.ADMIN_WEB_INDEX = old_index
 
 
+class PayloadCacheAndGzipTests(unittest.TestCase):
+    """R-12：重负载接口的结果缓存与路由级 gzip。"""
+
+    def _manager(self, tmp: str) -> Any:
+        data_dir = Path(tmp)
+        return admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+
+    def test_item_payload_cache_hits_and_invalidates_on_config_save(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            calls = {"n": 0}
+            original = manager._build_item_payload
+
+            def counting() -> Any:
+                calls["n"] += 1
+                return original()
+
+            manager._build_item_payload = counting  # type: ignore[method-assign]
+
+            first = manager.item_payload()
+            second = manager.item_payload()
+            self.assertEqual(calls["n"], 1, "同 revision 下二次请求必须命中缓存")
+            self.assertIs(first, second)
+
+            # 保存配置 → revision 自增 → 缓存必须失效重建
+            manager.save_config(manager.load_config())
+            manager.item_payload()
+            self.assertEqual(calls["n"], 2, "配置保存后缓存必须失效")
+
+    def test_equipment_meta_cache_and_dashboard_shortcut(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            calls = {"n": 0}
+            original = manager._build_equipment_meta
+
+            def counting() -> Any:
+                calls["n"] += 1
+                return original()
+
+            manager._build_equipment_meta = counting  # type: ignore[method-assign]
+
+            meta1 = manager.equipment_meta()
+            meta2 = manager.equipment_meta()
+            self.assertEqual(calls["n"], 1)
+            self.assertIs(meta1, meta2)
+
+            # R-12：dashboard 只需要境界名，不得再触发全量灵器目录构建
+            self.assertEqual(calls["n"], 1)
+            payload = manager.dashboard_payload()
+            self.assertEqual(calls["n"], 1, "dashboard_payload 不得再调用 equipment_meta")
+            self.assertEqual(payload["metrics"]["total_players"], 0)
+            self.assertEqual(payload["mode"], "snapshot")
+
+    def test_items_route_gzips_large_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            app = admin.create_admin_app(manager=manager)
+            client = _manager_client(app, manager)
+
+            response = client.get(
+                "/xiuxian-admin/api/items",
+                headers={"Accept-Encoding": "gzip"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers.get("content-encoding"), "gzip")
+            self.assertIn("Accept-Encoding", response.headers.get("vary", ""))
+            items = response.json()["items"]
+            self.assertGreater(len(items), 0)
+
+            # 小 payload 不压缩
+            small = client.get(
+                "/xiuxian-admin/api/dashboard",
+                headers={"Accept-Encoding": "gzip"},
+            )
+            self.assertEqual(small.status_code, 200)
+            self.assertNotIn("content-encoding", small.headers)
+
+
 if __name__ == "__main__":
     unittest.main()
