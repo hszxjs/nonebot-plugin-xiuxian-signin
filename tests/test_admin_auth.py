@@ -160,6 +160,10 @@ class _StubManager:
 
     def __init__(self, auth: AdminAuth) -> None:
         self.auth = auth
+        self.audit_events: list[tuple[str, dict[str, Any]]] = []
+
+    def audit(self, event: str, **fields: Any) -> None:
+        self.audit_events.append((event, fields))
 
     def dashboard_payload(self) -> dict[str, Any]:
         return {"ok": True}

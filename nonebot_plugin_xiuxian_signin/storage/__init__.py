@@ -23,6 +23,13 @@ from ..domain import (
 )
 from ..mystic_battle import DungeonEncounter, EncounterPhase
 from ..mystic_dungeon import DungeonPhase, MysticDungeonRun, MysticTokenMissingError
+from .audit import audit, read_audit
+from .snapshots import (
+    AUTO_REASON,
+    capture_before_write,
+    list_snapshots as _list_snapshots,
+    snapshot_dir as _snapshot_dir,
+)
 
 
 MYSTIC_TERMINAL_PHASES = {
@@ -90,12 +97,16 @@ def _fsync_dir(directory: Path) -> None:
                 os.close(fd)
 
 
-def atomic_write_json(path: Path, data: Any) -> None:
-    """原子写 JSON 文件。
+def atomic_write_json(path: Path, data: Any, *, snapshot_reason: str | None = AUTO_REASON) -> None:
+    """原子写 JSON 文件，并在覆盖前留一份上一版快照（R-05）。
 
     使用唯一临时文件名（``tempfile.mkstemp``）而非固定的 ``*.tmp``：两个写者
     共用同一个临时文件时，交叉覆盖会产生「新旧内容拼接」的坏 JSON（本项目
     已经发生过）。写入后 fsync 文件与目录，再用 ``os.replace`` 原子替换。
+
+    快照在临时文件写好之后、``os.replace`` 之前触发：前者保证写失败时不必
+    占用快照名额，后者保证拿到的一定是「被覆盖掉的那一版」。``snapshot_reason``
+    为 ``None`` 时跳过快照（凭据文件等无回滚价值的内容）。
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,6 +117,10 @@ def atomic_write_json(path: Path, data: Any) -> None:
             json.dump(data, fp, ensure_ascii=False, indent=2)
             fp.flush()
             os.fsync(fp.fileno())
+        if snapshot_reason is not None:
+            # 快照内部已兜住异常，这里再包一层，确保任何情况都不阻断真实写入。
+            with contextlib.suppress(Exception):
+                capture_before_write(path, reason=snapshot_reason)
         os.replace(temp_path, path)
         _fsync_dir(path.parent)
     except BaseException:
@@ -243,6 +258,21 @@ class JsonStore:
         self.rescue_file_path = data_dir / "mystic_rescue.json"
         self.mystic_file_path = data_dir / "mystic_dungeons.json"
         self._lock = asyncio.Lock()
+
+    # --- 快照与审计（R-05） ------------------------------------------------
+    def snapshot_directory(self, path: Path) -> Path:
+        """返回某个存档文件的快照目录（存在性不保证）。"""
+        return _snapshot_dir(path)
+
+    def list_snapshots(self, path: Path) -> list[Path]:
+        """按时间正序列出某存档文件的可用快照。"""
+        return _list_snapshots(path)
+
+    def audit(self, event: str, **fields: Any) -> None:
+        audit(self.data_dir, event, **fields)
+
+    def read_audit(self, limit: int = 200) -> list[dict[str, Any]]:
+        return read_audit(self.data_dir, limit=limit)
 
     async def get_user(self, user_id: str) -> UserRecord:
         async with self._lock:

@@ -82,6 +82,7 @@ class FakeManager:
         self.data_dir = data_dir
         self.token = token
         self.auth = FakeAuth(token or "secret")
+        self.audit_events: list[tuple[str, dict[str, Any]]] = []
         self.config: dict[str, Any] = {"version": 1, "signin": {"extra_fishing_chance_rate": 0.1}}
         self.players: dict[str, dict[str, Any]] = {
             "10001": {
@@ -115,6 +116,9 @@ class FakeManager:
 
     def apply_config(self) -> None:
         return None
+
+    def audit(self, event: str, **fields: Any) -> None:
+        self.audit_events.append((event, fields))
 
     def validate_mystic_theme_selections(self, data: dict[str, Any]) -> dict[str, Any]:
         real = admin.AdminManager(admin.JsonStore(self.data_dir), self.data_dir)

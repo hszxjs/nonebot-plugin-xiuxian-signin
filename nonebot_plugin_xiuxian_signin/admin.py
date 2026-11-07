@@ -25,7 +25,7 @@ from .mystic_dungeon import (
     MysticTemplateCatalog,
     default_mystic_gameplay_config,
 )
-from .storage import JsonStore, StorageCorruptError, atomic_write_json
+from .storage import JsonStore, StorageCorruptError, atomic_write_json, capture_before_write
 
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
@@ -236,6 +236,9 @@ RETIRED_MYSTIC_CONFIG_KEYS = (
     "daily_task_high_risk_token_count",
 )
 
+# 手工备份只保留最近这么多份（R-05 备份轮转）；默认值与 storage/snapshots.py 一致。
+BACKUP_KEEP = 20
+
 
 def deep_update(target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
     for key, value in source.items():
@@ -286,7 +289,13 @@ class AdminManager:
     def save_config(self, data: dict[str, Any]) -> None:
         # 与存档共用同一套原子写（唯一临时名 + fsync + os.replace），
         # 避免后台线程与事件循环交叉覆盖同一个 .tmp 文件。
-        atomic_write_json(self.config_path, data)
+        # reason="config" 会强制留快照（不受 5 分钟节流限制），使后台每次改配置
+        # 都能回到上一版，R-15 的一键回滚直接复用这批快照。
+        atomic_write_json(self.config_path, data, snapshot_reason="config")
+
+    def audit(self, event: str, **fields: Any) -> None:
+        """记录后台审计事件（R-05）：登录、改密、改配置、改存档、备份。"""
+        self.store.audit(event, **fields)
 
     def apply_config(self) -> None:
         config = self.load_config()
@@ -298,12 +307,27 @@ class AdminManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         backup_dir = self.data_dir / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
-        dst = backup_dir / f"users_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        # 微秒精度：连点"创建备份"不会互相覆盖。
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        dst = backup_dir / f"users_{stamp}.json"
         if self.store.user_file_path.exists():
             shutil.copy2(self.store.user_file_path, dst)
         else:
             dst.write_text("{}", encoding="utf-8")
-        return {"ok": True, "path": str(dst)}
+        pruned = self._prune_backups(backup_dir)
+        self.audit("admin.backup", path=str(dst), pruned=pruned)
+        return {"ok": True, "path": str(dst), "pruned": pruned}
+
+    def _prune_backups(self, backup_dir: Path, keep: int = BACKUP_KEEP) -> int:
+        """只保留最近 ``keep`` 份手工备份，返回删除数量（R-05 备份轮转）。"""
+        files = sorted(backup_dir.glob("users_*.json"))
+        stale = files[: max(0, len(files) - max(1, keep))]
+        for path in stale:
+            try:
+                path.unlink()
+            except OSError:
+                continue
+        return len(stale)
 
     def list_players(self, query: str = "") -> list[dict[str, Any]]:
         users = self.store.read_json_sync(self.store.user_file_path)
@@ -343,13 +367,19 @@ class AdminManager:
         saved = dict(data)
         saved["user_id"] = str(user_id)
         domain.UserRecord.from_dict(saved)
+        # 后台手工改存档前强制留一份快照（不受节流限制）：这是最容易造成
+        # 不可逆损失的操作，必须能逐次回退。
+        capture_before_write(self.store.user_file_path, reason="admin")
+
         # 校验通过后再进锁：读-改-写在同一把锁内完成，避免与事件循环内的
         # save_user 互相覆盖（原先的两次独立加锁存在丢更新窗口）。
         def _merge(users: dict[str, Any]) -> dict[str, Any]:
             users[str(user_id)] = domain.sanitize_user_record_data(saved)
             return users[str(user_id)]
 
-        return self.store.update_json_sync(self.store.user_file_path, _merge)
+        result = self.store.update_json_sync(self.store.user_file_path, _merge)
+        self.audit("admin.save_player", user_id=str(user_id))
+        return result
 
     def player_meta(self) -> dict[str, Any]:
         realm_quality_titles = {str(key): list(value) for key, value in domain.REALM_QUALITY_TITLES.items()}
@@ -668,9 +698,11 @@ def create_admin_app(
         if not manager.auth.authenticate(username, password):
             manager.auth.record_failure(client)
             logger.warning(f"后台登录失败：ip={client} user={username!r}")
+            manager.audit("admin.login", ip=client, username=username, result="failed")
             return _json_error("账号或密码不正确", 401)
         manager.auth.reset_failures(client)
         logger.info(f"后台登录成功：ip={client} user={username!r}")
+        manager.audit("admin.login", ip=client, username=username, result="ok")
         response = JSONResponse(
             {
                 "ok": True,
@@ -688,7 +720,8 @@ def create_admin_app(
         )
         return response
 
-    async def logout() -> Any:
+    async def logout(request: Request) -> Any:
+        manager.audit("admin.logout", ip=_client_key(request))
         response = JSONResponse({"ok": True})
         response.delete_cookie(SESSION_COOKIE_NAME, path="/")
         return response
@@ -705,6 +738,7 @@ def create_admin_app(
         if message is not None:
             return _json_error(message, 400)
         logger.warning(f"后台密码已修改：ip={_client_key(request)}")
+        manager.audit("admin.change_password", ip=_client_key(request))
         # 改密会轮换会话密钥，旧 Cookie 立即失效，因此重新下发一个。
         response = JSONResponse({"ok": True, "must_change_password": False})
         response.set_cookie(
@@ -742,6 +776,7 @@ def create_admin_app(
             return _json_error(str(exc), 400)
         manager.save_config(data)
         manager.apply_config()
+        manager.audit("admin.save_config", ip=_client_key(request))
         return {"ok": True, "config": manager.load_config()}
 
     async def list_players(
@@ -790,6 +825,7 @@ def create_admin_app(
             payload = manager.save_mystic_config(data)
         except ValueError as exc:
             return _json_error(str(exc), 400)
+        manager.audit("admin.save_mystic", ip=_client_key(request))
         return {"ok": True, "mystic": payload}
 
     async def equipment_rules() -> Any:

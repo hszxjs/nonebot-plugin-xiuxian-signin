@@ -132,7 +132,8 @@ class AdminAuth:
     def _write(self, data: dict[str, Any]) -> None:
         data["version"] = int(data.get("version") or 1)
         data["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        atomic_write_json(self.path, data)
+        # 凭据文件没有回滚价值（回滚等于恢复旧密码），因此不留快照。
+        atomic_write_json(self.path, data, snapshot_reason=None)
 
     def ensure_initialized(self) -> str | None:
         """确保凭据存在；返回仅需展示一次的明文密码（未生成时为 ``None``）。"""

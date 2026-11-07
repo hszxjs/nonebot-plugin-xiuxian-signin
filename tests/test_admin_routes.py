@@ -94,6 +94,7 @@ class FakeManager:
         self.token = token
         self.auth = FakeAuth(token)
         self.apply_config_calls = 0
+        self.audit_events: list[tuple[str, dict[str, Any]]] = []
         self.players: dict[str, dict[str, Any]] = {
             "42": {
                 "user_id": "42",
@@ -104,6 +105,9 @@ class FakeManager:
 
     def apply_config(self) -> None:
         self.apply_config_calls += 1
+
+    def audit(self, event: str, **fields: Any) -> None:
+        self.audit_events.append((event, fields))
 
     def dashboard_payload(self) -> dict[str, Any]:
         return {"ok": True, "source": "dashboard"}
@@ -411,6 +415,39 @@ class AdminRouteTests(unittest.TestCase):
             self.assertEqual(saved["root"]["extra_label"], "保留灵根备注")
             self.assertNotIn("pending_fishing", saved)
             self.assertEqual(manager.get_player_record("42"), saved)
+
+    def test_admin_manager_save_player_record_keeps_previous_version_snapshot(self) -> None:
+        """R-05：后台改存档前必须留快照，能回到上一版。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+            manager.save_player_record("42", {"realm_index": 0, "custom_note": "v1"})
+            manager.save_player_record("42", {"realm_index": 0, "custom_note": "v2"})
+
+            snapshot_files = manager.store.list_snapshots(manager.store.user_file_path)
+            self.assertTrue(snapshot_files, "后台改存档必须留下快照")
+            previous = json.loads(snapshot_files[-1].read_text(encoding="utf-8"))
+            self.assertEqual(previous["42"]["custom_note"], "v1")
+            self.assertEqual(manager.get_player_record("42")["custom_note"], "v2")
+
+            events = [entry["event"] for entry in manager.store.read_audit()]
+            self.assertEqual(events.count("admin.save_player"), 2)
+
+    def test_admin_manager_backup_users_rotates_and_audits(self) -> None:
+        """R-05：手工备份要轮转，不能无限堆积；每次都要进审计。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+            manager.save_player_record("42", {"realm_index": 0})
+
+            for _ in range(admin.BACKUP_KEEP + 5):
+                result = manager.backup_users()
+                self.assertTrue(Path(result["path"]).is_file())
+
+            backups = sorted((data_dir / "backups").glob("users_*.json"))
+            self.assertEqual(len(backups), admin.BACKUP_KEEP)
+            events = [entry["event"] for entry in manager.store.read_audit()]
+            self.assertEqual(events.count("admin.backup"), admin.BACKUP_KEEP + 5)
 
     def test_admin_manager_save_player_record_repairs_empty_reward_names(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
