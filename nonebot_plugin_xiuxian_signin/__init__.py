@@ -32,7 +32,7 @@ from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 
 from . import beast_realm as beast_realm_game
-from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_signin_calendar_card, render_signin_card, render_text_panel, set_font_paths
+from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_in_thread, render_signin_calendar_card, render_signin_card, render_text_panel, set_font_paths
 from .beast_realm_cards import render_beast_realm_panel
 from .config import Config
 from .domain import (
@@ -503,7 +503,8 @@ async def send_divination_timeout_notice(
     pending_divinations.pop(key, None)
     try:
         record = await store.get_user(user_id)
-        message = panel_segment(
+        message = await render_in_thread(
+            panel_segment,
             "\u5929\u673a\u5360\u535c",
             "\u5366\u706b\u5df2\u706d\uff0c\u672c\u6b21\u95ee\u5366\u5df2\u8d85\u65f6\u3002\u5982\u9700\u518d\u95ee\uff0c\u8bf7\u91cd\u65b0\u53d1\u9001\u201c\u5929\u673a\u5360\u535c\u201d\u3002",
             record,
@@ -570,21 +571,8 @@ def parse_fishing_arg(text: str) -> Optional[str]:
 
 
 
-async def fetch_avatar(user_id: str) -> Optional[bytes]:
-    if httpx is None:
-        return None
-    url = f"https://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
-    try:
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            timeout=config.xiuxian_signin_avatar_timeout,
-        ) as client:
-            response = await client.get(url)
-        if response.status_code == 200 and response.content:
-            return response.content
-    except Exception as exc:
-        logger.debug(f"获取 QQ 头像失败: {exc}")
-    return None
+# 头像获取收敛到 net.py：共享 httpx 客户端 + 带 TTL 的字节 LRU（R-13）。
+from .net import close_shared_http_client, fetch_avatar
 
 
 def nickname_from_event(event: MessageEvent) -> str:
@@ -1276,7 +1264,8 @@ async def send_panel(
     icon: str = "scroll",
     footer: str = "",
 ) -> None:
-    await matcher.send(panel_segment(title, content, record, subtitle, icon, footer))
+    segment = await render_in_thread(panel_segment, title, content, record, subtitle, icon, footer)
+    await matcher.send(segment)
 
 
 async def finish_panel(
@@ -1288,7 +1277,8 @@ async def finish_panel(
     icon: str = "scroll",
     footer: str = "",
 ) -> None:
-    await matcher.finish(panel_segment(title, content, record, subtitle, icon, footer))
+    segment = await render_in_thread(panel_segment, title, content, record, subtitle, icon, footer)
+    await matcher.finish(segment)
 
 
 async def send_private_panel(
@@ -1301,9 +1291,10 @@ async def send_private_panel(
     footer: str = "",
 ) -> bool:
     try:
+        segment = await render_in_thread(panel_segment, title, content, record, subtitle, icon, footer)
         await get_bot().send_private_msg(
             user_id=int(user_id),
-            message=panel_segment(title, content, record, subtitle, icon, footer),
+            message=segment,
         )
         return True
     except Exception as exc:
@@ -1439,7 +1430,8 @@ async def settle_divination_income(event: MessageEvent, viewer_record: Any = Non
 
 async def build_signin_image(event: MessageEvent, result: SigninResult) -> bytes:
     avatar = await fetch_avatar(event.get_user_id())
-    return render_signin_card(
+    return await render_in_thread(
+        render_signin_card,
         result=result,
         nickname=nickname_from_event(event),
         avatar_bytes=avatar,
@@ -1456,7 +1448,8 @@ async def build_signin_calendar_image(
 ) -> bytes:
     """构造签到日历图（含头像）。"""
     avatar = await fetch_avatar(user_id)
-    return render_signin_calendar_card(
+    return await render_in_thread(
+        render_signin_calendar_card,
         history=record.sign_history or {},
         nickname=nickname,
         avatar_bytes=avatar,
@@ -1529,7 +1522,8 @@ async def build_fishing_image(
     rewards,
 ) -> bytes:
     avatar = await fetch_avatar(event.get_user_id())
-    return render_fishing_card(
+    return await render_in_thread(
+        render_fishing_card,
         record=record,
         rewards=rewards,
         nickname=nickname_from_event(event),
@@ -1619,9 +1613,10 @@ async def send_normal_duel_prepare_cards(user_id: str, record, nickname: str) ->
     bot = get_bot()
     for title, content, icon in normal_duel_prepare_cards(record, nickname):
         try:
+            segment = await render_in_thread(panel_segment, title, content, record, icon=icon)
             await bot.send_private_msg(
                 user_id=int(user_id),
-                message=panel_segment(title, content, record, icon=icon),
+                message=segment,
             )
         except Exception as exc:
             logger.debug(f"\u53d1\u9001\u6597\u6cd5\u51c6\u5907\u79c1\u804a\u5931\u8d25: {user_id} {exc}")
@@ -1760,9 +1755,10 @@ async def send_mystic_prepare_cards(
         record, nickname, prepare_hint, monster_info
     ):
         try:
+            segment = await render_in_thread(panel_segment, title, content, record, icon=icon)
             await bot.send_private_msg(
                 user_id=int(user_id),
-                message=panel_segment(title, content, record, icon=icon),
+                message=segment,
             )
         except Exception as exc:
             logger.debug(f"发送秘境战备私聊失败: {user_id} {exc}")
@@ -1834,7 +1830,8 @@ async def build_normal_duel_image(result: dict[str, Any]) -> bytes:
         fetch_avatar(str(left.get("user_id", ""))),
         fetch_avatar(str(right.get("user_id", ""))),
     )
-    return render_battle_card(
+    return await render_in_thread(
+        render_battle_card,
         result,
         left_avatar=left_avatar,
         right_avatar=right_avatar,
@@ -1860,7 +1857,8 @@ async def finish_normal_duel(group_id: str, session: dict[str, Any]) -> None:
         bot = get_bot()
         await bot.send_group_msg(
             group_id=int(group_id),
-            message=panel_segment(
+            message=await render_in_thread(
+                panel_segment,
                 "\u666e\u901a\u6597\u6cd5",
                 "\u6597\u6cd5\u5df2\u5f00\u59cb\uff0c60\u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u795e\u901a\u3001\u8868\u60c5\u6216\u5373\u5174\u672f\u5f0f\u3002",
                 icon="duel",
@@ -2606,7 +2604,10 @@ async def settle_daily_chat_ranks() -> None:
         )
         try:
             bot = get_bot()
-            await bot.send_group_msg(group_id=int(group_id), message=panel_segment("每日话痨榜", message, icon="rank"))
+            await bot.send_group_msg(
+                group_id=int(group_id),
+                message=await render_in_thread(panel_segment, "每日话痨榜", message, icon="rank"),
+            )
         except Exception as exc:
             logger.exception(f"发送群 {group_id} 每日话痨榜失败")
             # NapCat/QQ 内核 ACK 超时（retcode=1200）时，消息实际往往已送达。
@@ -2732,6 +2733,7 @@ async def stop_admin_http_server() -> None:
     if admin_http_server is not None:
         admin_http_server.stop()
         admin_http_server = None
+    await close_shared_http_client()
     # 后台任务都必须取消并 await，否则停机后仍有协程在写存档 / 下载资源。
     pending = [
         task
@@ -4609,7 +4611,8 @@ async def handle_power_status(matcher: Matcher, event: MessageEvent) -> None:
 async def handle_adventure(matcher: Matcher, event: MessageEvent) -> None:
     await remember_group_member(event)
     record = await store.get_user(event.get_user_id())
-    image = render_adventure_card(
+    image = await render_in_thread(
+        render_adventure_card,
         record=record,
         nickname=nickname_from_event(event),
         width=config.xiuxian_signin_image_width,

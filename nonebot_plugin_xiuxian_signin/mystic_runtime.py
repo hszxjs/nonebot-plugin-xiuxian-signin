@@ -20,6 +20,7 @@ from .mystic_battle import (
     EncounterPhase,
     MysticBattleService,
 )
+from .cards import render_in_thread
 from .mystic_cards import MysticMapRenderModel, MysticMapRenderer, RenderedEdge, RenderedNode
 from .mystic_dungeon import (
     DungeonMode,
@@ -647,7 +648,7 @@ class MysticCommandCoordinator:
         saved = await self.store.create_mystic_run(run, charge.payer_id, charge.token_name)
         await self.store.bind_mystic_private_routes(saved)
         prefix = "天机示警已锁定单人秘境。" if offer.insight else "单人秘境已开启。"
-        return self._map_result(saved, message=prefix)
+        return await self._amap_result(saved, message=prefix)
 
     async def resolve_current_node(self, run_id: str) -> MysticCommandResult:
         run = await self.store.get_mystic_run(run_id)
@@ -740,7 +741,7 @@ class MysticCommandCoordinator:
             message = event_text or "休整完成，队伍可以继续投骰。"
         if content.kind is NodeKind.RANDOM:
             message = f"随机事件揭示为{resolved_kind.value}。{message}"
-        return self._map_result(saved_run, message=message)
+        return await self._amap_result(saved_run, message=message)
     async def _open_boss_encounter(
         self,
         run: MysticDungeonRun,
@@ -852,7 +853,7 @@ class MysticCommandCoordinator:
         if action == "秘境状态":
             return self._status_result(run)
         if action == "秘境地图":
-            return self._map_result(run)
+            return await self._amap_result(run)
         if run.active_encounter_id is None:
             return MysticCommandResult(error="当前没有可操作的秘境遭遇。")
         encounter = await self.store.get_mystic_encounter(run.active_encounter_id)
@@ -1253,7 +1254,7 @@ class MysticCommandCoordinator:
         if parsed.action is MysticGroupAction.CHOOSE_BRANCH:
             return await self._choose_branch(run, user_id, parsed.argument)
         if parsed.action is MysticGroupAction.MAP:
-            return self._map_result(run)
+            return await self._amap_result(run)
         if parsed.action is MysticGroupAction.RESPOND:
             if parsed.argument:
                 return await self._assist_boss(run, user_id, parsed.argument)
@@ -1644,7 +1645,7 @@ class MysticCommandCoordinator:
         )
         saved = await self.store.create_mystic_run(run, charge.payer_id, charge.token_name)
         await self.store.bind_mystic_private_routes(saved)
-        return self._map_result(saved, message="单人秘境已开启。")
+        return await self._amap_result(saved, message="单人秘境已开启。")
 
     async def _select_team(
         self,
@@ -1708,7 +1709,7 @@ class MysticCommandCoordinator:
         )
         saved = await self.store.create_mystic_run(run, charge.payer_id, charge.token_name)
         await self.store.bind_mystic_private_routes(saved)
-        return self._map_result(saved, message="单人秘境已开启。")
+        return await self._amap_result(saved, message="单人秘境已开启。")
 
     async def _create_team(
         self,
@@ -1823,7 +1824,7 @@ class MysticCommandCoordinator:
         )
         saved = await self.store.create_mystic_run(run, charge.payer_id, charge.token_name)
         await self.store.bind_mystic_private_routes(saved)
-        return self._map_result(saved, message="秘境已开启。")
+        return await self._amap_result(saved, message="秘境已开启。")
 
     async def _roll(
         self,
@@ -1850,7 +1851,7 @@ class MysticCommandCoordinator:
                 resolved,
                 message=f"{movement_message}\n{resolved.message}".strip(),
             )
-        return self._map_result(
+        return await self._amap_result(
             saved,
             message=movement_message,
             footer_notice=f"掷出 {dice_value} 点",
@@ -1879,7 +1880,7 @@ class MysticCommandCoordinator:
                 resolved,
                 message=f"{movement_message}\n{resolved.message}".strip(),
             )
-        return self._map_result(saved, message=movement_message)
+        return await self._amap_result(saved, message=movement_message)
 
     async def _group_run(
         self,
@@ -1914,6 +1915,16 @@ class MysticCommandCoordinator:
             run=run,
             updated_revision=run.revision,
         )
+
+    async def _amap_result(
+        self,
+        run: MysticDungeonRun,
+        *,
+        message: str = "",
+        footer_notice: str = "",
+    ) -> MysticCommandResult:
+        """_map_result 的异步版：渲染+PNG 编码是 CPU 密集，放到专用线程池。"""
+        return await render_in_thread(self._map_result, run, message=message, footer_notice=footer_notice)
 
     def _map_result(
         self,
