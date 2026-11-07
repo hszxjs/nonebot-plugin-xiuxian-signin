@@ -211,7 +211,7 @@ from .commands import doudizhu as _doudizhu_cmd_module  # noqa: E402,F401
 from .commands.doudizhu import is_doudizhu_command_text  # noqa: E402
 _doudizhu_cmd_module._g = sys.modules[__name__]  # noqa: E402  # 注入入口模块供延迟访问 helper
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 PICMENU_NEXT_FUNCS = [
     {

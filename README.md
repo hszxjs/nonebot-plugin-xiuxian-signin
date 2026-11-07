@@ -4,16 +4,20 @@
 
 ## 安装
 
-使用 NB-CLI：
+> 插件尚未发布到 PyPI，当前请从 GitHub Release 安装；发布 PyPI 后本节会恢复 `pip install` 说明。
+
+从 [Releases](https://github.com/hszxjs/nonebot-plugin-xiuxian-signin/releases) 下载最新版的 wheel 安装：
 
 ```bash
-nb plugin install nonebot-plugin-xiuxian-signin
+pip install ./nonebot_plugin_xiuxian_signin-<版本>-py3-none-any.whl
 ```
 
-或使用 pip：
+同一 Release 中的 `mystic_maps.zip` 是秘境背景图资源包（约 200 MB，见下文「资源包」），机器人首次启动会自动下载；离线环境可提前下载后按「资源包」小节放置。
+
+也可以直接从仓库源码安装：
 
 ```bash
-pip install nonebot-plugin-xiuxian-signin
+pip install git+https://github.com/hszxjs/nonebot-plugin-xiuxian-signin.git
 ```
 
 在 NoneBot 项目中加载：
@@ -42,12 +46,15 @@ plugins = ["nonebot_plugin_xiuxian_signin"]
 | `xiuxian_signin_font_path` | 空 | 自定义常规字体路径 |
 | `xiuxian_signin_bold_font_path` | 空 | 自定义粗体字体路径 |
 | `xiuxian_signin_admin_enabled` | `true` | 是否启动网页后台 |
-| `xiuxian_signin_admin_token` | 空 | 后台访问 Token，空表示不校验 |
 | `xiuxian_signin_admin_path` | `/xiuxian-admin` | 后台路径 |
-| `xiuxian_signin_admin_host` | `0.0.0.0` | 后台监听地址 |
-| `xiuxian_signin_admin_port` | `8081` | 后台端口 |
+| `xiuxian_signin_admin_host` | `0.0.0.0` | 独立端口模式下的后台监听地址 |
+| `xiuxian_signin_admin_port` | `8081` | 独立端口模式下的后台端口 |
+| `xiuxian_signin_asset_url` | 空 | 秘境资源包下载地址；留空用官方 Release，可指向自建镜像或本地 zip（离线部署） |
+| `xiuxian_signin_asset_auto_download` | `true` | 启动时自动下载缺失的秘境背景图资源包 |
 
 插件包内统一使用 `assets/fonts/HarmonyOS_Sans_SC.ttf`。如需覆盖字体，请使用上方字体路径配置。
+
+网页后台使用账号密码登录（HttpOnly 会话 Cookie），不再使用访问 Token。首次启动会自动创建管理员账号并在日志中打印初始密码，登录后强制修改；也可通过环境变量 `XIUXIAN_ADMIN_USER` / `XIUXIAN_ADMIN_PASSWORD` 指定初始账号。
 
 ## 快速开始
 
@@ -77,13 +84,33 @@ plugins = ["nonebot_plugin_xiuxian_signin"]
 
 ## 网页后台
 
-启用后访问：
+后台优先挂载到 NoneBot 主服务的同一端口（FastAPI driver），访问：
+
+```text
+http://<NoneBot主机>:<NoneBot端口>/xiuxian-admin
+```
+
+若 driver 不支持挂载，则回退为独立端口（`xiuxian_signin_admin_host` / `xiuxian_signin_admin_port`，默认 `0.0.0.0:8081`）：
 
 ```text
 http://<NoneBot主机>:8081/xiuxian-admin
 ```
 
-后台可查看玩家档案、备份数据、编辑玩家 JSON、查看物品目录、调整灵器规则、调整秘境掉落和管理御兽秘境卡牌。设置了 `xiuxian_signin_admin_token` 时，页面或 API 请求需要提供 Token。
+后台使用账号密码登录（HttpOnly 会话 Cookie，不用 Token、不进 URL）。首次启动会在日志中打印一次性初始账号密码（默认用户名 `admin`，登录后强制修改），或用环境变量 `XIUXIAN_ADMIN_USER` / `XIUXIAN_ADMIN_PASSWORD` 指定。
+
+后台可查看玩家档案、备份数据、编辑玩家 JSON、查看物品目录、调整灵器规则、调整秘境掉落和管理御兽秘境卡牌；改配置、改存档、备份等敏感操作均写入审计日志，存档与配置写入前自动留快照（可用于回退）。
+
+## 资源包
+
+`assets/mystic_maps/backgrounds/` 下的 26 张秘境背景原图（约 200 MB）**不打进安装包**（PyPI 单文件上限 100 MB），随 Release 以 `mystic_maps.zip` 分发。安装插件后首次启动会自动后台下载并逐张校验 SHA256，下载期间秘境使用程序化占位背景，不影响其他功能。
+
+三种提供方式（优先级从高到低）：
+
+1. 数据目录 `data_dir/assets/mystic_maps/` 里已有背景图（自动下载或手工放置）；
+2. 源码仓库内的 `assets/mystic_maps/`（开发环境无需下载）；
+3. 都没有 → 使用占位背景出图，并在日志提示。
+
+离线/内网环境：把 Release 的 `mystic_maps.zip` 提前下载好，将配置项 `xiuxian_signin_asset_url` 指向该 zip 的本地路径（或自建镜像 URL），启动即安装。
 
 ## 数据与资源
 
@@ -94,11 +121,18 @@ http://<NoneBot主机>:8081/xiuxian-admin
 ## 开发校验
 
 ```bash
-python -m unittest discover -s tests -v
-python -m py_compile __init__.py admin.py admin_dashboard.py beast_realm.py beast_realm_cards.py cards.py character_assets.py config.py domain.py storage.py tests/test_admin_routes.py tests/test_admin_dashboard.py tests/test_domain_features.py tests/test_xiuxian_admin_rewrite.py
+python -m pytest tests/ -q
+pnpm --dir webui typecheck
 pnpm --dir webui test
+pnpm --dir webui lint
 pnpm --dir webui build
-python tools/render_adventure_preview.py
+python -m build
+python scripts/check_wheel_contents.py dist/*.whl
+python scripts/build_asset_bundle.py --output dist/mystic_maps.zip
 ```
+
+- pytest 全量单测（含资源包、并发事务、配置 schema 用例）；
+- `check_wheel_contents.py` 校验 wheel：体积上限、秘境背景不进包、事件表/日历/图标/后台 SPA 完整；
+- `build_asset_bundle.py` 产出随 Release 分发的 `mystic_maps.zip`（26 张背景，约 200 MB）。
 
 预览输出在 `build/previews/`。发布前请确认 `git status --short` 中没有误加入 `build/`、调试图、预览图或临时报告。
