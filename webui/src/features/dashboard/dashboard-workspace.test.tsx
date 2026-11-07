@@ -80,9 +80,13 @@ const dashboard: DashboardPayload = {
 describe("DashboardWorkspace", () => {
   afterEach(() => cleanup())
 
-  it("renders snapshot operations data with Ant Design cards and a realm chart", () => {
+  it("renders snapshot operations data with Ant Design cards and a realm chart", async () => {
     const { container } = render(
-      <DashboardWorkspace dashboard={dashboard} onBackup={vi.fn()} />,
+      <DashboardWorkspace
+        dashboard={dashboard}
+        onBackup={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
     )
 
     expect(
@@ -90,9 +94,10 @@ describe("DashboardWorkspace", () => {
     ).toBeInTheDocument()
     expect(screen.getByText("玩家总数")).toBeInTheDocument()
     expect(screen.getAllByText("筑基境").length).toBeGreaterThan(0)
-    expect(screen.getByTestId("realm-distribution-chart")).toHaveTextContent(
-      "筑基境:2",
-    )
+    // R-14：charts 改为 React.lazy 懒加载，图表在 Suspense 解析后出现
+    expect(
+      await screen.findByTestId("realm-distribution-chart"),
+    ).toHaveTextContent("筑基境:2")
     expect(screen.getByText("云行")).toBeInTheDocument()
     expect(screen.getByText("沉舟")).toBeInTheDocument()
     expect(container.querySelector("table")).toBeNull()
@@ -102,7 +107,11 @@ describe("DashboardWorkspace", () => {
 
   it("keeps the backup action behind an alert dialog trigger", () => {
     const { container } = render(
-      <DashboardWorkspace dashboard={dashboard} onBackup={vi.fn()} />,
+      <DashboardWorkspace
+        dashboard={dashboard}
+        onBackup={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
     )
     const actionCard = screen.getByTestId("dashboard-maintenance-card")
 

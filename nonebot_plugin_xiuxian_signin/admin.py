@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import os
 import shutil
 import threading
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import unquote
 
 import uvicorn
@@ -36,7 +37,13 @@ from .mystic_dungeon import (
     MysticTemplateCatalog,
     default_mystic_gameplay_config,
 )
-from .storage import JsonStore, StorageCorruptError, atomic_write_json, capture_before_write
+from .storage import (
+    JsonStore,
+    StorageCorruptError,
+    atomic_write_json,
+    capture_before_write,
+    read_snapshot,
+)
 
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
@@ -267,6 +274,25 @@ class AdminManager:
             env_password=os.environ.get("XIUXIAN_ADMIN_PASSWORD", ""),
         )
         self.timezone = str(timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+        # 重负载只读 payload 的缓存：键 = 配置 revision（保存配置时自增即失效）。
+        # 缓存值视为只读（调用方只序列化，不修改），避免每次请求重建 ~8000 条目录。
+        self._payload_cache: dict[str, tuple[int, Any]] = {}
+
+    def _config_revision(self) -> int:
+        revision = self.load_config().get("revision")
+        try:
+            return int(revision)
+        except (TypeError, ValueError):
+            return -1
+
+    def _cached_payload(self, key: str, builder: Callable[[], Any]) -> Any:
+        revision = self._config_revision()
+        cached = self._payload_cache.get(key)
+        if cached is not None and cached[0] == revision:
+            return cached[1]
+        value = builder()
+        self._payload_cache[key] = (revision, value)
+        return value
 
     def today(self) -> date:
         try:
@@ -331,6 +357,60 @@ class AdminManager:
         # reason="config" 会强制留快照（不受 5 分钟节流限制），使后台每次改配置
         # 都能回到上一版，R-15 的一键回滚直接复用这批快照。
         atomic_write_json(self.config_path, validated, snapshot_reason="config")
+        return validated
+
+    def list_config_snapshots(self, limit: int = 10) -> list[dict[str, Any]]:
+        """最近的配置快照（新 → 旧），供 R-15 回滚入口选择。"""
+        snapshots = self.store.list_snapshots(self.config_path)
+        result: list[dict[str, Any]] = []
+        for snapshot in reversed(snapshots[-max(1, int(limit)) :]):
+            try:
+                stat = snapshot.stat()
+            except OSError:
+                continue
+            result.append(
+                {
+                    "name": snapshot.name,
+                    # 快照时间 = 文件 mtime，本来就是服务器本地时间，直接展示；
+                    # 不用 ZoneInfo（Windows 无 tzdata 时会炸）。
+                    "captured_at": datetime.fromtimestamp(stat.st_mtime).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                    "size": stat.st_size,
+                }
+            )
+        return result
+
+    def rollback_config(self, snapshot_name: str) -> dict[str, Any]:
+        """把 admin_config.json 恢复到指定快照（R-15）。
+
+        流程：读快照（白名单校验防穿越）→ 走与保存一致的迁移+校验管线 →
+        当前配置先留 ``pre-rollback`` 快照 → 原子写回 → revision 保持单调
+        递增（乐观锁基准不被回拨）→ 应用到运行时 → 审计。
+        """
+        try:
+            raw = read_snapshot(self.config_path, str(snapshot_name))
+        except (ValueError, FileNotFoundError) as exc:
+            raise ValueError(str(exc)) from exc
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"快照内容不是合法 JSON：{snapshot_name}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"快照内容不是配置对象：{snapshot_name}")
+
+        current_revision = self._config_revision()
+        merged = json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
+        deep_update(merged, data)
+        merged, _notes = migrate_config(merged)
+        merged = prune_unknown_config(merged)
+        _normalize_mystic_theme_config(merged)
+        merged["revision"] = current_revision + 1
+        validated = validate_config(merged)
+        # 当前（可能改坏的）配置在覆盖前留一份，回滚本身也可撤销。
+        atomic_write_json(self.config_path, validated, snapshot_reason="pre-rollback")
+        self.apply_config()
+        self.audit("admin.rollback_config", snapshot=str(snapshot_name))
         return validated
 
     def audit(self, event: str, **fields: Any) -> None:
@@ -536,6 +616,9 @@ class AdminManager:
         return self.load_config().get("equipment_rules", {})
 
     def equipment_meta(self) -> dict[str, Any]:
+        return self._cached_payload("equipment_meta", self._build_equipment_meta)
+
+    def _build_equipment_meta(self) -> dict[str, Any]:
         return {
             "realms": [{"index": index, "name": name} for index, name in enumerate(domain.REALMS)],
             "tiers": list(domain.ARTIFACT_REALM_BOUND_TIERS),
@@ -558,11 +641,8 @@ class AdminManager:
 
     def dashboard_payload(self) -> dict[str, Any]:
         users = self.store.read_json_sync(self.store.user_file_path)
-        realm_names = {
-            int(item["index"]): str(item["name"])
-            for item in self.equipment_meta().get("realms", [])
-            if isinstance(item, dict) and "index" in item and "name" in item
-        }
+        # 只需要境界名清单：直接取 domain.REALMS，避免顺带构建全量灵器目录。
+        realm_names = dict(enumerate(domain.REALMS))
 
         def battle_power_resolver(user_id: str, raw: dict[str, Any]) -> int:
             data = dict(raw)
@@ -615,6 +695,9 @@ class AdminManager:
         return items
 
     def item_payload(self) -> dict[str, Any]:
+        return self._cached_payload("item_payload", self._build_item_payload)
+
+    def _build_item_payload(self) -> dict[str, Any]:
         items = self.item_catalog()
         return {"ok": True, "items": items, "meta": self.item_meta(items)}
 
@@ -667,6 +750,21 @@ scoped_admin_index_html = _scoped_admin_index_html
 
 def _json_error(message: str, status_code: int) -> JSONResponse:
     return JSONResponse({"ok": False, "error": message}, status_code=status_code)
+
+
+# 超过该体积且客户端支持 gzip 时，路由内手动压缩后再回包。不能挂
+# GZipMiddleware：鉴权走路由级依赖，路由会被复制到 driver 的 server_app，
+# app 级中间件不会跟着路由走（见 install_admin_routes）。
+_GZIP_THRESHOLD_BYTES = 64 * 1024
+
+
+def _json_response_maybe_gzip(request: Request, payload: Any) -> Response:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Vary": "Accept-Encoding"}
+    if len(body) >= _GZIP_THRESHOLD_BYTES and "gzip" in str(request.headers.get("accept-encoding", "")).lower():
+        body = gzip.compress(body)
+        headers["Content-Encoding"] = "gzip"
+    return Response(content=body, media_type="application/json", headers=headers)
 
 
 async def _json_object_or_error(request: Request, object_error: str) -> tuple[dict[str, Any] | None, JSONResponse | None]:
@@ -840,6 +938,25 @@ def create_admin_app(
         manager.audit("admin.save_config", ip=_client_key(request), revision=revision)
         return {"ok": True, "config": manager.load_config()}
 
+    async def config_snapshots() -> Any:
+        return {"ok": True, "snapshots": manager.list_config_snapshots()}
+
+    async def rollback_config(
+        request: Request,
+    ) -> Any:
+        data, error = await _json_object_or_error(request, "rollback payload must be an object")
+        if error is not None:
+            return error
+        assert data is not None
+        snapshot_name = str(data.get("snapshot") or "")
+        if not snapshot_name:
+            return _json_error("缺少 snapshot 字段", 400)
+        try:
+            validated = manager.rollback_config(snapshot_name)
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
+        return {"ok": True, "config": validated}
+
     async def list_players(
         q: str = Query(default=""),
     ) -> Any:
@@ -866,8 +983,8 @@ def create_admin_app(
     async def backup() -> Any:
         return manager.backup_users()
 
-    async def items() -> Any:
-        return manager.item_payload()
+    async def items(request: Request) -> Any:
+        return _json_response_maybe_gzip(request, manager.item_payload())
 
     async def beast_cards() -> Any:
         return manager.beast_card_payload()
@@ -889,8 +1006,11 @@ def create_admin_app(
         manager.audit("admin.save_mystic", ip=_client_key(request))
         return {"ok": True, "mystic": payload}
 
-    async def equipment_rules() -> Any:
-        return {"ok": True, "rules": manager.equipment_rules(), "meta": manager.equipment_meta()}
+    async def equipment_rules(request: Request) -> Any:
+        return _json_response_maybe_gzip(
+            request,
+            {"ok": True, "rules": manager.equipment_rules(), "meta": manager.equipment_meta()},
+        )
 
     async def item_icon(
         icon_path: str,
@@ -949,6 +1069,18 @@ def create_admin_app(
     )
     app.add_api_route(f"{normalized_base_path}/api/config", get_config, methods=["GET"], dependencies=auth_guard)
     app.add_api_route(f"{normalized_base_path}/api/config", put_config, methods=["PUT"], dependencies=auth_guard)
+    app.add_api_route(
+        f"{normalized_base_path}/api/config/snapshots",
+        config_snapshots,
+        methods=["GET"],
+        dependencies=auth_guard,
+    )
+    app.add_api_route(
+        f"{normalized_base_path}/api/config/rollback",
+        rollback_config,
+        methods=["POST"],
+        dependencies=auth_guard,
+    )
     app.add_api_route(f"{normalized_base_path}/api/players", list_players, methods=["GET"], dependencies=auth_guard)
     app.add_api_route(
         f"{normalized_base_path}/api/players/{{user_id}}", get_player, methods=["GET"], dependencies=auth_guard

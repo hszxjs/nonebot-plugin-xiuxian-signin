@@ -28,6 +28,7 @@ from .snapshots import (
     AUTO_REASON,
     capture_before_write,
     list_snapshots as _list_snapshots,
+    read_snapshot,
     snapshot_dir as _snapshot_dir,
 )
 

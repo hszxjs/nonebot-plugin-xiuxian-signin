@@ -35,6 +35,7 @@ import { EmptyPanel, ErrorPanel, LoadingPanel } from "@/features/shared/ui"
 import {
   createBackup,
   logout,
+  rollbackConfig,
   saveConfig,
   saveMysticConfig,
   savePlayer,
@@ -86,6 +87,9 @@ function DashboardPage() {
   return (
     <DashboardWorkspace
       dashboard={data}
+      onRefresh={() => {
+        mutate()
+      }}
       onBackup={() => {
         createBackup()
           .then((result) => {
@@ -230,6 +234,16 @@ function ConfigPage() {
             return mutate()
           })
           .catch((saveError: unknown) => message.error(String(saveError)))
+      }}
+      onRollback={(snapshot) => {
+        rollbackConfig(snapshot)
+          .then(() => {
+            message.success(`配置已回滚（来自 ${snapshot}）`)
+            return mutate()
+          })
+          .catch((rollbackError: unknown) =>
+            message.error(String(rollbackError)),
+          )
       }}
     />
   )

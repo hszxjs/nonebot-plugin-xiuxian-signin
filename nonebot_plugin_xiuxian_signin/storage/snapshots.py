@@ -129,3 +129,22 @@ def reset_throttle() -> None:
     """清空节流状态（仅测试与手工排障使用）。"""
     with _lock:
         _last_capture.clear()
+
+
+def read_snapshot(path: Path, name: str) -> bytes:
+    """读取指定快照内容（R-15 回滚用）。
+
+    ``name`` 必须是快照目录内的普通文件名：拒绝任何路径分隔符，且解析后必须
+    仍位于快照目录内、后缀与原文件一致——后台会把用户提交的名字直接拼进来，
+    这里是防路径穿越的唯一关口。
+    """
+    target = Path(path)
+    if not isinstance(name, str) or not name or Path(name).name != name:
+        raise ValueError(f"非法快照名：{name!r}")
+    directory = snapshot_dir(target).resolve()
+    candidate = (directory / name).resolve()
+    if candidate.parent != directory or candidate.suffix != target.suffix:
+        raise ValueError(f"非法快照名：{name!r}")
+    if not candidate.is_file():
+        raise FileNotFoundError(f"快照不存在：{name}")
+    return candidate.read_bytes()

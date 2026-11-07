@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import math
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Callable, Final
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -23,6 +24,28 @@ from .mystic_dungeon import NodeKind
 _NO_TOKEN_BG_PATH = Path(__file__).parent / "assets" / "mystic_dungeon_ui" / "no_token_background.png"
 _TOKEN_NORMAL_ICON_PATH = Path(__file__).parent / "assets" / "mystic_dungeon_ui" / "token_normal.png"
 _TOKEN_HIGH_ICON_PATH = Path(__file__).parent / "assets" / "mystic_dungeon_ui" / "token_high.png"
+
+# 打开+LANCZOS 缩放是渲染热路径里最贵的一步；缓存 fitted 结果（键含 mtime_ns，
+# 资源包下载替换后自动失效）。调用方会在图上继续作画，因此每次返回 .copy()。
+_FITTED_IMAGE_CACHE: OrderedDict[tuple[str, int, int, int], Image.Image] = OrderedDict()
+_FITTED_IMAGE_CACHE_MAX = 16
+
+
+def _cached_fitted_image(path: Path, size: int | None, builder: Callable[[], Image.Image]) -> Image.Image:
+    try:
+        mtime_ns = path.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = 0
+    key = (str(path), mtime_ns, size or 0, 0)
+    cached = _FITTED_IMAGE_CACHE.get(key)
+    if cached is not None:
+        _FITTED_IMAGE_CACHE.move_to_end(key)
+        return cached.copy()
+    image = builder()
+    _FITTED_IMAGE_CACHE[key] = image
+    while len(_FITTED_IMAGE_CACHE) > _FITTED_IMAGE_CACHE_MAX:
+        _FITTED_IMAGE_CACHE.popitem(last=False)
+    return image.copy()
 
 
 @dataclass(frozen=True)
@@ -227,20 +250,23 @@ class MysticMapRenderer:
         )
 
     def _load_background(self, path: Path) -> Image.Image:
-        try:
-            with Image.open(path) as source:
-                background = source.convert("RGB")
-        except (FileNotFoundError, OSError):
-            if not self._allow_placeholder_background:
-                raise
-            background = self._placeholder_background()
-        if background.size != self.SOURCE_SIZE:
-            background = ImageOps.fit(
-                background,
-                self.SOURCE_SIZE,
-                method=Image.Resampling.LANCZOS,
-            )
-        return background
+        def build() -> Image.Image:
+            try:
+                with Image.open(path) as source:
+                    background = source.convert("RGB")
+            except (FileNotFoundError, OSError):
+                if not self._allow_placeholder_background:
+                    raise
+                background = self._placeholder_background()
+            if background.size != self.SOURCE_SIZE:
+                background = ImageOps.fit(
+                    background,
+                    self.SOURCE_SIZE,
+                    method=Image.Resampling.LANCZOS,
+                )
+            return background
+
+        return _cached_fitted_image(path, self.SOURCE_SIZE[0], build)
 
     def _placeholder_background(self) -> Image.Image:
         image = Image.new("RGB", self.SOURCE_SIZE, (18, 30, 38))
@@ -446,13 +472,19 @@ class MysticMapRenderer:
     def _load_portrait(self, path: Path | None, size: int) -> Image.Image:
         portrait: Image.Image | None = None
         if path is not None:
-            try:
+
+            def build() -> Image.Image:
                 with Image.open(path) as source:
-                    portrait = ImageOps.fit(
+                    return ImageOps.fit(
                         source.convert("RGBA"),
                         (size, size),
                         method=Image.Resampling.LANCZOS,
                     )
+
+            try:
+                # 只缓存打开+缩放的结果；下面的 putalpha/描环会改动图像，
+                # _cached_fitted_image 返回的是副本，改动不会污染缓存。
+                portrait = _cached_fitted_image(path, size, build)
             except (FileNotFoundError, OSError):
                 portrait = None
         if portrait is None:
@@ -500,15 +532,19 @@ class MysticMapRenderer:
 
 
 def _load_token_icon(path: Path, size: int) -> Image.Image:
-    """加载令牌图标并缩放到指定尺寸,失败时返回占位图。"""
-    try:
-        with Image.open(path) as source:
-            icon = source.convert("RGBA")
-    except (FileNotFoundError, OSError):
-        icon = Image.new("RGBA", (128, 128), (90, 140, 150, 255))
-    if icon.size != (size, size):
-        icon = icon.resize((size, size), Image.Resampling.LANCZOS)
-    return icon
+    """加载令牌图标并缩放到指定尺寸,失败时返回占位图（命中缓存时返回副本）。"""
+
+    def build() -> Image.Image:
+        try:
+            with Image.open(path) as source:
+                icon = source.convert("RGBA")
+        except (FileNotFoundError, OSError):
+            icon = Image.new("RGBA", (128, 128), (90, 140, 150, 255))
+        if icon.size != (size, size):
+            icon = icon.resize((size, size), Image.Resampling.LANCZOS)
+        return icon
+
+    return _cached_fitted_image(path, size, build)
 
 
 def render_no_token_panel(

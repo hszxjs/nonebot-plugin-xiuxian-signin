@@ -242,8 +242,11 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 }
 
 export function useDashboard() {
+  // R-12：dashboard 后端每次全量重算（读 users.json + 逐玩家战力），
+  // 10s 轮询 × 多开页面是纯浪费；降为 60s + 页头手动刷新（App.tsx mutate）。
   return useSWR<DashboardPayload>("dashboard", fetchJson, {
-    refreshInterval: 10_000,
+    refreshInterval: 60_000,
+    revalidateOnFocus: false,
   })
 }
 
@@ -284,8 +287,31 @@ export function useConfig() {
   return useSWR<ConfigPayload>("config", fetchJson)
 }
 
+export interface ConfigSnapshot {
+  name: string
+  captured_at: string
+  size: number
+}
+
+export interface ConfigSnapshotsPayload {
+  ok: boolean
+  snapshots: ConfigSnapshot[]
+}
+
+export function useConfigSnapshots() {
+  return useSWR<ConfigSnapshotsPayload>("config/snapshots", fetchJson)
+}
+
 export function saveConfig(config: ConfigPayload["config"]) {
   return apiJson(api.put("config", { json: config }).json<ConfigPayload>())
+}
+
+export function rollbackConfig(snapshot: string) {
+  return apiJson(
+    api
+      .post("config/rollback", { json: { snapshot } })
+      .json<{ ok: boolean; config: ConfigPayload["config"] }>(),
+  )
 }
 
 export function savePlayer(

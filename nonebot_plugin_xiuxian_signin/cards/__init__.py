@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import calendar
+import functools
 import json
+import time
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
@@ -162,6 +167,7 @@ def set_font_paths(font_path: Optional[str], bold_font_path: Optional[str]) -> N
     global _configured_font_path, _configured_bold_font_path
     _configured_font_path = Path(font_path) if font_path else None
     _configured_bold_font_path = Path(bold_font_path) if bold_font_path else None
+    _load_font_cached.cache_clear()
 
 
 def font_candidates(bold: bool) -> list[Path]:
@@ -181,11 +187,16 @@ def mix(left: Color, right: Color, ratio: float) -> Color:
     return tuple(int(left[i] * (1 - ratio) + right[i] * ratio) for i in range(3))
 
 
+@functools.lru_cache(maxsize=64)
+def _load_font_cached(path_str: str, size: int, bold: bool) -> ImageFont.ImageFont:
+    return ImageFont.truetype(path_str, size=size)
+
+
 def load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     for path in font_candidates(bold):
         if path.exists():
             try:
-                return ImageFont.truetype(str(path), size=size)
+                return _load_font_cached(str(path.resolve()), size, bold)
             except OSError:
                 continue
     return ImageFont.load_default()
@@ -273,16 +284,51 @@ def make_background(width: int, height: int, accent: str) -> Image.Image:
     return Image.alpha_composite(image, layer)
 
 
+# 面板背景缓存：键含 mtime_ns，资源包下载替换后自动失效；值只读，返回 .copy()
+# （调用方会在背景上作画，多线程渲染下共享原对象会互相涂改）。
+_PANEL_BACKGROUND_CACHE: OrderedDict[tuple[str, int, int, int, str], tuple[Image.Image, bool]] = OrderedDict()
+_PANEL_BACKGROUND_CACHE_MAX = 8
+
+
 def load_panel_background(path: Path, width: int, height: int, accent: str) -> tuple[Image.Image, bool]:
+    try:
+        mtime_ns = path.stat().st_mtime_ns if path.exists() else 0
+    except OSError:
+        mtime_ns = 0
+    key = (str(path), mtime_ns, width, height, accent)
+    cached = _PANEL_BACKGROUND_CACHE.get(key)
+    if cached is not None:
+        _PANEL_BACKGROUND_CACHE.move_to_end(key)
+        image, used = cached
+        return image.copy(), used
+
     if path.exists():
         try:
             image = Image.open(path).convert("RGBA")
             if image.size != (width, height):
                 image = ImageOps.fit(image, (width, height), method=Image.Resampling.LANCZOS)
-            return image, True
+            used = True
         except OSError:
-            pass
-    return make_xiuxian_background(width, height, accent), False
+            image, used = None, False
+    else:
+        image, used = None, False
+    if image is None:
+        image = make_xiuxian_background(width, height, accent)
+
+    _PANEL_BACKGROUND_CACHE[key] = (image, used)
+    while len(_PANEL_BACKGROUND_CACHE) > _PANEL_BACKGROUND_CACHE_MAX:
+        _PANEL_BACKGROUND_CACHE.popitem(last=False)
+    return image.copy(), used
+
+
+# 渲染专用线程池：PIL 是 CPU 密集，限 2 并发，避免多群同时出图把机器吃满。
+_RENDER_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="xiuxian-render")
+
+
+async def render_in_thread(func: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Any:
+    """把 CPU 密集的 PIL 渲染调度到专用线程池，事件循环保持响应。"""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_RENDER_EXECUTOR, functools.partial(func, *args, **kwargs))
 
 
 def text_panel_background_path(icon: str) -> Optional[Path]:

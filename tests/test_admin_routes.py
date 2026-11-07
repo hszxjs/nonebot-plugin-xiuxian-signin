@@ -647,5 +647,179 @@ class AdminRouteTests(unittest.TestCase):
             admin.ADMIN_WEB_INDEX = old_index
 
 
+class PayloadCacheAndGzipTests(unittest.TestCase):
+    """R-12：重负载接口的结果缓存与路由级 gzip。"""
+
+    def _manager(self, tmp: str) -> Any:
+        data_dir = Path(tmp)
+        return admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+
+    def test_item_payload_cache_hits_and_invalidates_on_config_save(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            calls = {"n": 0}
+            original = manager._build_item_payload
+
+            def counting() -> Any:
+                calls["n"] += 1
+                return original()
+
+            manager._build_item_payload = counting  # type: ignore[method-assign]
+
+            first = manager.item_payload()
+            second = manager.item_payload()
+            self.assertEqual(calls["n"], 1, "同 revision 下二次请求必须命中缓存")
+            self.assertIs(first, second)
+
+            # 保存配置 → revision 自增 → 缓存必须失效重建
+            manager.save_config(manager.load_config())
+            manager.item_payload()
+            self.assertEqual(calls["n"], 2, "配置保存后缓存必须失效")
+
+    def test_equipment_meta_cache_and_dashboard_shortcut(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            calls = {"n": 0}
+            original = manager._build_equipment_meta
+
+            def counting() -> Any:
+                calls["n"] += 1
+                return original()
+
+            manager._build_equipment_meta = counting  # type: ignore[method-assign]
+
+            meta1 = manager.equipment_meta()
+            meta2 = manager.equipment_meta()
+            self.assertEqual(calls["n"], 1)
+            self.assertIs(meta1, meta2)
+
+            # R-12：dashboard 只需要境界名，不得再触发全量灵器目录构建
+            self.assertEqual(calls["n"], 1)
+            payload = manager.dashboard_payload()
+            self.assertEqual(calls["n"], 1, "dashboard_payload 不得再调用 equipment_meta")
+            self.assertEqual(payload["metrics"]["total_players"], 0)
+            self.assertEqual(payload["mode"], "snapshot")
+
+    def test_items_route_gzips_large_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            app = admin.create_admin_app(manager=manager)
+            client = _manager_client(app, manager)
+
+            response = client.get(
+                "/xiuxian-admin/api/items",
+                headers={"Accept-Encoding": "gzip"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers.get("content-encoding"), "gzip")
+            self.assertIn("Accept-Encoding", response.headers.get("vary", ""))
+            items = response.json()["items"]
+            self.assertGreater(len(items), 0)
+
+            # 小 payload 不压缩
+            small = client.get(
+                "/xiuxian-admin/api/dashboard",
+                headers={"Accept-Encoding": "gzip"},
+            )
+            self.assertEqual(small.status_code, 200)
+            self.assertNotIn("content-encoding", small.headers)
+
+
+class ConfigRollbackTests(unittest.TestCase):
+    """R-15：配置快照回滚（列表 + 恢复 + 防穿越 + 审计）。"""
+
+    def _manager(self, tmp: str) -> Any:
+        data_dir = Path(tmp)
+        return admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+
+    def test_rollback_restores_snapshot_and_bumps_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+
+            config = manager.load_config()
+            config["signin"]["extra_fishing_chance_rate"] = 0.25
+            manager.save_config(config)
+            config = manager.load_config()
+            config["signin"]["extra_fishing_chance_rate"] = 0.5
+            manager.save_config(config)
+            self.assertEqual(manager.load_config()["signin"]["extra_fishing_chance_rate"], 0.5)
+
+            snapshots = manager.list_config_snapshots()
+            self.assertGreaterEqual(len(snapshots), 2)
+            # 最新在前
+            self.assertGreaterEqual(snapshots[0]["captured_at"], snapshots[-1]["captured_at"])
+
+            oldest = snapshots[-1]["name"]
+            revision_before = manager.load_config()["revision"]
+            restored = manager.rollback_config(oldest)
+
+            self.assertEqual(
+                restored["signin"]["extra_fishing_chance_rate"],
+                0.10,
+                "回滚应恢复快照时的旧值（首版默认 0.10）",
+            )
+            self.assertEqual(
+                manager.load_config()["signin"]["extra_fishing_chance_rate"],
+                0.10,
+            )
+            self.assertEqual(
+                manager.load_config()["revision"],
+                revision_before + 1,
+                "回滚后 revision 必须单调递增，不回拨乐观锁基准",
+            )
+            # 回滚本身留了 pre-rollback 快照，可再次回滚
+            pre_rollback = [
+                item["name"]
+                for item in manager.list_config_snapshots()
+                if "pre-rollback" in item["name"]
+            ]
+            self.assertTrue(pre_rollback, "回滚动作本身必须留快照")
+            events = [entry["event"] for entry in manager.store.read_audit()]
+            self.assertIn("admin.rollback_config", events)
+
+    def test_rollback_rejects_illegal_snapshot_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            manager.save_config(manager.load_config())
+
+            for name in ("../admin_config.json", "..", "no_such_snapshot.json", ""):
+                with self.subTest(name=name):
+                    with self.assertRaises(ValueError):
+                        manager.rollback_config(name)
+
+    def test_rollback_routes_require_session_and_validate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            manager.save_config(manager.load_config())
+            app = admin.create_admin_app(manager=manager)
+            client = _manager_client(app, manager)
+            anonymous = TestClient(app)
+
+            listed = client.get("/xiuxian-admin/api/config/snapshots")
+            self.assertEqual(listed.status_code, 200)
+            self.assertGreaterEqual(len(listed.json()["snapshots"]), 1)
+
+            denied = anonymous.post(
+                "/xiuxian-admin/api/config/rollback",
+                json={"snapshot": "whatever.json"},
+            )
+            self.assertEqual(denied.status_code, 401)
+
+            denied_list = anonymous.get("/xiuxian-admin/api/config/snapshots")
+            self.assertEqual(denied_list.status_code, 401)
+
+            bad = client.post(
+                "/xiuxian-admin/api/config/rollback",
+                json={"snapshot": "../escape.json"},
+            )
+            self.assertEqual(bad.status_code, 400)
+
+            missing = client.post(
+                "/xiuxian-admin/api/config/rollback",
+                json={"snapshot": "no_such.json"},
+            )
+            self.assertEqual(missing.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()
