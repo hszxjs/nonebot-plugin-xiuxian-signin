@@ -78,6 +78,8 @@ nonebot_plugin_xiuxian_signin = [
     "assets/mystic_maps/manifest.json",
     "assets/mystic_maps/templates.json",
     "assets/mystic_maps/backgrounds/*.png",
+    "assets/mystic_events/*.json",
+    "assets/signin_calendar/*.png",
     "assets/mystic_dungeon_ui/*.png",
 ]
 

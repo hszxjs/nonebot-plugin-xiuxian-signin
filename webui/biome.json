@@ -1,7 +1,12 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
   "files": { "includes": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"] },
-  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "auto"
+  },
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "javascript": {
     "formatter": { "quoteStyle": "double", "semicolons": "asNeeded" }

@@ -43,6 +43,29 @@ describe("apiErrorMessage", () => {
     )
   })
 
+  it("prefers ky's parsed error.data because ky already consumed the body", async () => {
+    // ky v2 在抛出 HTTPError 前已读取响应体（bodyUsed=true），真实报错路径
+    // 只能从 error.data 拿文案；这里复刻该形状，防止回归成 "Request failed (401)"。
+    const response = new Response(
+      JSON.stringify({ ok: false, error: "账号或密码不正确" }),
+      {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      },
+    )
+    await response.text()
+    const error = Object.assign(
+      new Error("Request failed with status code 401"),
+      {
+        name: "HTTPError",
+        response,
+        data: { ok: false, error: "账号或密码不正确" },
+      },
+    )
+
+    await expect(apiErrorMessage(error)).resolves.toBe("账号或密码不正确")
+  })
+
   it("falls back to a generic Error message", async () => {
     await expect(apiErrorMessage(new Error("network down"))).resolves.toBe(
       "network down",
