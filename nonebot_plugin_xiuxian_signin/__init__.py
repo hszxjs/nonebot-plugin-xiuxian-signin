@@ -477,13 +477,9 @@ NORMAL_DUEL_ACTION_SEGMENT_LABELS = {
 NORMAL_DUEL_IGNORED_SEGMENT_TYPES = {"at", "reply", "node"}
 RANK_SETTLE_HOUR = 22
 RANK_SETTLE_MINUTE = 0
-pending_fishing_users: dict[str, float] = {}
-pending_divinations: dict[str, dict[str, Any]] = {}
-normal_duel_queue: dict[str, dict[str, Any]] = {}
-normal_duel_sessions: dict[str, dict[str, Any]] = {}
-doudizhu_tables: dict[str, dict[str, Any]] = {}
-beast_realm_tables: dict[str, dict[str, Any]] = {}
-beast_realm_private_routes: dict[str, str] = {}
+# 共享可变状态（钓鱼待结算、斗法队列、牌桌等）统一定义在 state.py，
+# 此处只沿用上方 `from .state import ...` 的引用。曾经在这里重新赋值为新的
+# 空字典，导致入口模块与 commands/ 子模块各持一份、互不可见（F811）。
 BEAST_REALM_ICON = "beast_realm"
 rank_scheduler_task: Optional[asyncio.Task] = None
 mystic_recovery_task: Optional[asyncio.Task] = None

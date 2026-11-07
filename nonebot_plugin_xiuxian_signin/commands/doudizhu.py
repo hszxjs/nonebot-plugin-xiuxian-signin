@@ -5,7 +5,14 @@
 """
 from __future__ import annotations
 
-from nonebot import on_message
+import asyncio
+import random
+import re
+import time
+from collections import Counter
+from typing import Any, Optional
+
+from nonebot import get_bot, logger, on_message
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent
 from nonebot.matcher import Matcher
 from nonebot.rule import Rule
@@ -413,9 +420,9 @@ async def ddz_send_all_hands(table: dict[str, Any], group_id: str) -> None:
 
 
 async def start_forced_normal_duel(group_id: str, left_id: str, right_id: str, left_name: str, right_name: str) -> str:
-    if group_duel_session(group_id):
+    if _g.group_duel_session(group_id):
         return "本群已有普通斗法进行中，威压约战暂时顺延。"
-    start_at = time.monotonic() + NORMAL_DUEL_PREPARE_SECONDS
+    start_at = time.monotonic() + _g.NORMAL_DUEL_PREPARE_SECONDS
     session = {
         "left_id": str(left_id),
         "right_id": str(right_id),
@@ -423,13 +430,13 @@ async def start_forced_normal_duel(group_id: str, left_id: str, right_id: str, l
         "right_name": right_name,
         "created_at": time.monotonic(),
         "start_at": start_at,
-        "end_at": start_at + NORMAL_DUEL_DURATION_SECONDS,
+        "end_at": start_at + _g.NORMAL_DUEL_DURATION_SECONDS,
         "active": False,
         "actions": {str(left_id): [], str(right_id): []},
     }
     normal_duel_sessions[group_id] = session
-    asyncio.create_task(send_normal_duel_prepare_messages(session))
-    asyncio.create_task(finish_normal_duel(group_id, session))
+    asyncio.create_task(_g.send_normal_duel_prepare_messages(session))
+    asyncio.create_task(_g.finish_normal_duel(group_id, session))
     return f"威压结算：{left_name} 与 {right_name} 将在 1 分钟后强制进行普通斗法。"
 
 
@@ -457,7 +464,7 @@ async def ddz_finish_game(group_id: str, table: dict[str, Any], winner_id: str) 
         lines.append(f"{player.get('name')}｜剩{len(player.get('hand', []))}张｜[{ddz_cards_text(list(player.get('hand', [])))}]")
     duel_info = table.get("pressure_duel")
     if duel_info:
-        duel_message = await _g.start_forced_normal_duel(
+        duel_message = await start_forced_normal_duel(
             group_id,
             str(duel_info.get("left_id")),
             str(duel_info.get("right_id")),
@@ -802,8 +809,8 @@ async def handle_doudizhu(matcher: Matcher, event: GroupMessageEvent) -> None:
         candidate = ddz_player(table, candidate_id)
         challenger_record = await store.get_user(user_id)
         candidate_record = await store.get_user(candidate_id) if candidate and not candidate.get("bot") else None
-        actor_power = battle_power(challenger_record)
-        target_power = battle_power(candidate_record) if candidate_record else 1
+        actor_power = _g.battle_power(challenger_record)
+        target_power = _g.battle_power(candidate_record) if candidate_record else 1
         chance = ddz_pressure_chance(actor_power, target_power, pressure)
         success = random.random() < chance
         action_name = "\u65bd\u52a0\u5a01\u538b\u62a2\u5730\u4e3b" if pressure else "\u62a2\u5730\u4e3b"
