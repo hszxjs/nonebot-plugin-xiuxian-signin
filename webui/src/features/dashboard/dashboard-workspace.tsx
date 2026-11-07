@@ -1,8 +1,14 @@
-import { Bar } from "@ant-design/charts"
-import { Card, List, Progress, Space, Tag, Typography } from "antd"
+import { ReloadOutlined } from "@ant-design/icons"
+import { Button, Card, List, Progress, Space, Tag, Typography } from "antd"
+import { lazy, Suspense } from "react"
 import { ConfirmAction, MetricCard, PageHeader } from "@/features/shared/ui"
 import { formatCompactNumber, formatNumber } from "@/lib/format"
 import type { DashboardPayload, PlayerSummary } from "@/lib/types"
+
+// R-14：@ant-design/charts（charts-vendor 约 1.3MB）仅在 dashboard 渲染时
+// 通过懒加载 chunk 拉取，不再进入首屏。动态 import 的边界是
+// dashboard-bar.tsx 门面模块。
+const Bar = lazy(() => import("./dashboard-bar"))
 
 function PlayerListCard({
   title,
@@ -47,9 +53,11 @@ function PlayerListCard({
 export function DashboardWorkspace({
   dashboard,
   onBackup,
+  onRefresh,
 }: {
   dashboard: DashboardPayload
   onBackup: () => void
+  onRefresh: () => void
 }) {
   const signinPercent = Math.round(
     dashboard.health_flags.today_signin_ratio * 100,
@@ -64,13 +72,18 @@ export function DashboardWorkspace({
         title="修仙运维控制台"
         description={`快照日期 ${dashboard.generated_date}，当前为 ${dashboard.mode} 模式。`}
         actions={
-          <ConfirmAction
-            triggerLabel="创建玩家备份"
-            title="创建玩家数据备份？"
-            description="备份会复制当前玩家存档文件，适合在批量调整前执行。"
-            actionLabel="创建备份"
-            onConfirm={onBackup}
-          />
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={onRefresh}>
+              刷新
+            </Button>
+            <ConfirmAction
+              triggerLabel="创建玩家备份"
+              title="创建玩家数据备份？"
+              description="备份会复制当前玩家存档文件，适合在批量调整前执行。"
+              actionLabel="创建备份"
+              onConfirm={onBackup}
+            />
+          </Space>
         }
       />
 
@@ -99,24 +112,26 @@ export function DashboardWorkspace({
           title="境界分布"
           extra="按当前玩家存档生成的境界快照"
         >
-          <Bar
-            data={dashboard.realm_distribution}
-            xField="count"
-            yField="realm"
-            height={280}
-            colorField="realm"
-            label={{
-              text: "count",
-              position: "right",
-            }}
-            axis={{
-              x: { title: "玩家数" },
-              y: { title: false },
-            }}
-            tooltip={{
-              title: "realm",
-            }}
-          />
+          <Suspense fallback={<Card loading title="境界分布" />}>
+            <Bar
+              data={dashboard.realm_distribution}
+              xField="count"
+              yField="realm"
+              height={280}
+              colorField="realm"
+              label={{
+                text: "count",
+                position: "right",
+              }}
+              axis={{
+                x: { title: "玩家数" },
+                y: { title: false },
+              }}
+              tooltip={{
+                title: "realm",
+              }}
+            />
+          </Suspense>
         </Card>
 
         <Card title="健康状态" data-testid="dashboard-maintenance-card">

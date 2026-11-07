@@ -86,6 +86,9 @@ function DashboardPage() {
   return (
     <DashboardWorkspace
       dashboard={data}
+      onRefresh={() => {
+        mutate()
+      }}
       onBackup={() => {
         createBackup()
           .then((result) => {

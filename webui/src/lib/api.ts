@@ -242,8 +242,11 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 }
 
 export function useDashboard() {
+  // R-12：dashboard 后端每次全量重算（读 users.json + 逐玩家战力），
+  // 10s 轮询 × 多开页面是纯浪费；降为 60s + 页头手动刷新（App.tsx mutate）。
   return useSWR<DashboardPayload>("dashboard", fetchJson, {
-    refreshInterval: 10_000,
+    refreshInterval: 60_000,
+    revalidateOnFocus: false,
   })
 }
 
