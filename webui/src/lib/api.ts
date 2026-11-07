@@ -287,8 +287,31 @@ export function useConfig() {
   return useSWR<ConfigPayload>("config", fetchJson)
 }
 
+export interface ConfigSnapshot {
+  name: string
+  captured_at: string
+  size: number
+}
+
+export interface ConfigSnapshotsPayload {
+  ok: boolean
+  snapshots: ConfigSnapshot[]
+}
+
+export function useConfigSnapshots() {
+  return useSWR<ConfigSnapshotsPayload>("config/snapshots", fetchJson)
+}
+
 export function saveConfig(config: ConfigPayload["config"]) {
   return apiJson(api.put("config", { json: config }).json<ConfigPayload>())
+}
+
+export function rollbackConfig(snapshot: string) {
+  return apiJson(
+    api
+      .post("config/rollback", { json: { snapshot } })
+      .json<{ ok: boolean; config: ConfigPayload["config"] }>(),
+  )
 }
 
 export function savePlayer(

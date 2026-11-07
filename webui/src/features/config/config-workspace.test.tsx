@@ -38,7 +38,7 @@ describe("ConfigWorkspace", () => {
 
   it("uses shape-aware controls for gameplay configuration", () => {
     const { container } = render(
-      <ConfigWorkspace config={config} onSave={vi.fn()} />,
+      <ConfigWorkspace config={config} onSave={vi.fn()} onRollback={vi.fn()} />,
     )
 
     expect(
@@ -59,7 +59,7 @@ describe("ConfigWorkspace", () => {
 
   it("requires an alert dialog before saving the global config", () => {
     const { container } = render(
-      <ConfigWorkspace config={config} onSave={vi.fn()} />,
+      <ConfigWorkspace config={config} onSave={vi.fn()} onRollback={vi.fn()} />,
     )
 
     expect(

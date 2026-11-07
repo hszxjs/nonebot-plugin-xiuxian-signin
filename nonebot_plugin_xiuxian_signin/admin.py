@@ -37,7 +37,13 @@ from .mystic_dungeon import (
     MysticTemplateCatalog,
     default_mystic_gameplay_config,
 )
-from .storage import JsonStore, StorageCorruptError, atomic_write_json, capture_before_write
+from .storage import (
+    JsonStore,
+    StorageCorruptError,
+    atomic_write_json,
+    capture_before_write,
+    read_snapshot,
+)
 
 ITEM_ICON_ROOT = Path(__file__).parent / "assets" / "item_icons"
 ITEM_ICON_RECORDS = ITEM_ICON_ROOT / "item_icon_records.json"
@@ -351,6 +357,60 @@ class AdminManager:
         # reason="config" 会强制留快照（不受 5 分钟节流限制），使后台每次改配置
         # 都能回到上一版，R-15 的一键回滚直接复用这批快照。
         atomic_write_json(self.config_path, validated, snapshot_reason="config")
+        return validated
+
+    def list_config_snapshots(self, limit: int = 10) -> list[dict[str, Any]]:
+        """最近的配置快照（新 → 旧），供 R-15 回滚入口选择。"""
+        snapshots = self.store.list_snapshots(self.config_path)
+        result: list[dict[str, Any]] = []
+        for snapshot in reversed(snapshots[-max(1, int(limit)) :]):
+            try:
+                stat = snapshot.stat()
+            except OSError:
+                continue
+            result.append(
+                {
+                    "name": snapshot.name,
+                    # 快照时间 = 文件 mtime，本来就是服务器本地时间，直接展示；
+                    # 不用 ZoneInfo（Windows 无 tzdata 时会炸）。
+                    "captured_at": datetime.fromtimestamp(stat.st_mtime).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                    "size": stat.st_size,
+                }
+            )
+        return result
+
+    def rollback_config(self, snapshot_name: str) -> dict[str, Any]:
+        """把 admin_config.json 恢复到指定快照（R-15）。
+
+        流程：读快照（白名单校验防穿越）→ 走与保存一致的迁移+校验管线 →
+        当前配置先留 ``pre-rollback`` 快照 → 原子写回 → revision 保持单调
+        递增（乐观锁基准不被回拨）→ 应用到运行时 → 审计。
+        """
+        try:
+            raw = read_snapshot(self.config_path, str(snapshot_name))
+        except (ValueError, FileNotFoundError) as exc:
+            raise ValueError(str(exc)) from exc
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"快照内容不是合法 JSON：{snapshot_name}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"快照内容不是配置对象：{snapshot_name}")
+
+        current_revision = self._config_revision()
+        merged = json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
+        deep_update(merged, data)
+        merged, _notes = migrate_config(merged)
+        merged = prune_unknown_config(merged)
+        _normalize_mystic_theme_config(merged)
+        merged["revision"] = current_revision + 1
+        validated = validate_config(merged)
+        # 当前（可能改坏的）配置在覆盖前留一份，回滚本身也可撤销。
+        atomic_write_json(self.config_path, validated, snapshot_reason="pre-rollback")
+        self.apply_config()
+        self.audit("admin.rollback_config", snapshot=str(snapshot_name))
         return validated
 
     def audit(self, event: str, **fields: Any) -> None:
@@ -878,6 +938,25 @@ def create_admin_app(
         manager.audit("admin.save_config", ip=_client_key(request), revision=revision)
         return {"ok": True, "config": manager.load_config()}
 
+    async def config_snapshots() -> Any:
+        return {"ok": True, "snapshots": manager.list_config_snapshots()}
+
+    async def rollback_config(
+        request: Request,
+    ) -> Any:
+        data, error = await _json_object_or_error(request, "rollback payload must be an object")
+        if error is not None:
+            return error
+        assert data is not None
+        snapshot_name = str(data.get("snapshot") or "")
+        if not snapshot_name:
+            return _json_error("缺少 snapshot 字段", 400)
+        try:
+            validated = manager.rollback_config(snapshot_name)
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
+        return {"ok": True, "config": validated}
+
     async def list_players(
         q: str = Query(default=""),
     ) -> Any:
@@ -990,6 +1069,18 @@ def create_admin_app(
     )
     app.add_api_route(f"{normalized_base_path}/api/config", get_config, methods=["GET"], dependencies=auth_guard)
     app.add_api_route(f"{normalized_base_path}/api/config", put_config, methods=["PUT"], dependencies=auth_guard)
+    app.add_api_route(
+        f"{normalized_base_path}/api/config/snapshots",
+        config_snapshots,
+        methods=["GET"],
+        dependencies=auth_guard,
+    )
+    app.add_api_route(
+        f"{normalized_base_path}/api/config/rollback",
+        rollback_config,
+        methods=["POST"],
+        dependencies=auth_guard,
+    )
     app.add_api_route(f"{normalized_base_path}/api/players", list_players, methods=["GET"], dependencies=auth_guard)
     app.add_api_route(
         f"{normalized_base_path}/api/players/{{user_id}}", get_player, methods=["GET"], dependencies=auth_guard

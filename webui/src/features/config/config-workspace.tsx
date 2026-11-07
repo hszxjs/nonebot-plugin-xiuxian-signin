@@ -1,9 +1,12 @@
+import { HistoryOutlined } from "@ant-design/icons"
 import {
+  Button,
   Card,
   Checkbox,
   Form,
   Input,
   List,
+  Modal,
   Slider,
   Space,
   Switch,
@@ -13,6 +16,7 @@ import {
 } from "antd"
 import { useMemo, useState } from "react"
 import { ConfirmAction, PageHeader } from "@/features/shared/ui"
+import { useConfigSnapshots } from "@/lib/api"
 import { formatJson, formatNumber, sliderValueToRate } from "@/lib/format"
 import type { AdminConfig } from "@/lib/types"
 
@@ -30,12 +34,17 @@ function parseConfig(text: string, fallback: AdminConfig) {
 export function ConfigWorkspace({
   config,
   onSave,
+  onRollback,
 }: {
   config: AdminConfig
   onSave: (config: AdminConfig) => void
+  onRollback: (snapshot: string) => void
 }) {
   const [draft, setDraft] = useState(config)
   const [jsonText, setJsonText] = useState(formatJson(config))
+  const [rollbackOpen, setRollbackOpen] = useState(false)
+  const { data: snapshotPayload } = useConfigSnapshots()
+  const snapshots = snapshotPayload?.snapshots ?? []
   const mystic = draft.mystic
   const mysticTypes = mystic.types ?? mystic.enabled_types ?? []
   const highRiskTypes =
@@ -67,14 +76,22 @@ export function ConfigWorkspace({
         title="配置管理"
         description="按玩法领域编辑全局规则，复杂覆盖项保留在高级 JSON 层。"
         actions={
-          <ConfirmAction
-            triggerLabel="保存全局配置"
-            title="保存全局玩法配置？"
-            description="保存后会立即应用到修仙签到逻辑，请确认当前配置已检查。"
-            actionLabel="保存配置"
-            onConfirm={saveFromJson}
-            danger
-          />
+          <Space>
+            <Button
+              icon={<HistoryOutlined />}
+              onClick={() => setRollbackOpen(true)}
+            >
+              回滚
+            </Button>
+            <ConfirmAction
+              triggerLabel="保存全局配置"
+              title="保存全局玩法配置？"
+              description="保存后会立即应用到修仙签到逻辑，请确认当前配置已检查。"
+              actionLabel="保存配置"
+              onConfirm={saveFromJson}
+              danger
+            />
+          </Space>
         }
       />
 
@@ -287,6 +304,48 @@ export function ConfigWorkspace({
           },
         ]}
       />
+
+      <Modal
+        title="回滚到历史配置"
+        open={rollbackOpen}
+        footer={null}
+        onCancel={() => setRollbackOpen(false)}
+      >
+        <Typography.Paragraph type="secondary">
+          每次保存配置都会自动留一份快照；回滚会把所选快照恢复为当前配置，
+          回滚前的版本同样会留快照，可再次回滚。
+        </Typography.Paragraph>
+        {snapshots.length === 0 ? (
+          <Typography.Text type="secondary">
+            暂无快照：保存一次配置后即可回滚。
+          </Typography.Text>
+        ) : (
+          <List
+            dataSource={snapshots}
+            renderItem={(item) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="restore"
+                    size="small"
+                    onClick={() => {
+                      setRollbackOpen(false)
+                      onRollback(item.name)
+                    }}
+                  >
+                    回滚到此版
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={item.captured_at}
+                  description={`${item.name}（${formatNumber(item.size)} 字节）`}
+                />
+              </List.Item>
+            )}
+          />
+        )}
+      </Modal>
     </div>
   )
 }

@@ -725,5 +725,101 @@ class PayloadCacheAndGzipTests(unittest.TestCase):
             self.assertNotIn("content-encoding", small.headers)
 
 
+class ConfigRollbackTests(unittest.TestCase):
+    """R-15：配置快照回滚（列表 + 恢复 + 防穿越 + 审计）。"""
+
+    def _manager(self, tmp: str) -> Any:
+        data_dir = Path(tmp)
+        return admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+
+    def test_rollback_restores_snapshot_and_bumps_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+
+            config = manager.load_config()
+            config["signin"]["extra_fishing_chance_rate"] = 0.25
+            manager.save_config(config)
+            config = manager.load_config()
+            config["signin"]["extra_fishing_chance_rate"] = 0.5
+            manager.save_config(config)
+            self.assertEqual(manager.load_config()["signin"]["extra_fishing_chance_rate"], 0.5)
+
+            snapshots = manager.list_config_snapshots()
+            self.assertGreaterEqual(len(snapshots), 2)
+            # 最新在前
+            self.assertGreaterEqual(snapshots[0]["captured_at"], snapshots[-1]["captured_at"])
+
+            oldest = snapshots[-1]["name"]
+            revision_before = manager.load_config()["revision"]
+            restored = manager.rollback_config(oldest)
+
+            self.assertEqual(
+                restored["signin"]["extra_fishing_chance_rate"],
+                0.10,
+                "回滚应恢复快照时的旧值（首版默认 0.10）",
+            )
+            self.assertEqual(
+                manager.load_config()["signin"]["extra_fishing_chance_rate"],
+                0.10,
+            )
+            self.assertEqual(
+                manager.load_config()["revision"],
+                revision_before + 1,
+                "回滚后 revision 必须单调递增，不回拨乐观锁基准",
+            )
+            # 回滚本身留了 pre-rollback 快照，可再次回滚
+            pre_rollback = [
+                item["name"]
+                for item in manager.list_config_snapshots()
+                if "pre-rollback" in item["name"]
+            ]
+            self.assertTrue(pre_rollback, "回滚动作本身必须留快照")
+            events = [entry["event"] for entry in manager.store.read_audit()]
+            self.assertIn("admin.rollback_config", events)
+
+    def test_rollback_rejects_illegal_snapshot_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            manager.save_config(manager.load_config())
+
+            for name in ("../admin_config.json", "..", "no_such_snapshot.json", ""):
+                with self.subTest(name=name):
+                    with self.assertRaises(ValueError):
+                        manager.rollback_config(name)
+
+    def test_rollback_routes_require_session_and_validate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager(tmp)
+            manager.save_config(manager.load_config())
+            app = admin.create_admin_app(manager=manager)
+            client = _manager_client(app, manager)
+            anonymous = TestClient(app)
+
+            listed = client.get("/xiuxian-admin/api/config/snapshots")
+            self.assertEqual(listed.status_code, 200)
+            self.assertGreaterEqual(len(listed.json()["snapshots"]), 1)
+
+            denied = anonymous.post(
+                "/xiuxian-admin/api/config/rollback",
+                json={"snapshot": "whatever.json"},
+            )
+            self.assertEqual(denied.status_code, 401)
+
+            denied_list = anonymous.get("/xiuxian-admin/api/config/snapshots")
+            self.assertEqual(denied_list.status_code, 401)
+
+            bad = client.post(
+                "/xiuxian-admin/api/config/rollback",
+                json={"snapshot": "../escape.json"},
+            )
+            self.assertEqual(bad.status_code, 400)
+
+            missing = client.post(
+                "/xiuxian-admin/api/config/rollback",
+                json={"snapshot": "no_such.json"},
+            )
+            self.assertEqual(missing.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()
