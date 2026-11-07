@@ -23,6 +23,7 @@ import nonebot_plugin_localstore as localstore  # noqa: E402
 from .config import Config  # noqa: E402
 from .cards import set_font_paths  # noqa: E402
 from .storage import JsonStore  # noqa: E402
+from .resource_pack import configure as configure_resource_pack  # noqa: E402
 from .admin import AdminManager  # noqa: E402
 from .mystic_dungeon import (  # noqa: E402
     MysticDungeonService,
@@ -72,6 +73,8 @@ def get_data_dir() -> Path:
 
 
 store = JsonStore(get_data_dir())
+# 登记数据目录，使秘境背景图优先从外置资源包解析（R-09）。
+configure_resource_pack(get_data_dir())
 admin_manager = AdminManager(
     store,
     get_data_dir(),

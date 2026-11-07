@@ -4,21 +4,26 @@ import {
   ControlOutlined,
   DatabaseOutlined,
   GoldOutlined,
+  LogoutOutlined,
   SettingOutlined,
   TeamOutlined,
   ThunderboltOutlined,
+  UserOutlined,
 } from "@ant-design/icons"
 import {
   App as AntdApp,
+  Button,
   ConfigProvider,
   Layout,
   Menu,
   Result,
+  Typography,
   theme,
 } from "antd"
 import { useState } from "react"
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
 
+import { AuthGate, useAuthUsername } from "@/features/auth/auth-gate"
 import { BeastRealmWorkspace } from "@/features/beast/beast-workspace"
 import { ConfigWorkspace } from "@/features/config/config-workspace"
 import { DashboardWorkspace } from "@/features/dashboard/dashboard-workspace"
@@ -29,6 +34,7 @@ import { PlayersWorkspace } from "@/features/players/players-workspace"
 import { EmptyPanel, ErrorPanel, LoadingPanel } from "@/features/shared/ui"
 import {
   createBackup,
+  logout,
   saveConfig,
   saveMysticConfig,
   savePlayer,
@@ -242,21 +248,36 @@ function NotFoundPage() {
 function AdminShell() {
   const location = useLocation()
   const navigate = useNavigate()
+  const username = useAuthUsername()
 
   return (
     <Layout className="admin-layout">
       <Layout.Sider width={240} breakpoint="lg" collapsedWidth={0}>
-        <div className="admin-logo">
-          <SettingOutlined />
-          <span>修仙签到后台</span>
+        <div className="admin-sider">
+          <div className="admin-logo">
+            <SettingOutlined />
+            <span>修仙签到后台</span>
+          </div>
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={[selectedMenuKey(location.pathname)]}
+            items={navItems}
+            onClick={(event) => navigate(event.key)}
+          />
+          <div className="admin-sider-footer">
+            <Typography.Text className="admin-user" ellipsis>
+              <UserOutlined /> {username || "admin"}
+            </Typography.Text>
+            <Button
+              size="small"
+              icon={<LogoutOutlined />}
+              onClick={() => void logout()}
+            >
+              退出
+            </Button>
+          </div>
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[selectedMenuKey(location.pathname)]}
-          items={navItems}
-          onClick={(event) => navigate(event.key)}
-        />
       </Layout.Sider>
       <Layout>
         <Layout.Content className="admin-content">
@@ -288,7 +309,9 @@ export function App() {
       }}
     >
       <AntdApp>
-        <AdminShell />
+        <AuthGate>
+          <AdminShell />
+        </AuthGate>
       </AntdApp>
     </ConfigProvider>
   )

@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "refactor/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python / lint + types + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # 只锁「真错误」：未定义名字、重复定义、语法错误、无效转义。
+      # 风格类（UP045 约 300 条、RUF100 约 155 条）不做门禁——全仓 --fix 会产生
+      # 上万行 diff，且会误删 __init__.py 里为 _g 延迟访问而保留的 re-export 导入
+      # （F401），那会把斗地主再打崩一次。风格清理留给阶段 4 拆文件时顺带做。
+      - name: ruff（真错误集）
+        run: ruff check nonebot_plugin_xiuxian_signin tests --select E9,F63,F7,F82,F811
+
+      - name: mypy
+        run: mypy
+
+      - name: pytest
+        run: pytest -q
+
+  webui:
+    name: WebUI / types + tests + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: webui/pnpm-lock.yaml
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: typecheck
+        run: pnpm typecheck
+
+      - name: test
+        run: pnpm test
+
+      - name: lint
+        run: pnpm lint
+
+      # 构建产物会写进 nonebot_plugin_xiuxian_signin/assets/admin_web，
+      # 这一步只验证「能构建」，不检查产物是否与仓库内的一致。
+      - name: build
+        run: pnpm build
+
+  wheel:
+    name: Wheel 内容校验
+    # 构建要打包 250+ MB 资源，PR 上跑代价太大；push 与手动触发时校验。
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 构建 wheel
+        run: pip wheel . -w dist --no-deps
+
+      # 只验证「构建成功」是不够的：package-data 漏一条 glob 时构建照样成功、
+      # 测试照样全绿，装到用户机器上才发现资源缺失（R-08 就是这样漏的）。
+      # 背景图已外置（R-09），此处的 100 MB 上限现在可以硬卡住。
+      - name: 校验内容完整性
+        run: python scripts/check_wheel_contents.py dist/*.whl --max-size-mb 100
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+          retention-days: 7

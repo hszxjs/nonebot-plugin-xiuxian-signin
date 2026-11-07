@@ -33,10 +33,56 @@ spec.loader.exec_module(admin)
 ADMIN_PY = Path(admin.__file__)
 
 
+def _client(app, token: str = "secret"):
+    """带会话 Cookie 的测试客户端（Starlette 已不建议逐请求传 cookies）。"""
+    return TestClient(app, cookies={admin.SESSION_COOKIE_NAME: token})
+
+
+class FakeAuth:
+    """测试替身：用一个固定字符串代表"已登录会话"。"""
+
+    session_ttl = 7 * 24 * 3600
+
+    def __init__(self, token: str = "secret") -> None:
+        self._token = token
+
+    def ensure_initialized(self) -> None:
+        return None
+
+    def verify_session(self, token: str | None) -> bool:
+        return bool(token) and token == self._token
+
+    def must_change_password(self) -> bool:
+        return False
+
+    def username(self) -> str:
+        return "admin"
+
+    def issue_session(self) -> str:
+        return self._token
+
+    def authenticate(self, username: str, password: str) -> bool:
+        return username == "admin" and password == self._token
+
+    def change_password(self, old_password: str, new_password: str) -> str | None:
+        return None
+
+    def penalty_delay(self, key: str) -> float:
+        return 0.0
+
+    def record_failure(self, key: str) -> None:
+        return None
+
+    def reset_failures(self, key: str) -> None:
+        return None
+
+
 class FakeManager:
     def __init__(self, data_dir: Path, token: str = "") -> None:
         self.data_dir = data_dir
         self.token = token
+        self.auth = FakeAuth(token or "secret")
+        self.audit_events: list[tuple[str, dict[str, Any]]] = []
         self.config: dict[str, Any] = {"version": 1, "signin": {"extra_fishing_chance_rate": 0.1}}
         self.players: dict[str, dict[str, Any]] = {
             "10001": {
@@ -65,11 +111,14 @@ class FakeManager:
     def load_config(self) -> dict[str, Any]:
         return json.loads(json.dumps(self.config, ensure_ascii=False))
 
-    def save_config(self, data: dict[str, Any]) -> None:
+    def save_config(self, data: dict[str, Any], *, if_revision: int | None = None) -> None:
         self.config = json.loads(json.dumps(data, ensure_ascii=False))
 
     def apply_config(self) -> None:
         return None
+
+    def audit(self, event: str, **fields: Any) -> None:
+        self.audit_events.append((event, fields))
 
     def validate_mystic_theme_selections(self, data: dict[str, Any]) -> dict[str, Any]:
         real = admin.AdminManager(admin.JsonStore(self.data_dir), self.data_dir)
@@ -166,7 +215,7 @@ class XiuxianAdminRewriteTest(unittest.TestCase):
                 base_path="/xiuxian-admin",
                 static_root=static_root,
             )
-            client = TestClient(app)
+            client = _client(app)
 
             page = client.get("/xiuxian-admin")
             self.assertEqual(page.status_code, 200)
@@ -195,14 +244,14 @@ class XiuxianAdminRewriteTest(unittest.TestCase):
                 base_path="/xiuxian-admin",
                 static_root=static_root,
             )
-            client = TestClient(app)
+            anonymous = TestClient(app)
+            authorized = _client(app)
 
-            self.assertEqual(client.get("/xiuxian-admin").status_code, 401)
-            self.assertEqual(client.get("/xiuxian-admin/api/dashboard").status_code, 401)
-            self.assertEqual(
-                client.get("/xiuxian-admin/api/dashboard", headers={"X-Xiuxian-Token": "secret"}).status_code,
-                200,
-            )
+            # SPA 外壳必须匿名可取：登录页本身就在这个外壳里加载。
+            self.assertEqual(anonymous.get("/xiuxian-admin").status_code, 200)
+            # 但任何 /api/* 一律需要有效会话。
+            self.assertEqual(anonymous.get("/xiuxian-admin/api/dashboard").status_code, 401)
+            self.assertEqual(authorized.get("/xiuxian-admin/api/dashboard").status_code, 200)
 
     def test_player_meta_uses_root_tiers_not_equipment_tiers(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -300,3 +349,6 @@ class XiuxianAdminRewriteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

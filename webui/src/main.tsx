@@ -4,10 +4,8 @@ import { BrowserRouter } from "react-router-dom"
 
 import "antd/dist/reset.css"
 import "./index.css"
-import { adminBasePath, bootstrapAdminToken } from "@/lib/api.ts"
+import { adminBasePath } from "@/lib/api.ts"
 import App from "./App.tsx"
-
-bootstrapAdminToken()
 
 const rootElement = document.getElementById("root")
 

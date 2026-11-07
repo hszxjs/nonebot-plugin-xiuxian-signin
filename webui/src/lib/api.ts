@@ -14,7 +14,6 @@ import type {
   PlayerListPayload,
 } from "@/lib/types"
 
-const tokenStorageKey = "xiuxian-admin-token"
 const appRoutes = [
   "/players",
   "/items",
@@ -39,33 +38,6 @@ export function adminBasePath() {
   return path === "/" ? "" : path
 }
 
-export function getAdminToken() {
-  if (typeof window === "undefined") {
-    return ""
-  }
-  if (typeof window.localStorage?.getItem !== "function") {
-    return ""
-  }
-  return window.localStorage.getItem(tokenStorageKey) || ""
-}
-
-export function setAdminToken(token: string) {
-  if (typeof window.localStorage?.setItem !== "function") {
-    return
-  }
-  window.localStorage.setItem(tokenStorageKey, token)
-}
-
-export function bootstrapAdminToken() {
-  if (typeof window === "undefined") {
-    return
-  }
-  const token = new URLSearchParams(window.location.search).get("token")
-  if (token) {
-    setAdminToken(token)
-  }
-}
-
 function apiPrefix() {
   const base = adminBasePath()
   const path = `${base}/api`.replace(/\/{2,}/g, "/")
@@ -77,19 +49,17 @@ function apiPrefix() {
 
 export function assetUrl(path: string) {
   const base = adminBasePath()
-  const normalized =
-    `${base}${path.startsWith("/") ? path : `/${path}`}`.replace(/\/{2,}/g, "/")
-  const token = getAdminToken()
-  if (!token) {
-    return normalized
-  }
-  const separator = normalized.includes("?") ? "&" : "?"
-  return `${normalized}${separator}token=${encodeURIComponent(token)}`
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`.replace(
+    /\/{2,}/g,
+    "/",
+  )
 }
 
 type ApiErrorPayload = {
   error?: unknown
   detail?: unknown
+  // 配置校验失败时后端返回字段级问题列表（R-07）。
+  issues?: unknown
 }
 
 class ApiRequestError extends Error {
@@ -107,14 +77,35 @@ function payloadMessage(payload: unknown) {
   if (!payload || typeof payload !== "object") {
     return ""
   }
-  const { error, detail } = payload as ApiErrorPayload
+  const { error, detail, issues } = payload as ApiErrorPayload
+  const detailText = formatIssues(issues)
   if (typeof error === "string" && error.trim()) {
-    return error
+    return detailText ? `${error}：${detailText}` : error
   }
   if (typeof detail === "string" && detail.trim()) {
-    return detail
+    return detailText ? `${detail}：${detailText}` : detail
   }
-  return ""
+  return detailText
+}
+
+/** 把「字段路径: 说明」拼成一句，最多三条，避免提示框被刷屏。 */
+function formatIssues(value: unknown) {
+  if (!Array.isArray(value)) {
+    return ""
+  }
+  return value
+    .slice(0, 3)
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return ""
+      }
+      const { path, message } = item as { path?: unknown; message?: unknown }
+      const pathText = typeof path === "string" ? path : ""
+      const messageText = typeof message === "string" ? message : ""
+      return pathText ? `${pathText}: ${messageText}` : messageText
+    })
+    .filter(Boolean)
+    .join("；")
 }
 
 function statusMessage(response: Response) {
@@ -125,15 +116,27 @@ function statusMessage(response: Response) {
 }
 
 export async function apiErrorMessage(error: unknown) {
+  // ky v2 在抛 HTTPError 前已把响应体读成 error.data（bodyUsed 为 true），
+  // 因此必须先读 data，再退回 response.clone()——否则后端返回的中文错误文案
+  // 会被吞成 "Request failed (4xx)"。
+  const data = (error as { data?: unknown } | null)?.data
+  if (data !== undefined) {
+    const message = payloadMessage(data)
+    if (message) {
+      return message
+    }
+  }
   const response = errorResponse(error)
   if (response) {
-    try {
-      const message = payloadMessage(await response.clone().json())
-      if (message) {
-        return message
+    if (!response.bodyUsed) {
+      try {
+        const message = payloadMessage(await response.clone().json())
+        if (message) {
+          return message
+        }
+      } catch {
+        // 非 JSON 响应体：用状态码文案兜底。
       }
-    } catch {
-      return statusMessage(response)
     }
     return statusMessage(response)
   }
@@ -151,15 +154,37 @@ async function apiJson<T>(request: Promise<T>) {
   }
 }
 
+const sessionChangeEvent = "xiuxian:session-change"
+
+/** 会话状态变化（失效 401/403、登录、登出、改密）时广播，AuthGate 据此重新校验。 */
+function notifySessionChange() {
+  if (typeof window === "undefined") {
+    return
+  }
+  window.dispatchEvent(new Event(sessionChangeEvent))
+}
+
+export function onSessionChange(listener: () => void) {
+  if (typeof window === "undefined") {
+    return () => {}
+  }
+  window.addEventListener(sessionChangeEvent, listener)
+  return () => window.removeEventListener(sessionChangeEvent, listener)
+}
+
 export const api = ky.create({
   prefix: apiPrefix(),
   timeout: 30_000,
+  credentials: "include",
   hooks: {
-    beforeRequest: [
-      ({ request }) => {
-        const token = getAdminToken()
-        if (token) {
-          request.headers.set("X-Xiuxian-Token", token)
+    afterResponse: [
+      ({ response, request }) => {
+        // 会话失效统一上报，避免每个页面各自处理 401。
+        if (response.status === 401) {
+          notifySessionChange()
+        }
+        if (response.status === 403 && !request.url.includes("/api/password")) {
+          notifySessionChange()
         }
       },
     ],
@@ -167,6 +192,54 @@ export const api = ky.create({
 })
 
 const fetchJson = <T>(path: string) => apiJson(api.get(path).json<T>())
+
+export type SessionPayload = {
+  ok: boolean
+  authenticated: boolean
+  username?: string
+  must_change_password?: boolean
+}
+
+export function useSession() {
+  return useSWR<SessionPayload>("session", fetchJson, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+  })
+}
+
+export async function login(username: string, password: string) {
+  try {
+    return await apiJson(
+      api
+        .post("login", { json: { username, password } })
+        .json<SessionPayload>(),
+    )
+  } finally {
+    notifySessionChange()
+  }
+}
+
+export async function logout() {
+  try {
+    await apiJson(api.post("logout").json<{ ok: boolean }>())
+  } finally {
+    notifySessionChange()
+  }
+}
+
+export async function changePassword(oldPassword: string, newPassword: string) {
+  try {
+    return await apiJson(
+      api
+        .post("password", {
+          json: { old_password: oldPassword, new_password: newPassword },
+        })
+        .json<{ ok: boolean; must_change_password: boolean }>(),
+    )
+  } finally {
+    notifySessionChange()
+  }
+}
 
 export function useDashboard() {
   return useSWR<DashboardPayload>("dashboard", fetchJson, {

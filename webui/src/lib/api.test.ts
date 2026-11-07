@@ -21,6 +21,24 @@ describe("apiErrorMessage", () => {
     )
   })
 
+  it("appends field issues from config validation failures", async () => {
+    const response = new Response(
+      JSON.stringify({
+        ok: false,
+        error: "配置校验未通过",
+        issues: [
+          { path: "mystic.fishing_option_rate", message: "不能大于 1" },
+          { path: "signin.extra_fishing_chance_rate", message: "必须是数字" },
+        ],
+      }),
+      { status: 400, statusText: "Bad Request" },
+    )
+
+    await expect(apiErrorMessage(responseError(response))).resolves.toBe(
+      "配置校验未通过：mystic.fishing_option_rate: 不能大于 1；signin.extra_fishing_chance_rate: 必须是数字",
+    )
+  })
+
   it("uses the backend JSON detail field", async () => {
     const response = new Response(JSON.stringify({ detail: "unauthorized" }), {
       status: 401,
@@ -41,6 +59,29 @@ describe("apiErrorMessage", () => {
     await expect(apiErrorMessage(responseError(response))).resolves.toBe(
       "Request failed (502 Bad Gateway)",
     )
+  })
+
+  it("prefers ky's parsed error.data because ky already consumed the body", async () => {
+    // ky v2 在抛出 HTTPError 前已读取响应体（bodyUsed=true），真实报错路径
+    // 只能从 error.data 拿文案；这里复刻该形状，防止回归成 "Request failed (401)"。
+    const response = new Response(
+      JSON.stringify({ ok: false, error: "账号或密码不正确" }),
+      {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      },
+    )
+    await response.text()
+    const error = Object.assign(
+      new Error("Request failed with status code 401"),
+      {
+        name: "HTTPError",
+        response,
+        data: { ok: false, error: "账号或密码不正确" },
+      },
+    )
+
+    await expect(apiErrorMessage(error)).resolves.toBe("账号或密码不正确")
   })
 
   it("falls back to a generic Error message", async () => {

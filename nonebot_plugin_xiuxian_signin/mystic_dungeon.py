@@ -626,10 +626,6 @@ class MysticGameplayConfig:
     leader_inactive_seconds: int
     leader_transfer_vote_seconds: int
     rescue_wait_seconds: int
-    signin_normal_token_count: int
-    signin_high_risk_token_count: int
-    daily_task_normal_token_count: int
-    daily_task_high_risk_token_count: int
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "normal_node_weights", dict(self.normal_node_weights))
@@ -663,10 +659,6 @@ class MysticGameplayConfig:
             "leader_inactive_seconds": self.leader_inactive_seconds,
             "leader_transfer_vote_seconds": self.leader_transfer_vote_seconds,
             "rescue_wait_seconds": self.rescue_wait_seconds,
-            "signin_normal_token_count": self.signin_normal_token_count,
-            "signin_high_risk_token_count": self.signin_high_risk_token_count,
-            "daily_task_normal_token_count": self.daily_task_normal_token_count,
-            "daily_task_high_risk_token_count": self.daily_task_high_risk_token_count,
         }
 
     @classmethod
@@ -750,10 +742,6 @@ class MysticGameplayConfig:
             leader_inactive_seconds=bounded_int("leader_inactive_seconds", 10, 3600),
             leader_transfer_vote_seconds=bounded_int("leader_transfer_vote_seconds", 10, 3600),
             rescue_wait_seconds=bounded_int("rescue_wait_seconds", 10, 3600),
-            signin_normal_token_count=bounded_int("signin_normal_token_count", 0, 10),
-            signin_high_risk_token_count=bounded_int("signin_high_risk_token_count", 0, 10),
-            daily_task_normal_token_count=bounded_int("daily_task_normal_token_count", 0, 10),
-            daily_task_high_risk_token_count=bounded_int("daily_task_high_risk_token_count", 0, 10),
         )
 
 
@@ -836,10 +824,6 @@ def default_mystic_gameplay_config() -> MysticGameplayConfig:
         leader_inactive_seconds=600,
         leader_transfer_vote_seconds=60,
         rescue_wait_seconds=1800,
-        signin_normal_token_count=0,
-        signin_high_risk_token_count=0,
-        daily_task_normal_token_count=0,
-        daily_task_high_risk_token_count=0,
     )
 
 
@@ -1167,6 +1151,9 @@ class MysticThemeDefinition:
     template_id: str
     background_path: Path
     background_sha256: str = ""
+    # manifest 里的相对路径（如 backgrounds/xxx.png）。R-09 把背景图移出 wheel 后，
+    # 渲染时用它去外置资源目录里找同一张图；包内路径只作为开发环境的兜底。
+    background_relative: str = ""
 
 
 @dataclass(frozen=True)
@@ -1219,6 +1206,7 @@ class MysticTemplateCatalog:
                 template_id=_as_string(theme_data["template_id"], f"theme {theme_id!r}.template_id"),
                 background_path=background_path,
                 background_sha256=background_sha256,
+                background_relative=relative_background.as_posix(),
             )
 
         templates_document = _load_json_object(templates_file)
@@ -1256,8 +1244,20 @@ class MysticTemplateCatalog:
         return catalog
 
     def _validate_background_hashes(self) -> None:
+        """校验包内背景图哈希：存在则必须匹配，缺失则跳过。
+
+        背景图自 R-09 起不在 wheel 内（202 MB 超过 PyPI 上限），由外置资源包
+        按需下载，因此「文件不存在」是正常状态——渲染器会退化成程序化占位背景。
+        外置那份不在这里校验：``resource_pack`` 在下载安装时已逐张比对过 sha256，
+        这里只兜住「仓库内的素材被改坏」这种情况。
+
+        本模块刻意保持零包级依赖（多个测试按文件路径单独加载它），故不引入
+        resource_pack 的导入。
+        """
         for theme in self.themes.values():
             if not theme.background_sha256:
+                continue
+            if not theme.background_path.is_file():
                 continue
             try:
                 with theme.background_path.open("rb") as background_file:

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
+import tempfile
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from nonebot import logger
 
@@ -19,6 +23,13 @@ from ..domain import (
 )
 from ..mystic_battle import DungeonEncounter, EncounterPhase
 from ..mystic_dungeon import DungeonPhase, MysticDungeonRun, MysticTokenMissingError
+from .audit import audit, read_audit
+from .snapshots import (
+    AUTO_REASON,
+    capture_before_write,
+    list_snapshots as _list_snapshots,
+    snapshot_dir as _snapshot_dir,
+)
 
 
 MYSTIC_TERMINAL_PHASES = {
@@ -28,9 +39,18 @@ MYSTIC_TERMINAL_PHASES = {
 }
 
 
+class InsufficientSpiritStones(ValueError):
+    """余额不足：事务型改动整体不落盘，调用方据此给出提示。"""
+
+    def __init__(self, user_id: str, required: int, available: int) -> None:
+        super().__init__(f"灵石不足：需要 {required}，仅有 {available}")
+        self.user_id = str(user_id)
+        self.required = int(required)
+        self.available = int(available)
+
+
 class MysticRunConflict(RuntimeError):
     """Raised when a persisted run revision changed before update."""
-
 
 class MysticRunNotFound(LookupError):
     """Raised when a requested persisted run does not exist."""
@@ -42,6 +62,80 @@ class MysticEncounterConflict(RuntimeError):
 
 class MysticStateCorrupt(ValueError):
     """Raised when the persistent dungeon document cannot be validated."""
+
+
+class StorageCorruptError(RuntimeError):
+    """Raised when a storage document cannot be read, parsed or recovered.
+
+    绝不能退化为返回空 dict：调用方普遍是「读-改-写」，空 dict 会被写回，
+    等价于清空整份存档。宁可让单个功能报错暴露问题，也不能静默丢数据。
+    """
+
+    def __init__(self, path: Path, *, backup: Path | None = None, reason: str = "") -> None:
+        self.path = Path(path)
+        self.backup = backup
+        self.reason = reason
+        detail = str(self.path)
+        if backup is not None:
+            detail += f"（损坏副本：{backup}）"
+        if reason:
+            detail += f"：{reason}"
+        super().__init__(f"存档文件不可读或已损坏：{detail}")
+
+
+# 进程级文件锁：NoneBot 主事件循环与后台 HTTP 线程（无论是独立 uvicorn 线程，
+# 还是 driver 挂载后 Starlette 的同步线程池）都会读写同一批 JSON 文件。
+# asyncio.Lock 只在单个事件循环内有效，无法阻止上述跨线程并发写，因此所有
+# 落盘路径统一走这把可重入锁。
+_FILE_LOCK = threading.RLock()
+
+
+def _fsync_dir(directory: Path) -> None:
+    """尽力把目录项变更刷盘；Windows 不支持对目录 fsync，直接跳过。"""
+    if os.name == "nt":
+        return
+    fd = -1
+    try:
+        fd = os.open(str(directory), os.O_RDONLY)
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        if fd >= 0:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+
+
+def atomic_write_json(path: Path, data: Any, *, snapshot_reason: str | None = AUTO_REASON) -> None:
+    """原子写 JSON 文件，并在覆盖前留一份上一版快照（R-05）。
+
+    使用唯一临时文件名（``tempfile.mkstemp``）而非固定的 ``*.tmp``：两个写者
+    共用同一个临时文件时，交叉覆盖会产生「新旧内容拼接」的坏 JSON（本项目
+    已经发生过）。写入后 fsync 文件与目录，再用 ``os.replace`` 原子替换。
+
+    快照在临时文件写好之后、``os.replace`` 之前触发：前者保证写失败时不必
+    占用快照名额，后者保证拿到的一定是「被覆盖掉的那一版」。``snapshot_reason``
+    为 ``None`` 时跳过快照（凭据文件等无回滚价值的内容）。
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fp:
+            json.dump(data, fp, ensure_ascii=False, indent=2)
+            fp.flush()
+            os.fsync(fp.fileno())
+        if snapshot_reason is not None:
+            # 快照内部已兜住异常，这里再包一层，确保任何情况都不阻断真实写入。
+            with contextlib.suppress(Exception):
+                capture_before_write(path, reason=snapshot_reason)
+        os.replace(temp_path, path)
+        _fsync_dir(path.parent)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            temp_path.unlink()
+        raise
 
 
 @dataclass(frozen=True)
@@ -173,6 +267,21 @@ class JsonStore:
         self.rescue_file_path = data_dir / "mystic_rescue.json"
         self.mystic_file_path = data_dir / "mystic_dungeons.json"
         self._lock = asyncio.Lock()
+
+    # --- 快照与审计（R-05） ------------------------------------------------
+    def snapshot_directory(self, path: Path) -> Path:
+        """返回某个存档文件的快照目录（存在性不保证）。"""
+        return _snapshot_dir(path)
+
+    def list_snapshots(self, path: Path) -> list[Path]:
+        """按时间正序列出某存档文件的可用快照。"""
+        return _list_snapshots(path)
+
+    def audit(self, event: str, **fields: Any) -> None:
+        audit(self.data_dir, event, **fields)
+
+    def read_audit(self, limit: int = 200) -> list[dict[str, Any]]:
+        return read_audit(self.data_dir, limit=limit)
 
     async def get_user(self, user_id: str) -> UserRecord:
         async with self._lock:
@@ -396,6 +505,55 @@ class JsonStore:
             self._write_json(self.user_file_path, data)
             return record
 
+    async def apply_to_users(self, user_ids: Iterable[str], updater) -> dict[str, UserRecord]:
+        """在一次读-改-写里同时处理多个用户（R-03 的双人原子操作基座）。
+
+        ``updater(records: dict[str, UserRecord])`` 在锁内被调用；抛异常时整批
+        不落盘，调用方据异常区分业务失败。**updater 内不得再调用本类的其它
+        异步方法**——``self._lock`` 是普通 ``asyncio.Lock``，不可重入。
+        """
+        unique_ids = [str(uid) for uid in dict.fromkeys(str(uid) for uid in user_ids)]
+        if not unique_ids:
+            raise ValueError("apply_to_users requires at least one user id")
+        async with self._lock:
+            data = self._read_json(self.user_file_path)
+            records: dict[str, UserRecord] = {}
+            for uid in unique_ids:
+                user_data = data.get(uid)
+                records[uid] = (
+                    UserRecord.from_dict(user_data)
+                    if isinstance(user_data, dict)
+                    else UserRecord(user_id=uid)
+                )
+            updater(records)
+            for uid in unique_ids:
+                data[uid] = sanitize_user_record_data(records[uid].to_dict())
+            self._write_json(self.user_file_path, data)
+            return records
+
+    async def transfer_spirit_stones(
+        self,
+        from_user_id: str,
+        to_user_id: str,
+        amount: int,
+    ) -> dict[str, UserRecord]:
+        """灵石转账：余额校验与双方改动在同一把锁内完成，余额不足则不落盘。"""
+        amount = int(amount)
+        if amount <= 0:
+            raise ValueError("transfer amount must be positive")
+
+        payer_id = str(from_user_id)
+        payee_id = str(to_user_id)
+
+        def _transfer(records: dict[str, UserRecord]) -> None:
+            payer = records[payer_id]
+            if payer.spirit_stones < amount:
+                raise InsufficientSpiritStones(payer_id, amount, payer.spirit_stones)
+            payer.spirit_stones -= amount
+            records[payee_id].spirit_stones += amount
+
+        return await self.apply_to_users([payer_id, payee_id], _transfer)
+
 
     async def get_unique_artifacts(self) -> dict[str, Any]:
         async with self._lock:
@@ -477,6 +635,23 @@ class JsonStore:
             data[str(group_id)] = group
             self._write_json(self.trade_file_path, data)
             return dict(offer)
+
+    async def reopen_trade_offer(self, group_id: str, offer_id: str) -> bool:
+        """把已接单的挂单放回市场（付款失败时回滚）。"""
+        async with self._lock:
+            data = self._read_json(self.trade_file_path)
+            group = data.get(str(group_id), {})
+            if not isinstance(group, dict):
+                return False
+            offer = group.get(str(offer_id))
+            if not isinstance(offer, dict) or offer.get("status") != "taken":
+                return False
+            offer["status"] = "open"
+            offer.pop("buyer_id", None)
+            group[str(offer_id)] = offer
+            data[str(group_id)] = group
+            self._write_json(self.trade_file_path, data)
+            return True
 
     async def cancel_trade_offer(self, group_id: str, offer_id: str, seller_id: str) -> dict[str, Any] | None:
         async with self._lock:
@@ -1456,35 +1631,41 @@ class JsonStore:
         return changed
 
     def _read_json(self, path: Path) -> dict[str, Any]:
-        if not path.exists():
-            return {}
-        try:
-            with path.open("r", encoding="utf-8") as fp:
-                data = json.load(fp)
-        except json.JSONDecodeError:
-            # 文件损坏（典型形态：历史并发写导致新旧内容拼接）。直接返回
-            # 空 dict 会让后续“读-改-写”把空状态写回、清空全部数据，因此
-            # 必须先自愈：解析出文件中最后一段完整的 JSON 根，备份损坏文件
-            # 后用干净数据重写，再返回。
-            recovered = self._recover_json_file(path)
-            if recovered is None:
+        with _FILE_LOCK:
+            if not path.exists():
                 return {}
-            data = recovered
-        except OSError:
-            return {}
-        return data if isinstance(data, dict) else {}
+            try:
+                with path.open("r", encoding="utf-8") as fp:
+                    data = json.load(fp)
+            except json.JSONDecodeError:
+                # 文件损坏（典型形态：历史并发写导致新旧内容拼接）。直接返回
+                # 空 dict 会让后续“读-改-写”把空状态写回、清空全部数据，因此
+                # 必须先自愈：解析出文件中最后一段完整的 JSON 根，备份损坏文件
+                # 后用干净数据重写，再返回；确实无法恢复时抛错，绝不返回空 dict。
+                recovered, backup = self._recover_json_file(path)
+                if recovered is None:
+                    raise StorageCorruptError(path, backup=backup, reason="无法从残留内容中恢复出完整 JSON") from None
+                return recovered
+            except OSError as exc:
+                raise StorageCorruptError(path, reason=f"读取失败：{exc}") from exc
+            if not isinstance(data, dict):
+                raise StorageCorruptError(path, reason=f"根节点不是对象（实际为 {type(data).__name__}）")
+            return data
 
-    def _recover_json_file(self, path: Path) -> dict[str, Any] | None:
+    def _recover_json_file(self, path: Path) -> tuple[dict[str, Any] | None, Path]:
         """从损坏的 JSON 文件中恢复最后一段完整内容。
 
         损坏形态多为“完整 JSON + 旧内容残留”（写入未截断的历史遗留）。这里
         用 raw_decode 逐段解析，取最后一段完整且为 dict 的内容；成功则备份
-        坏文件并把恢复结果原子写回。完全无法恢复时返回 None。
+        坏文件并把恢复结果原子写回。返回 ``(恢复结果或 None, 损坏备份路径)``。
         """
+        backup = path.with_name(
+            f"{path.name}.corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
+        )
         try:
             raw = path.read_text(encoding="utf-8")
         except OSError:
-            return None
+            return None, backup
         decoder = json.JSONDecoder()
         last_good: dict[str, Any] | None = None
         pos = 0
@@ -1500,23 +1681,34 @@ class JsonStore:
             if isinstance(obj, dict):
                 last_good = obj
             pos = end
-        backup = path.with_name(
-            f"{path.name}.corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
-        )
         try:
             path.replace(backup)
         except OSError:
             pass
         if last_good is None:
             logger.error(f"存档文件损坏且无法恢复，已备份为 {backup.name}")
-            return None
+            return None, backup
         logger.warning(f"存档文件损坏，已自动恢复最后完整段并备份为 {backup.name}")
         self._write_json(path, last_good)
-        return last_good
+        return last_good, backup
 
     def _write_json(self, path: Path, data: dict[str, Any]) -> None:
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        temp_path = path.with_suffix(".tmp")
-        with temp_path.open("w", encoding="utf-8") as fp:
-            json.dump(data, fp, ensure_ascii=False, indent=2)
-        temp_path.replace(path)
+        with _FILE_LOCK:
+            atomic_write_json(path, data)
+
+    # --- 供后台（独立线程 / Starlette 线程池）使用的同步接口 -----------------
+    # 后台不能直接调用 _read_json/_write_json：那会绕开锁语义的封装边界。
+    # 以下三个方法共享同一把进程级可重入锁，与事件循环内的异步读写互斥。
+    def read_json_sync(self, path: Path) -> dict[str, Any]:
+        return self._read_json(path)
+
+    def write_json_sync(self, path: Path, data: dict[str, Any]) -> None:
+        self._write_json(path, data)
+
+    def update_json_sync(self, path: Path, mutator: Callable[[dict[str, Any]], Any]) -> Any:
+        """在同一把锁内完成「读-改-写」，消除跨线程 TOCTOU 丢更新。"""
+        with _FILE_LOCK:
+            data = self._read_json(path)
+            result = mutator(data)
+            self._write_json(path, data)
+            return result

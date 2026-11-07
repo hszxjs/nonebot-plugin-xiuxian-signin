@@ -7,6 +7,7 @@ import types
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 
 # 伪造轻量父包 nonebot_plugin_xiuxian_signin（不执行真实 __init__.py，避免触发 NoneBot 初始化），
@@ -91,55 +92,58 @@ class DomainFeatureTests(unittest.TestCase):
         self.assertEqual(record.pending_fishing, 2)
         self.assertEqual(result.fishing_chances_gained, 2)
 
-    def test_signin_can_grant_configured_mystic_tokens(self) -> None:
-        domain.apply_admin_config(
-            {
-                "mystic": {
-                    "signin_normal_token_count": 1,
-                    "signin_high_risk_token_count": 1,
-                }
-            }
-        )
+    def test_signin_drops_mystic_tokens_by_probability(self) -> None:
+        """签到按概率掉落令牌：命中为 1 枚，未命中为 0，两种风险独立判定。
+
+        a4a85d9 起签到改为概率掉落（普通 50% / 高风险 30%），不再读取配置数量；
+        这里固定 random 结果以消除原用例约 30% 的随机失败。
+        """
+        with mock.patch("random.random", return_value=0.0):
+            hit = domain.UserRecord(user_id="42", root=root())
+            domain.apply_signin(hit, date(2026, 7, 16))
+
+        self.assertEqual(domain.reward_count_by_names(hit, ["普通秘境令牌"]), 1)
+        self.assertEqual(domain.reward_count_by_names(hit, ["高风险秘境令牌"]), 1)
+
+        with mock.patch("random.random", return_value=0.99):
+            miss = domain.UserRecord(user_id="42", root=root())
+            domain.apply_signin(miss, date(2026, 7, 16))
+
+        self.assertEqual(domain.reward_count_by_names(miss, ["普通秘境令牌"]), 0)
+        self.assertEqual(domain.reward_count_by_names(miss, ["高风险秘境令牌"]), 0)
+
+    def test_mystic_token_grant_is_capped_per_kind(self) -> None:
+        """发放时每种令牌叠加到 MYSTIC_TOKEN_MAX_COUNT 封顶，负数按 0 处理。"""
         record = domain.UserRecord(user_id="42", root=root())
 
-        domain.apply_signin(record, date(2026, 7, 16))
+        granted = domain.grant_mystic_tokens(record, 99, -4)
 
-        self.assertEqual(domain.reward_count_by_names(record, ["普通秘境令牌"]), 1)
-        self.assertEqual(domain.reward_count_by_names(record, ["高风险秘境令牌"]), 1)
-
-    def test_mystic_token_grant_counts_are_clamped_to_zero_through_ten(self) -> None:
-        domain.apply_admin_config(
-            {
-                "mystic": {
-                    "signin_normal_token_count": 99,
-                    "signin_high_risk_token_count": -4,
-                }
-            }
+        self.assertEqual(granted["普通秘境令牌"], domain.MYSTIC_TOKEN_MAX_COUNT)
+        self.assertEqual(granted["高风险秘境令牌"], 0)
+        self.assertEqual(
+            domain.reward_count_by_names(record, ["普通秘境令牌"]),
+            domain.MYSTIC_TOKEN_MAX_COUNT,
         )
+
+    def test_daily_task_guarantees_one_normal_token_task(self) -> None:
+        """每日任务里恰有 1 个「令牌任务」，完成后发放 1 枚普通令牌、不发高风险令牌。"""
         record = domain.UserRecord(user_id="42", root=root())
+        tasks = domain.generate_daily_tasks(record, date(2026, 7, 16))
+        token_indexes = [
+            index
+            for index, task in enumerate(tasks, start=1)
+            if int(task.get("token_normal", 0))
+        ]
 
-        domain.apply_signin(record, date(2026, 7, 16))
+        self.assertEqual(len(token_indexes), 1)
 
-        self.assertEqual(domain.reward_count_by_names(record, ["普通秘境令牌"]), 10)
-        self.assertEqual(domain.reward_count_by_names(record, ["高风险秘境令牌"]), 0)
-
-    def test_daily_task_can_grant_configured_mystic_tokens(self) -> None:
-        domain.apply_admin_config(
-            {
-                "mystic": {
-                    "daily_task_normal_token_count": 1,
-                    "daily_task_high_risk_token_count": 1,
-                }
-            }
+        success, _ = domain.complete_daily_task(
+            record, token_indexes[0], date(2026, 7, 16)
         )
-        record = domain.UserRecord(user_id="42", root=root())
-        domain.generate_daily_tasks(record, date(2026, 7, 16))
-
-        success, _ = domain.complete_daily_task(record, 1, date(2026, 7, 16))
 
         self.assertTrue(success)
         self.assertEqual(domain.reward_count_by_names(record, ["普通秘境令牌"]), 1)
-        self.assertEqual(domain.reward_count_by_names(record, ["高风险秘境令牌"]), 1)
+        self.assertEqual(domain.reward_count_by_names(record, ["高风险秘境令牌"]), 0)
 
     def test_mystic_tokens_are_admin_items_but_not_fishing_drops(self) -> None:
         token_names = set(domain.MYSTIC_TOKEN_DEFINITIONS)

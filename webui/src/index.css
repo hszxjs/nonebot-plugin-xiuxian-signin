@@ -28,6 +28,45 @@ body {
   padding: 24px;
 }
 
+.admin-sider {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.admin-sider-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+}
+
+.admin-user {
+  color: rgb(255 255 255 / 75%);
+  font-size: 13px;
+}
+
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: #f5f7fa;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-alert {
+  margin-bottom: 16px;
+}
+
 .page-header {
   display: flex;
   align-items: flex-start;

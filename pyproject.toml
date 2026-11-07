@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nonebot-plugin-xiuxian-signin"
-version = "0.5.2"
+version = "0.6.0"
 description = "A NoneBot2 cultivation signin plugin with image panels, fishing, realms, mystic realms, items, duels and PicMenu Next support."
 readme = "README.md"
 requires-python = ">=3.12, <4.0"
@@ -77,8 +77,18 @@ nonebot_plugin_xiuxian_signin = [
     "assets/ui_sprite/signin/output/sprites/*.png",
     "assets/mystic_maps/manifest.json",
     "assets/mystic_maps/templates.json",
-    "assets/mystic_maps/backgrounds/*.png",
+    # 背景图（202 MB）刻意不进 wheel：PyPI 单文件上限 100 MB，这批图由
+    # scripts/build_asset_bundle.py 打成 zip 随 Release 分发，首次启动下载（R-09）。
+    "assets/mystic_events/*.json",
+    "assets/signin_calendar/*.png",
     "assets/mystic_dungeon_ui/*.png",
+]
+
+# include-package-data 会把 MANIFEST.in 命中的文件一并塞进 wheel，光靠 package-data
+# 不列、MANIFEST 里 prune 都挡不住，必须显式排除。背景图 202 MB 走 Release 资源包。
+[tool.setuptools.exclude-package-data]
+nonebot_plugin_xiuxian_signin = [
+    "assets/mystic_maps/backgrounds/*",
 ]
 
 [tool.ruff]
@@ -94,9 +104,12 @@ files = [
     "nonebot_plugin_xiuxian_signin/mystic_battle.py",
     "nonebot_plugin_xiuxian_signin/mystic_cards.py",
     "nonebot_plugin_xiuxian_signin/mystic_dungeon.py",
-    "nonebot_plugin_xiuxian_signin/mystic_runtime.py",
+    # mystic_runtime.py 暂不纳入：阶段 6 秘境推倒重做（Q4=C）会整体删除这 6,776 行，
+    # 现在给它补类型是纯浪费。删除时连同这一行一起移除。
     "nonebot_plugin_xiuxian_signin/storage/__init__.py",
     "nonebot_plugin_xiuxian_signin/admin.py",
+    "nonebot_plugin_xiuxian_signin/admin_auth.py",
+    "nonebot_plugin_xiuxian_signin/config_schema.py",
 ]
 follow_imports = "skip"
 check_untyped_defs = true

@@ -172,7 +172,7 @@ from .domain import (
     use_pills_batch,
     use_talisman,
 )
-from .admin import AdminManager, start_admin_server
+from .admin import AdminManager, install_admin_routes, start_admin_server
 from .mystic_battle import MysticBattleService
 from .mystic_cards import MysticMapRenderer, render_no_token_panel
 from .mystic_dungeon import (
@@ -194,7 +194,9 @@ from .mystic_runtime import (
     parse_mystic_group_command,
     parse_mystic_private_command,
 )
-from .storage import JsonStore, MysticRescueRequest
+from .storage import InsufficientSpiritStones, JsonStore, MysticRescueRequest
+from .resource_pack import configure as configure_resource_pack
+from .resource_pack import ensure_pack, pack_status as resource_pack_status
 from . import state as _state  # 共享单例（config/store/admin_manager/mystic_coordinator 等）
 from .state import (  # noqa: F401
     config, store, admin_manager, mystic_coordinator, mystic_catalog,
@@ -209,7 +211,7 @@ from .commands import doudizhu as _doudizhu_cmd_module  # noqa: E402,F401
 from .commands.doudizhu import is_doudizhu_command_text  # noqa: E402
 _doudizhu_cmd_module._g = sys.modules[__name__]  # noqa: E402  # 注入入口模块供延迟访问 helper
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 PICMENU_NEXT_FUNCS = [
     {
@@ -477,16 +479,14 @@ NORMAL_DUEL_ACTION_SEGMENT_LABELS = {
 NORMAL_DUEL_IGNORED_SEGMENT_TYPES = {"at", "reply", "node"}
 RANK_SETTLE_HOUR = 22
 RANK_SETTLE_MINUTE = 0
-pending_fishing_users: dict[str, float] = {}
-pending_divinations: dict[str, dict[str, Any]] = {}
-normal_duel_queue: dict[str, dict[str, Any]] = {}
-normal_duel_sessions: dict[str, dict[str, Any]] = {}
-doudizhu_tables: dict[str, dict[str, Any]] = {}
-beast_realm_tables: dict[str, dict[str, Any]] = {}
-beast_realm_private_routes: dict[str, str] = {}
+# 共享可变状态（钓鱼待结算、斗法队列、牌桌等）统一定义在 state.py，
+# 此处只沿用上方 `from .state import ...` 的引用。曾经在这里重新赋值为新的
+# 空字典，导致入口模块与 commands/ 子模块各持一份、互不可见（F811）。
 BEAST_REALM_ICON = "beast_realm"
 rank_scheduler_task: Optional[asyncio.Task] = None
 mystic_recovery_task: Optional[asyncio.Task] = None
+# 秘境背景图外置包的后台下载任务（R-09）：不阻塞启动，失败只降级为占位背景。
+asset_download_task: Optional[asyncio.Task] = None
 admin_http_server = None
 
 
@@ -2659,40 +2659,97 @@ async def mystic_recovery_sweep() -> None:
 
 @driver.on_startup
 async def start_rank_scheduler() -> None:
-    global admin_http_server, rank_scheduler_task, mystic_recovery_task
+    global admin_http_server, rank_scheduler_task, mystic_recovery_task, asset_download_task
+    admin_ready = False
     if config.xiuxian_signin_admin_enabled:
+        # fail-closed：账号初始化失败（数据目录不可写、凭据文件损坏）时
+        # 直接不启动后台，而不是启动一个没人能登录、或没人需要登录的后台。
         try:
-            admin_http_server = start_admin_server(
-                admin_manager,
-                config.xiuxian_signin_admin_host,
-                config.xiuxian_signin_admin_port,
-                config.xiuxian_signin_admin_path,
-            )
-            logger.info(
-                "修仙签到后台已启动："
-                f"http://{admin_http_server.host}:{admin_http_server.port}{admin_http_server.base_path}"
-            )
+            admin_manager.auth.ensure_initialized()
+            admin_ready = True
         except Exception:
             logger.exception(
-                f"修仙签到后台启动失败：{config.xiuxian_signin_admin_host}:{config.xiuxian_signin_admin_port}"
+                "后台账号初始化失败，本次不启动后台。"
+                "请检查数据目录写权限，或删除 admin_auth.json 后重启重建。"
             )
-            admin_manager.apply_config()
+    if admin_ready:
+        mounted = False
+        try:
+            # 首选：把后台路由挂到 NoneBot driver 的 FastAPI server_app 上。
+            # 这样后台与命令处理共用同一个事件循环，且不额外占用端口，
+            # 从结构上消除"主循环 + 独立 uvicorn 线程"两个写者的局面。
+            mounted = install_admin_routes(driver, admin_manager, config.xiuxian_signin_admin_path)
+        except Exception:
+            logger.exception("修仙签到后台挂载到 driver 失败，回退独立端口")
+            mounted = False
+        if mounted:
+            logger.info(f"修仙签到后台已挂载到 driver：{config.xiuxian_signin_admin_path}")
+        else:
+            try:
+                admin_http_server = start_admin_server(
+                    admin_manager,
+                    config.xiuxian_signin_admin_host,
+                    config.xiuxian_signin_admin_port,
+                    config.xiuxian_signin_admin_path,
+                )
+                logger.info(
+                    "修仙签到后台已启动："
+                    f"http://{admin_http_server.host}:{admin_http_server.port}{admin_http_server.base_path}"
+                )
+            except Exception:
+                logger.exception(
+                    f"修仙签到后台启动失败：{config.xiuxian_signin_admin_host}:{config.xiuxian_signin_admin_port}"
+                )
+                admin_manager.apply_config()
     else:
         admin_manager.apply_config()
     await recover_mystic_dungeons()
     rank_scheduler_task = asyncio.create_task(rank_scheduler())
     mystic_recovery_task = asyncio.create_task(mystic_recovery_sweep())
 
+    # 秘境背景图（202 MB）不进 wheel，启动后再后台拉取：先让机器人可用，
+    # 下载期间出图用程序化占位背景，完成即切换到真图（resolve_background 每次解析）。
+    configure_resource_pack(get_data_dir())
+    if config.xiuxian_signin_asset_auto_download:
+        asset_download_task = asyncio.create_task(
+            ensure_asset_pack(data_dir=get_data_dir(), url=config.xiuxian_signin_asset_url)
+        )
+
+
+async def ensure_asset_pack(*, data_dir, url: Optional[str]) -> None:
+    """后台准备秘境资源包；任何失败都只告警，不影响机器人运行。"""
+    status = resource_pack_status(data_dir)
+    if status.complete:
+        logger.info(f"秘境资源包已就绪：{status.summary()}")
+        return
+    logger.info(f"秘境资源包不完整：{status.summary()}")
+    await ensure_pack(data_dir=data_dir, url=url)
+
 
 @driver.on_shutdown
 async def stop_admin_http_server() -> None:
-    global admin_http_server, mystic_recovery_task
+    global admin_http_server, mystic_recovery_task, rank_scheduler_task, asset_download_task
     if admin_http_server is not None:
         admin_http_server.stop()
         admin_http_server = None
-    if mystic_recovery_task is not None:
-        mystic_recovery_task.cancel()
-        mystic_recovery_task = None
+    # 后台任务都必须取消并 await，否则停机后仍有协程在写存档 / 下载资源。
+    pending = [
+        task
+        for task in (mystic_recovery_task, rank_scheduler_task, asset_download_task)
+        if task is not None
+    ]
+    for task in pending:
+        task.cancel()
+    for task in pending:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("后台任务在停机时抛出异常")
+    mystic_recovery_task = None
+    rank_scheduler_task = None
+    asset_download_task = None
 
 
 def beast_realm_group_key_from_event(event: GroupMessageEvent) -> str:
@@ -3842,23 +3899,36 @@ async def handle_trade(matcher: Matcher, event: MessageEvent) -> None:
             await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", "\u4ea4\u6613\u5df2\u88ab\u63a5\u53d6\u3001\u53d6\u6d88\u6216\u8fc7\u671f\u3002", record, icon="warning")
         seller_id = str(offer.get("seller_id"))
         item = dict(offer.get("item") or {})
-        record.spirit_stones -= price
+        # 唯一道具归一化内部会取 store 锁，必须在原子事务之外完成。
         item, append_msg = await normalize_unique_reward_for_user(record, item, event)
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
 
-        def seller_gain(seller, gain=price):
-            seller.spirit_stones += gain
+        def settle_trade(records, buyer_id=user_id, seller_id=seller_id, price=price, item=item):
+            # 余额校验与双方改动在同一把锁内，杜绝并发接单的重复扣款/凭空灵石。
+            buyer = records[buyer_id]
+            if buyer.spirit_stones < price:
+                raise InsufficientSpiritStones(buyer_id, price, buyer.spirit_stones)
+            buyer.spirit_stones -= price
+            buyer.rewards = list(buyer.rewards or []) + [item]
+            records[seller_id].spirit_stones += price
 
-        await store.apply_to_user(seller_id, seller_gain)
+        try:
+            settled = await store.apply_to_users([user_id, seller_id], settle_trade)
+        except InsufficientSpiritStones:
+            await store.reopen_trade_offer(group_id, str(accept_id))
+            record = await store.get_user(user_id)
+            await finish_panel(matcher, "\u4ea4\u6613\u5931\u8d25", f"\u7075\u77f3\u4e0d\u8db3\uff0c\u9700\u8981 {spirit_stone_text(price)}\u3002", record, icon="warning")
+        record = settled[user_id]
         await finish_panel(matcher, "\u4ea4\u6613\u5b8c\u6210", f"\u83b7\u5f97 {reward_display_name(item)}\uff0c\u652f\u4ed8 {spirit_stone_text(price)}\u3002{append_msg}", record, icon="shop")
     if cancel_id is not None:
         offer = await store.cancel_trade_offer(group_id, str(cancel_id), user_id)
         if not offer:
             await finish_panel(matcher, "\u64a4\u9500\u5931\u8d25", "\u6ca1\u6709\u627e\u5230\u53ef\u64a4\u9500\u7684\u672c\u4eba\u6302\u5355\u3002", record, icon="warning")
         item = dict(offer.get("item") or {})
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
+
+        def restore_item(rec, item=item):
+            rec.rewards = list(rec.rewards or []) + [item]
+
+        record = await store.apply_to_user(user_id, restore_item)
         await finish_panel(matcher, "\u4ea4\u6613\u64a4\u9500", f"\u5df2\u64a4\u56de {reward_display_name(item)}\u3002", record, icon="shop")
     if offer_data is None:
         await finish_panel(matcher, "\u73a9\u5bb6\u4ea4\u6613", "\u6302\u5355\u683c\u5f0f\uff1a\u4ea4\u6613 @\u5bf9\u65b9 \u7c7b\u522b \u7f16\u53f7 \u4ef7\u683c\uff0c\u4f8b\u5982\uff1a\u4ea4\u6613 @\u9053\u53cb \u7075\u5668 1 100\u3002", record, icon="shop")
@@ -3912,23 +3982,35 @@ async def handle_market(matcher: Matcher, event: MessageEvent) -> None:
             await finish_panel(matcher, "购买失败", "寄售已被购买、下架或状态变化。", record, icon="warning")
         seller_id = str(offer.get("seller_id"))
         item = dict(offer.get("item") or {})
-        record.spirit_stones -= price
+        # 唯一道具归一化内部会取 store 锁，必须在原子事务之外完成。
         item, append_msg = await normalize_unique_reward_for_user(record, item, event)
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
 
-        def seller_gain(seller, gain=price):
-            seller.spirit_stones += gain
+        def settle_market(records, buyer_id=user_id, seller_id=seller_id, price=price, item=item):
+            buyer = records[buyer_id]
+            if buyer.spirit_stones < price:
+                raise InsufficientSpiritStones(buyer_id, price, buyer.spirit_stones)
+            buyer.spirit_stones -= price
+            buyer.rewards = list(buyer.rewards or []) + [item]
+            records[seller_id].spirit_stones += price
 
-        await store.apply_to_user(seller_id, seller_gain)
+        try:
+            settled = await store.apply_to_users([user_id, seller_id], settle_market)
+        except InsufficientSpiritStones:
+            await store.reopen_trade_offer(group_id, str(buy_id))
+            record = await store.get_user(user_id)
+            await finish_panel(matcher, "购买失败", f"灵石不足，需要 {spirit_stone_text(price)}。", record, icon="warning")
+        record = settled[user_id]
         await finish_panel(matcher, "万宝楼成交", f"购得 {reward_display_name(item)}，支付 {spirit_stone_text(price)}。{append_msg}", record, icon="shop")
     if cancel_id is not None:
         offer = await store.cancel_trade_offer(group_id, str(cancel_id), user_id)
         if not offer or not offer.get("market"):
             await finish_panel(matcher, "下架失败", "没有找到可下架的本人寄售物。", record, icon="warning")
         item = dict(offer.get("item") or {})
-        record.rewards = list(record.rewards or []) + [item]
-        await store.save_user(record)
+
+        def restore_market_item(rec, item=item):
+            rec.rewards = list(rec.rewards or []) + [item]
+
+        record = await store.apply_to_user(user_id, restore_market_item)
         await finish_panel(matcher, "万宝楼下架", f"已下架 {reward_display_name(item)}。", record, icon="shop")
     if offer_data is None:
         await finish_panel(matcher, "万宝楼", "格式：万宝楼挂售 类别 编号，例如：万宝楼挂售 灵器 1。", record, icon="shop", footer=command_hint("交易与商店"))

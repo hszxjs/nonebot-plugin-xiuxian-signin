@@ -183,10 +183,6 @@ export type MysticConfig = {
   leader_inactive_seconds?: number
   leader_transfer_vote_seconds?: number
   rescue_wait_seconds?: number
-  signin_normal_token_count?: number
-  signin_high_risk_token_count?: number
-  daily_task_normal_token_count?: number
-  daily_task_high_risk_token_count?: number
   themes?: MysticThemeBinding[]
   types?: string[]
   high_risk_types?: string[]
@@ -219,6 +215,8 @@ export type MysticThemeBinding = {
 
 export type AdminConfig = {
   version: number
+  /** 修订号：每次保存自增，服务端用它拒绝陈旧页面的覆盖（R-07）。 */
+  revision?: number
   equipment_rules: EquipmentRules
   mystic: MysticConfig
   signin: {
