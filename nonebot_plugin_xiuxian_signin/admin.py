@@ -216,10 +216,6 @@ DEFAULT_ADMIN_CONFIG: dict[str, Any] = {
         "category_weights": domain.default_mystic_category_weights(),
         "drop_overrides": {},
         "fishing_option_rate": 0.05,
-        "signin_normal_token_count": 0,
-        "signin_high_risk_token_count": 0,
-        "daily_task_normal_token_count": 0,
-        "daily_task_high_risk_token_count": 0,
     },
     "signin": {"extra_fishing_chance_rate": 0.10},
     "item_overrides": {},
@@ -229,6 +225,16 @@ DEFAULT_ADMIN_CONFIG: dict[str, Any] = {
 
 ITEM_OVERRIDE_TEXT_FIELDS = {"category", "required_realm", "required_attribute", "usage", "source", "story"}
 ITEM_OVERRIDE_LIST_FIELDS = {"tiers", "grades"}
+
+# 已退役的 mystic 配置键：a4a85d9 起秘境令牌改为签到概率掉落 / 每日任务固定 1 枚，
+# 这四个键不再有任何读取方。保留在代码里会让运营以为可以调节，故从默认值中移除，
+# 并在读取旧配置时裁掉（旧 admin_config.json 升级后自动失效）。
+RETIRED_MYSTIC_CONFIG_KEYS = (
+    "signin_normal_token_count",
+    "signin_high_risk_token_count",
+    "daily_task_normal_token_count",
+    "daily_task_high_risk_token_count",
+)
 
 
 def deep_update(target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
@@ -270,6 +276,10 @@ class AdminManager:
             data = {}
         merged = json.loads(json.dumps(DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
         deep_update(merged, data if isinstance(data, dict) else {})
+        mystic_section = merged.get("mystic")
+        if isinstance(mystic_section, dict):
+            for retired_key in RETIRED_MYSTIC_CONFIG_KEYS:
+                mystic_section.pop(retired_key, None)
         _normalize_mystic_theme_config(merged)
         return merged
 
@@ -402,10 +412,6 @@ class AdminManager:
             "category_weights": mystic.get("category_weights", {}),
             "drop_overrides": mystic.get("drop_overrides", {}),
             "fishing_option_rate": mystic.get("fishing_option_rate", 0.05),
-            "signin_normal_token_count": mystic.get("signin_normal_token_count", 0),
-            "signin_high_risk_token_count": mystic.get("signin_high_risk_token_count", 0),
-            "daily_task_normal_token_count": mystic.get("daily_task_normal_token_count", 0),
-            "daily_task_high_risk_token_count": mystic.get("daily_task_high_risk_token_count", 0),
             "extra_fishing_chance_rate": signin.get("extra_fishing_chance_rate", 0.10),
             "categories": list(domain.REWARD_CATEGORIES) + [domain.IMMORTAL_SEED_CATEGORY],
             "tiers": list(domain.TIER_ORDER),

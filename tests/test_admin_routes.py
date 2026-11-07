@@ -452,10 +452,10 @@ class AdminRouteTests(unittest.TestCase):
 
             config = manager.load_config()
             self.assertEqual(config["mystic"]["fishing_option_rate"], 0.05)
-            self.assertEqual(config["mystic"]["signin_normal_token_count"], 0)
-            self.assertEqual(config["mystic"]["signin_high_risk_token_count"], 0)
-            self.assertEqual(config["mystic"]["daily_task_normal_token_count"], 0)
-            self.assertEqual(config["mystic"]["daily_task_high_risk_token_count"], 0)
+            # 令牌数量配置键在 a4a85d9 后已无消费者（改为概率掉落），已从配置面移除，
+            # 这里断言不会回潮：任何重新引入都必须同时提供读取方。
+            self.assertNotIn("signin_normal_token_count", config["mystic"])
+            self.assertNotIn("daily_task_normal_token_count", config["mystic"])
             self.assertEqual(config["signin"]["extra_fishing_chance_rate"], 0.10)
 
             config["mystic"]["fishing_option_rate"] = 0.25
@@ -465,8 +465,24 @@ class AdminRouteTests(unittest.TestCase):
             payload = manager.mystic_payload()
             self.assertEqual(payload["fishing_option_rate"], 0.25)
             self.assertEqual(payload["extra_fishing_chance_rate"], 0.35)
-            self.assertEqual(payload["signin_normal_token_count"], 0)
-            self.assertEqual(payload["daily_task_high_risk_token_count"], 0)
+            self.assertNotIn("signin_normal_token_count", payload)
+            self.assertNotIn("daily_task_high_risk_token_count", payload)
+
+    def test_load_config_drops_retired_mystic_token_keys(self) -> None:
+        """旧 admin_config.json 里的退役键在读取时被裁掉，升级后自动失效。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            manager = admin.AdminManager(admin.JsonStore(data_dir), data_dir)
+            legacy = json.loads(json.dumps(admin.DEFAULT_ADMIN_CONFIG, ensure_ascii=False))
+            legacy["mystic"]["signin_normal_token_count"] = 5
+            legacy["mystic"]["daily_task_high_risk_token_count"] = 2
+            manager.save_config(legacy)
+
+            config = manager.load_config()
+
+            self.assertNotIn("signin_normal_token_count", config["mystic"])
+            self.assertNotIn("daily_task_high_risk_token_count", config["mystic"])
+            self.assertIn("fishing_option_rate", config["mystic"])
 
     def test_default_mystic_config_exposes_map_sizes_and_timeouts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

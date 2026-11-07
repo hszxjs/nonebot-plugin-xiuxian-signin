@@ -30,10 +30,6 @@ MYSTIC_DROP_OVERRIDES: dict[str, list[dict[str, Any]]] = {}
 # 可调标量（apply_admin_config 用 global 重绑本模块命名空间；读取方经 _domain 访问以拿到最新值）。
 MYSTIC_FISHING_OPTION_RATE = 0.05
 SIGNIN_EXTRA_FISHING_CHANCE_RATE = 0.10
-SIGNIN_NORMAL_MYSTIC_TOKEN_COUNT = 0
-SIGNIN_HIGH_RISK_MYSTIC_TOKEN_COUNT = 0
-DAILY_TASK_NORMAL_MYSTIC_TOKEN_COUNT = 0
-DAILY_TASK_HIGH_RISK_MYSTIC_TOKEN_COUNT = 0
 
 def random_beast_name() -> str:
     return random.choice(BEAST_NAMES)
@@ -323,24 +319,11 @@ def apply_admin_config(config: dict[str, Any]) -> None:
     MYSTIC_ENABLED_HIGH_RISK_TYPES.clear()
     globals()["MYSTIC_FISHING_OPTION_RATE"] = 0.05
     globals()["SIGNIN_EXTRA_FISHING_CHANCE_RATE"] = 0.10
-    token_count_keys = {
-        "signin_normal_token_count": "SIGNIN_NORMAL_MYSTIC_TOKEN_COUNT",
-        "signin_high_risk_token_count": "SIGNIN_HIGH_RISK_MYSTIC_TOKEN_COUNT",
-        "daily_task_normal_token_count": "DAILY_TASK_NORMAL_MYSTIC_TOKEN_COUNT",
-        "daily_task_high_risk_token_count": "DAILY_TASK_HIGH_RISK_MYSTIC_TOKEN_COUNT",
-    }
-    for global_name in token_count_keys.values():
-        globals()[global_name] = 0
     if isinstance(mystic_config, dict):
         try:
             globals()["MYSTIC_FISHING_OPTION_RATE"] = max(0.0, min(1.0, float(mystic_config.get("fishing_option_rate", MYSTIC_FISHING_OPTION_RATE))))
         except (TypeError, ValueError):
             pass
-        for config_key, global_name in token_count_keys.items():
-            try:
-                globals()[global_name] = max(0, min(MYSTIC_TOKEN_MAX_COUNT, int(mystic_config.get(config_key, 0))))
-            except (TypeError, ValueError):
-                globals()[global_name] = 0
         enabled_types = mystic_config.get("enabled_types", list(MYSTIC_REALM_TYPES))
         if isinstance(enabled_types, list):
             MYSTIC_ENABLED_TYPES.update(str(item) for item in enabled_types if str(item) in MYSTIC_REALM_TYPES)

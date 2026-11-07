@@ -626,10 +626,6 @@ class MysticGameplayConfig:
     leader_inactive_seconds: int
     leader_transfer_vote_seconds: int
     rescue_wait_seconds: int
-    signin_normal_token_count: int
-    signin_high_risk_token_count: int
-    daily_task_normal_token_count: int
-    daily_task_high_risk_token_count: int
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "normal_node_weights", dict(self.normal_node_weights))
@@ -663,10 +659,6 @@ class MysticGameplayConfig:
             "leader_inactive_seconds": self.leader_inactive_seconds,
             "leader_transfer_vote_seconds": self.leader_transfer_vote_seconds,
             "rescue_wait_seconds": self.rescue_wait_seconds,
-            "signin_normal_token_count": self.signin_normal_token_count,
-            "signin_high_risk_token_count": self.signin_high_risk_token_count,
-            "daily_task_normal_token_count": self.daily_task_normal_token_count,
-            "daily_task_high_risk_token_count": self.daily_task_high_risk_token_count,
         }
 
     @classmethod
@@ -750,10 +742,6 @@ class MysticGameplayConfig:
             leader_inactive_seconds=bounded_int("leader_inactive_seconds", 10, 3600),
             leader_transfer_vote_seconds=bounded_int("leader_transfer_vote_seconds", 10, 3600),
             rescue_wait_seconds=bounded_int("rescue_wait_seconds", 10, 3600),
-            signin_normal_token_count=bounded_int("signin_normal_token_count", 0, 10),
-            signin_high_risk_token_count=bounded_int("signin_high_risk_token_count", 0, 10),
-            daily_task_normal_token_count=bounded_int("daily_task_normal_token_count", 0, 10),
-            daily_task_high_risk_token_count=bounded_int("daily_task_high_risk_token_count", 0, 10),
         )
 
 
@@ -836,10 +824,6 @@ def default_mystic_gameplay_config() -> MysticGameplayConfig:
         leader_inactive_seconds=600,
         leader_transfer_vote_seconds=60,
         rescue_wait_seconds=1800,
-        signin_normal_token_count=0,
-        signin_high_risk_token_count=0,
-        daily_task_normal_token_count=0,
-        daily_task_high_risk_token_count=0,
     )
 
 
