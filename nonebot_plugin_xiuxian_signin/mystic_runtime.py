@@ -33,6 +33,7 @@ from .mystic_dungeon import (
     active_mystic_theme_ids,
 )
 from .mystic_menu import mystic_menu_text
+from .resource_pack import resolve_background
 from .domain import UserRecord, combat_max_hp
 from .domain.rewards import reward_count_by_names
 from .storage import (
@@ -1993,7 +1994,7 @@ class MysticCommandCoordinator:
         return MysticMapRenderModel(
             title=theme.display_name,
             subtitle=f"{run.map_size} 格秘境 · {run.risk.value}",
-            background_path=theme.background_path,
+            background_path=resolve_background(theme.background_path, theme.background_relative),
             nodes=nodes,
             edges=edges,
             current_node_id=run.current_node_id,

@@ -15,3 +15,7 @@ class Config(BaseModel):
     xiuxian_signin_admin_path: str = Field(default="/xiuxian-admin")
     xiuxian_signin_admin_host: str = Field(default="0.0.0.0")
     xiuxian_signin_admin_port: int = Field(default=8081)
+    # 秘境背景图体积太大不进 wheel（R-09），首次启动按需下载。
+    # asset_url 可指向自建镜像或本地 zip；留空用内置的 GitHub Release 地址。
+    xiuxian_signin_asset_url: Optional[str] = Field(default=None)
+    xiuxian_signin_asset_auto_download: bool = Field(default=True)

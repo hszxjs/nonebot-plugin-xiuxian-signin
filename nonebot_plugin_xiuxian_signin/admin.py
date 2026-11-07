@@ -29,6 +29,7 @@ from .config_schema import (
     prune_unknown_config,
     validate_config,
 )
+from .resource_pack import resolve_background
 from .mystic_dungeon import (
     DungeonRisk,
     MysticGameplayConfig,
@@ -451,18 +452,20 @@ class AdminManager:
         mystic = config.get("mystic", {}) if isinstance(config.get("mystic"), dict) else {}
         signin = config.get("signin", {}) if isinstance(config.get("signin"), dict) else {}
         gameplay = MysticGameplayConfig.from_mapping(mystic).to_mapping()
-        themes = [
-            {
-                "theme_id": theme_id,
-                "display_name": theme.display_name,
-                "risk": theme.risk.value,
-                "template_id": theme.template_id,
-                "background_path": str(theme.background_path),
-                "background_exists": theme.background_path.is_file(),
-                "template_exists": theme.template_id in _MYSTIC_CATALOG.templates,
-            }
-            for theme_id, theme in sorted(_MYSTIC_CATALOG.themes.items())
-        ]
+        themes = []
+        for theme_id, theme in sorted(_MYSTIC_CATALOG.themes.items()):
+            resolved = resolve_background(theme.background_path, theme.background_relative)
+            themes.append(
+                {
+                    "theme_id": theme_id,
+                    "display_name": theme.display_name,
+                    "risk": theme.risk.value,
+                    "template_id": theme.template_id,
+                    "background_path": str(resolved),
+                    "background_exists": resolved.is_file(),
+                    "template_exists": theme.template_id in _MYSTIC_CATALOG.templates,
+                }
+            )
         return {
             **gameplay,
             "types": _mystic_theme_ids(DungeonRisk.NORMAL),

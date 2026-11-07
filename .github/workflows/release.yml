@@ -26,16 +26,23 @@ jobs:
         run: pip wheel . -w dist --no-deps
 
       - name: 校验内容完整性
-        run: python scripts/check_wheel_contents.py dist/*.whl
+        run: python scripts/check_wheel_contents.py dist/*.whl --max-size-mb 100
 
-      - name: 创建 Release 并附带 wheel
+      # 背景图 202 MB 不在 wheel 里（R-09），必须单独作为资源包发出，
+      # 插件启动时从 releases/latest/download/mystic_maps.zip 拉取。
+      - name: 构建秘境背景资源包
+        run: python scripts/build_asset_bundle.py --output dist/mystic_maps.zip
+
+      - name: 创建 Release 并附带产物
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/*.whl --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.whl dist/mystic_maps.zip --generate-notes
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheel
-          path: dist/*.whl
+          name: release-assets
+          path: |
+            dist/*.whl
+            dist/mystic_maps.zip
           retention-days: 14

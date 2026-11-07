@@ -195,6 +195,8 @@ from .mystic_runtime import (
     parse_mystic_private_command,
 )
 from .storage import InsufficientSpiritStones, JsonStore, MysticRescueRequest
+from .resource_pack import configure as configure_resource_pack
+from .resource_pack import ensure_pack, pack_status as resource_pack_status
 from . import state as _state  # 共享单例（config/store/admin_manager/mystic_coordinator 等）
 from .state import (  # noqa: F401
     config, store, admin_manager, mystic_coordinator, mystic_catalog,
@@ -483,6 +485,8 @@ RANK_SETTLE_MINUTE = 0
 BEAST_REALM_ICON = "beast_realm"
 rank_scheduler_task: Optional[asyncio.Task] = None
 mystic_recovery_task: Optional[asyncio.Task] = None
+# 秘境背景图外置包的后台下载任务（R-09）：不阻塞启动，失败只降级为占位背景。
+asset_download_task: Optional[asyncio.Task] = None
 admin_http_server = None
 
 
@@ -2655,7 +2659,7 @@ async def mystic_recovery_sweep() -> None:
 
 @driver.on_startup
 async def start_rank_scheduler() -> None:
-    global admin_http_server, rank_scheduler_task, mystic_recovery_task
+    global admin_http_server, rank_scheduler_task, mystic_recovery_task, asset_download_task
     admin_ready = False
     if config.xiuxian_signin_admin_enabled:
         # fail-closed：账号初始化失败（数据目录不可写、凭据文件损坏）时
@@ -2703,15 +2707,37 @@ async def start_rank_scheduler() -> None:
     rank_scheduler_task = asyncio.create_task(rank_scheduler())
     mystic_recovery_task = asyncio.create_task(mystic_recovery_sweep())
 
+    # 秘境背景图（202 MB）不进 wheel，启动后再后台拉取：先让机器人可用，
+    # 下载期间出图用程序化占位背景，完成即切换到真图（resolve_background 每次解析）。
+    configure_resource_pack(get_data_dir())
+    if config.xiuxian_signin_asset_auto_download:
+        asset_download_task = asyncio.create_task(
+            ensure_asset_pack(data_dir=get_data_dir(), url=config.xiuxian_signin_asset_url)
+        )
+
+
+async def ensure_asset_pack(*, data_dir, url: Optional[str]) -> None:
+    """后台准备秘境资源包；任何失败都只告警，不影响机器人运行。"""
+    status = resource_pack_status(data_dir)
+    if status.complete:
+        logger.info(f"秘境资源包已就绪：{status.summary()}")
+        return
+    logger.info(f"秘境资源包不完整：{status.summary()}")
+    await ensure_pack(data_dir=data_dir, url=url)
+
 
 @driver.on_shutdown
 async def stop_admin_http_server() -> None:
-    global admin_http_server, mystic_recovery_task, rank_scheduler_task
+    global admin_http_server, mystic_recovery_task, rank_scheduler_task, asset_download_task
     if admin_http_server is not None:
         admin_http_server.stop()
         admin_http_server = None
-    # 两个后台任务都必须取消并 await，否则停机后仍有协程在写存档。
-    pending = [task for task in (mystic_recovery_task, rank_scheduler_task) if task is not None]
+    # 后台任务都必须取消并 await，否则停机后仍有协程在写存档 / 下载资源。
+    pending = [
+        task
+        for task in (mystic_recovery_task, rank_scheduler_task, asset_download_task)
+        if task is not None
+    ]
     for task in pending:
         task.cancel()
     for task in pending:
@@ -2723,6 +2749,7 @@ async def stop_admin_http_server() -> None:
             logger.exception("后台任务在停机时抛出异常")
     mystic_recovery_task = None
     rank_scheduler_task = None
+    asset_download_task = None
 
 
 def beast_realm_group_key_from_event(event: GroupMessageEvent) -> str:

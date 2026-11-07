@@ -94,8 +94,9 @@ jobs:
 
       # 只验证「构建成功」是不够的：package-data 漏一条 glob 时构建照样成功、
       # 测试照样全绿，装到用户机器上才发现资源缺失（R-08 就是这样漏的）。
+      # 背景图已外置（R-09），此处的 100 MB 上限现在可以硬卡住。
       - name: 校验内容完整性
-        run: python scripts/check_wheel_contents.py dist/*.whl
+        run: python scripts/check_wheel_contents.py dist/*.whl --max-size-mb 100
 
       - uses: actions/upload-artifact@v4
         with:

@@ -6,5 +6,7 @@ include pyproject.toml
 # sdist 需要 MANIFEST.in 才能把 assets 打进源码包。缺了它，从 sdist 安装会得到
 # 一个没有任何图片/字体/事件表的插件（R-08）。
 recursive-include nonebot_plugin_xiuxian_signin/assets *
+# 秘境背景图 202 MB，走 Release 资源包而不是包内分发（R-09）。
+prune nonebot_plugin_xiuxian_signin/assets/mystic_maps/backgrounds
 recursive-include nonebot_plugin_xiuxian_signin py.typed
 recursive-include scripts *.py

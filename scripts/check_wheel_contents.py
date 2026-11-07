@@ -38,6 +38,10 @@ FORBIDDEN: list[tuple[str, str]] = [
     ("*.pyc", "字节码缓存不应进包"),
     ("tests/*", "测试不应进包"),
     ("*/.pytest_cache/*", "测试缓存不应进包"),
+    (
+        "*/assets/mystic_maps/backgrounds/*",
+        "秘境背景图应走外置资源包（R-09），进了 wheel 会把体积顶过 PyPI 上限",
+    ),
 ]
 
 
