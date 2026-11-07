@@ -96,9 +96,12 @@ files = [
     "nonebot_plugin_xiuxian_signin/mystic_battle.py",
     "nonebot_plugin_xiuxian_signin/mystic_cards.py",
     "nonebot_plugin_xiuxian_signin/mystic_dungeon.py",
-    "nonebot_plugin_xiuxian_signin/mystic_runtime.py",
+    # mystic_runtime.py 暂不纳入：阶段 6 秘境推倒重做（Q4=C）会整体删除这 6,776 行，
+    # 现在给它补类型是纯浪费。删除时连同这一行一起移除。
     "nonebot_plugin_xiuxian_signin/storage/__init__.py",
     "nonebot_plugin_xiuxian_signin/admin.py",
+    "nonebot_plugin_xiuxian_signin/admin_auth.py",
+    "nonebot_plugin_xiuxian_signin/config_schema.py",
 ]
 follow_imports = "skip"
 check_untyped_defs = true
