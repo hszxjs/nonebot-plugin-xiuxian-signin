@@ -121,6 +121,7 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 - 生命周期：`@driver.on_startup`（启动后台/恢复秘境/排行调度）、`@driver.on_shutdown`
 - 命令分发：`on_message` matcher + handler（签到/面板/突破/背包/…/秘境/御兽/交易）
 - 兜底 matcher：`chat_rank_counter`（p99，群聊统计）、`normal_duel_chat`（p8，斗法）
+- **只放这三类东西**：元数据、matcher 注册、生命周期钩子。纯函数与新逻辑一律进 `commands/` 对应层。
 
 ## state.py — 共享单例
 
@@ -134,10 +135,25 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 
 ## commands/ — 命令子包
 
-部分自包含的玩法已迁入子包，子模块在 import 时注册各自的 NoneBot matcher：
-- `commands/doudizhu.py`：斗地主完整子系统（触发词 + 卡牌引擎 + matcher + handler）
+命令层按「文本 → 解析 → 渲染 → 判定 → 注册」单向分层，`tests/test_plugin_structure.py` 用 AST 钉住这条分层，**新增模块必须登记到该测试的 `LAYERS` 表**：
 
-子模块的外部 helper（`finish_panel`/`nickname_from_event` 等）经 `_g`（入口模块引用，由 `__init__.py` 注入）延迟访问；共享状态经 `state` 获取。后续可按相同模式继续迁移 normal_duel/divination/mystic 等功能。
+| 层 | 模块 | 职责 |
+| --- | --- | --- |
+| L0 | `commands/texts.py` | 触发词、前缀、面板文案常量（纯数据，不引用运行时对象） |
+| L1 | `commands/parsing.py` | 玩家输入 → 结构化参数；群名片/昵称读取 |
+| L2 | `commands/panels.py` | 唯一发消息出口：群聊/私聊面板、签到场次图片、`BEAST_REALM_ICON` |
+| L2 | `commands/ranking.py` | 修为榜/战力榜取数与结算时刻判定 |
+| L3 | `commands/duel.py` | 普通斗法的准备、结算与招式记录 |
+| L3 | `commands/formatting.py` | 各面板纯文本装配（`format_*`，不发消息、不读写存档） |
+| L3 | `commands/beast.py` | 御兽秘境分组播报 |
+| L3 | `commands/doudizhu.py` | 斗地主完整子系统（触发词 + 卡牌引擎 + matcher + handler） |
+| L4 | `commands/rules.py` | `is_*_message` 判定 + 秘境战斗期阻断其他插件的 `event_preprocessor` |
+
+约定：
+
+- 子模块**不得 import 插件入口**（避免循环），共享单例走 `from ..state import store, config`；
+- 需要入口里的 helper 时，说明该 helper 还没下沉到合适的层，应优先下沉而不是加反向依赖；
+- `commands/doudizhu.py` 是历史遗留：仍用 `_g`（入口模块引用，由 `__init__.py` 注入）延迟访问 `finish_panel` 等，待其 helper 迁移完成后统一改为直接 import。
 
 ## 添加新功能的指引
 
@@ -146,7 +162,7 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 | 新增修仙规则/数据 | `domain/` 对应子系统；纯数据加 `constants.py` |
 | 新增领域函数 | 归入 `domain/` 的 Layer 2-4 对应模块；跨层调用用 `_domain.` |
 | 新增图片面板 | `cards/`（新 render 函数） |
-| 新增命令 | `__init__.py` 的 matcher + handler（未来可迁 `commands/` 子包） |
+| 新增命令 | 判定放 `commands/rules.py`，纯文本放 `commands/formatting.py`，handler 与 matcher 放 `__init__.py`（R-18 后续迁入 `commands/handlers/`） |
 | 新增后台页面 | `webui/src/`（前端）+ `admin.py`（API 路由） |
 | 新增资源 | `assets/` 对应子目录 + `pyproject.toml` package-data |
 | 新增秘境内容 | `mystic_dungeon.py`（状态机）/ `assets/mystic_maps/`（地图） |

@@ -33,7 +33,6 @@ from nonebot.rule import Rule
 
 from . import beast_realm as beast_realm_game
 from .cards import render_adventure_card, render_battle_card, render_fishing_card, render_in_thread, render_signin_calendar_card, render_signin_card, render_text_panel, set_font_paths
-from .beast_realm_cards import render_beast_realm_panel
 from .config import Config
 from .domain import (
     CANCEL_WORDS,
@@ -194,6 +193,7 @@ from .mystic_runtime import (
     parse_mystic_private_command,
 )
 from .storage import InsufficientSpiritStones, JsonStore, MysticRescueRequest
+from .net import close_shared_http_client
 from .resource_pack import configure as configure_resource_pack
 from .resource_pack import ensure_pack, pack_status as resource_pack_status
 from . import state as _state  # 共享单例（config/store/admin_manager/mystic_coordinator 等）
@@ -209,6 +209,304 @@ from .state import (  # noqa: F401
 from .commands import doudizhu as _doudizhu_cmd_module  # noqa: E402,F401
 from .commands.doudizhu import is_doudizhu_command_text  # noqa: E402
 _doudizhu_cmd_module._g = sys.modules[__name__]  # noqa: E402  # 注入入口模块供延迟访问 helper
+
+# --- 命令子模块（R-18 拆分）-------------------------------------------------
+# 入口只保留插件元数据、matcher 注册与生命周期钩子，具体实现按域放在
+# commands/ 下。此处集中回导，供本文件剩余的 handler 与 commands/doudizhu.py
+# 的延迟引用（_g）继续使用；handler 全部迁出后这组回导可以整段删除。
+from .commands.texts import (  # noqa: F401
+    ACQUIRED_ROOT_TEXTS,
+    ADVENTURE_TEXTS,
+    ALCHEMY_PREFIXES,
+    ALCHEMY_TEXTS,
+    ARRAY_DEDUCTION_PREFIXES,
+    ARRAY_DEDUCTION_TEXTS,
+    ARRAY_EQUIP_PREFIXES,
+    ARRAY_LIST_TEXTS,
+    ARTIFACT_LIST_TEXTS,
+    ARTIFACT_ROOT_PREFIXES,
+    ARTIFACT_SLOT_NAMES,
+    BATCH_SELL_PREFIXES,
+    BATCH_USE_ALL_WORDS,
+    BREAKTHROUGH_TEXTS,
+    BUY_PREFIXES,
+    CATALOG_QUERY_PREFIXES,
+    CATALOG_TEXTS,
+    COMMAND_PREFIX_CHARS,
+    CULTIVATION_RANK_TEXTS,
+    CURIO_USE_PREFIXES,
+    DAN_ROOT_PREFIXES,
+    DEMON_CORE_BATCH_USE_PREFIXES,
+    DEMON_CORE_USE_PREFIXES,
+    DUEL_PREFIXES,
+    EMPEROR_CATALOG_TEXTS,
+    EQUIP_PREFIXES,
+    EVIL_QUIT_TEXTS,
+    EVIL_SELECT_TEXTS,
+    FISHING_TEXTS,
+    FOOD_BATCH_USE_PREFIXES,
+    FOOD_USE_PREFIXES,
+    HELP_TEXTS,
+    IDENTITY_SELECT_PREFIXES,
+    IMMORTAL_SEED_EQUIP_PREFIXES,
+    IMMORTAL_SEED_TEXTS,
+    ITEM_LIST_TEXTS,
+    LIFE_ARTIFACT_PREFIXES,
+    LOW_REALM_ARTIFACT_BATCH_SELL_PREFIXES,
+    MAKEUP_SIGN_PREFIXES,
+    MARKET_BUY_PREFIXES,
+    MARKET_CANCEL_PREFIXES,
+    MARKET_OFFER_PREFIXES,
+    MARKET_TEXTS,
+    METHOD_DETAIL_PREFIXES,
+    METHOD_EQUIP_PREFIXES,
+    METHOD_LIST_TEXTS,
+    MISC_USE_PREFIXES,
+    NEWBIE_TUTORIAL_TEXTS,
+    NORMAL_DUEL_ACTION_SEGMENT_LABELS,
+    NORMAL_DUEL_DURATION_SECONDS,
+    NORMAL_DUEL_IGNORED_SEGMENT_TYPES,
+    NORMAL_DUEL_PREPARE_SECONDS,
+    NORMAL_DUEL_TEXTS,
+    PENDING_FISHING_TTL,
+    PILL_BATCH_USE_PREFIXES,
+    PILL_USE_PREFIXES,
+    PLANT_EQUIP_PREFIXES,
+    PLANT_LIST_TEXTS,
+    POWER_RANK_TEXTS,
+    POWER_TEXTS,
+    PUPPET_EQUIP_PREFIXES,
+    PUPPET_LIST_TEXTS,
+    RANK_SETTLE_HOUR,
+    RANK_SETTLE_MINUTE,
+    REFINING_PREFIXES,
+    REFINING_TEXTS,
+    RESCUE_REQUEST_PREFIXES,
+    RESCUE_TAKE_PREFIXES,
+    ROUTE_SELECT_PREFIXES,
+    ROUTE_TEXTS,
+    SELL_PREFIXES,
+    SHOP_TEXTS,
+    SIGNIN_CALENDAR_TEXTS,
+    SIGNIN_TEXTS,
+    SPECIAL_ABILITY_CATALOG_TEXTS,
+    SPECIAL_ABILITY_LEARN_PREFIXES,
+    SPECIAL_ABILITY_TEXTS,
+    SPIRIT_LIQUID_USE_PREFIXES,
+    STATUS_TEXTS,
+    STONE_BATCH_USE_PREFIXES,
+    STONE_USE_PREFIXES,
+    TALISMAN_DRAW_PREFIXES,
+    TALISMAN_DRAW_TEXTS,
+    TALISMAN_EQUIP_PREFIXES,
+    TALISMAN_UNEQUIP_TEXTS,
+    TALISMAN_USE_PREFIXES,
+    TASK_COMPLETE_PREFIXES,
+    TASK_TEXTS,
+    TIANJI_MYSTIC_TEXTS,
+    TRADE_ACCEPT_PREFIXES,
+    TRADE_CANCEL_PREFIXES,
+    TRADE_OFFER_PREFIXES,
+    UNEQUIP_TEXTS,
+)
+from .commands.parsing import (  # noqa: F401
+    TRADE_CATEGORIES,
+    at_user_ids,
+    conversation_pending_key,
+    group_member_display_name,
+    is_acquired_root_command_text,
+    is_alchemy_command_text,
+    is_array_deduction_command_text,
+    is_dual_cultivation_command_text,
+    is_duel_command_text,
+    is_equip_array_command_text,
+    is_equip_command_text,
+    is_equip_method_command_text,
+    is_equip_puppet_command_text,
+    is_equip_talisman_command_text,
+    is_immortal_seed_command_text,
+    is_item_use_command_text,
+    is_life_artifact_command_text,
+    is_market_command_text,
+    is_method_detail_command_text,
+    is_normal_duel_apply_text,
+    is_plant_command_text,
+    is_prefixed_index_command,
+    is_refining_command_text,
+    is_rescue_command_text,
+    is_route_command_text,
+    is_shop_command_text,
+    is_special_ability_command_text,
+    is_special_ability_learn_command_text,
+    is_spirit_liquid_use_command_text,
+    is_talisman_draw_command_text,
+    is_task_command_text,
+    is_tianji_mystic_command_text,
+    is_trade_command_text,
+    nickname_from_event,
+    normal_duel_action_text,
+    normalized_plain_text,
+    parse_acquired_root_command,
+    parse_alchemy_name,
+    parse_array_deduction_index,
+    parse_artifact_slot,
+    parse_batch_item_use,
+    parse_batch_sell,
+    parse_batch_use_limit,
+    parse_catalog_query,
+    parse_duel_target,
+    parse_equip_artifact_command,
+    parse_equip_index,
+    parse_equip_talisman_index,
+    parse_fishing_arg,
+    parse_immortal_seed_equip_index,
+    parse_item_use,
+    parse_life_artifact_index,
+    parse_low_realm_artifact_batch_sell,
+    parse_market_buy,
+    parse_market_cancel,
+    parse_market_offer,
+    parse_prefixed_index,
+    parse_prefixed_name,
+    parse_refining_name,
+    parse_rescue_request,
+    parse_rescue_take,
+    parse_sell_item,
+    parse_shop_buy_index,
+    parse_short_index_text,
+    parse_spirit_liquid_use,
+    parse_talisman_draw_index,
+    parse_trade_accept,
+    parse_trade_cancel,
+    parse_trade_offer,
+    parse_unequip_artifact_slot,
+    remember_group_member,
+    short_name,
+)
+from .commands.panels import (  # noqa: F401
+    BEAST_REALM_ICON,
+    build_fishing_image,
+    build_signin_calendar_image,
+    build_signin_image,
+    finish_panel,
+    finish_private_or_current_panel,
+    panel_accent,
+    panel_segment,
+    parse_calendar_target,
+    parse_makeup_target,
+    send_image,
+    send_panel,
+    send_private_panel,
+)
+from .commands.duel import (  # noqa: F401
+    _mystic_prepare_info,
+    append_normal_duel_action,
+    build_normal_duel_image,
+    finish_normal_duel,
+    group_duel_session,
+    mystic_prepare_cards,
+    normal_duel_prepare_cards,
+    send_mystic_prepare_cards,
+    send_normal_duel_prepare_cards,
+    send_normal_duel_prepare_messages,
+)
+from .commands.ranking import (  # noqa: F401
+    format_cultivation_rank,
+    format_power_rank,
+    group_cultivation_rank_entries,
+    group_power_rank_entries,
+    is_settle_time,
+    rank_entries_from_group,
+)
+from .commands.formatting import (  # noqa: F401
+    _is_likely_sent_despite_error,
+    append_item_lines,
+    format_adventure_panel,
+    format_array_list,
+    format_artifact_list,
+    format_catalog_text,
+    format_duel_result,
+    format_help_text,
+    format_item_list,
+    format_method_list,
+    format_newbie_tutorial_text,
+    format_plant_list,
+    format_power_status,
+    format_puppet_list,
+    format_rank_message,
+    format_shop_panel,
+    item_icon_for_category,
+    item_list_display,
+    reward_catalog_lines,
+)
+from .commands.beast import (  # noqa: F401
+    beast_realm_group_id_from_key,
+    beast_realm_group_key_from_event,
+    cleanup_beast_realm_table,
+    route_beast_realm_players,
+    send_beast_realm_group_report,
+    send_beast_realm_leader_panel,
+    send_beast_realm_recruit_panels,
+)
+from .commands.rules import (  # noqa: F401
+    block_other_plugins_during_mystic_battle,
+    is_acquired_root_message,
+    is_adventure_message,
+    is_alchemy_message,
+    is_array_deduction_message,
+    is_array_list_message,
+    is_artifact_list_message,
+    is_beast_realm_group_message,
+    is_beast_realm_private_message,
+    is_breakthrough_message,
+    is_catalog_message,
+    is_cultivation_rank_message,
+    is_dual_cultivation_message,
+    is_duel_message,
+    is_emperor_catalog_message,
+    is_equip_array_message,
+    is_equip_artifact_message,
+    is_equip_method_message,
+    is_equip_puppet_message,
+    is_equip_talisman_message,
+    is_fishing_message,
+    is_fishing_reply,
+    is_group_chat_for_rank,
+    is_help_message,
+    is_immortal_seed_message,
+    is_item_list_message,
+    is_item_use_message,
+    is_life_artifact_message,
+    is_makeup_sign_message,
+    is_managed_command_text,
+    is_market_message,
+    is_method_detail_message,
+    is_method_list_message,
+    is_mystic_group_message,
+    is_mystic_private_message,
+    is_newbie_tutorial_message,
+    is_normal_duel_apply_message,
+    is_normal_duel_chat_message,
+    is_plant_list_message,
+    is_plant_message,
+    is_power_message,
+    is_power_rank_message,
+    is_puppet_list_message,
+    is_refining_message,
+    is_rescue_message,
+    is_route_message,
+    is_shop_message,
+    is_signin_calendar_message,
+    is_signin_message,
+    is_special_ability_learn_message,
+    is_special_ability_message,
+    is_spirit_liquid_use_message,
+    is_status_message,
+    is_talisman_draw_message,
+    is_task_message,
+    is_tianji_mystic_message,
+    is_trade_message,
+)
 
 __version__ = "0.6.0"
 
@@ -350,132 +648,9 @@ __plugin_meta__ = PluginMetadata(
 
 driver = get_driver()
 
-SIGNIN_TEXTS = {"签到", "修仙签到", "每日签到"}
-STATUS_TEXTS = {"\u6211\u7684\u4fee\u4e3a", "\u4fee\u4e3a", "\u5883\u754c", "\u7075\u6839", "\u9762\u677f", "\u4e2a\u4eba\u9762\u677f"}
-# 签到日历：独立查询/翻月词组 + 补签词组（签到功能的延伸，不算新系统）
-SIGNIN_CALENDAR_TEXTS = {"签到日历", "签到日历表", "日历", "我的日历"}
-MAKEUP_SIGN_PREFIXES = ("补签",)
-HELP_TEXTS = {"\u5e2e\u52a9", "\u4fee\u4ed9\u5e2e\u52a9", "\u6307\u4ee4", "\u8bf4\u660e", "\u73a9\u6cd5", "\u83dc\u5355"}
-CATALOG_TEXTS = {
-    "\u56fe\u9274",
-    "\u56fe\u5f55",
-    "\u5883\u754c\u56fe\u9274",
-    "\u7a81\u7834\u56fe\u9274",
-    "\u54c1\u76f8\u56fe\u9274",
-    "\u7a81\u7834\u54c1\u76f8\u56fe\u9274",
-    "\u9053\u5177\u54c1\u76f8\u56fe\u9274",
-    "\u4e39\u836f\u56fe\u9274",
-    "\u7b26\u7b93\u56fe\u9274",
-    "\u7075\u5668\u56fe\u9274",
-    "\u529f\u6cd5\u56fe\u9274",
-    "\u9635\u76d8\u56fe\u9274",
-    "\u6750\u6599\u56fe\u9274",
-    "\u795e\u901a\u56fe\u9274",
-    "\u7075\u6750\u56fe\u9274",
-}
-CATALOG_QUERY_PREFIXES = ("图鉴", "图录", "查看图鉴")
-BREAKTHROUGH_TEXTS = {"\u7a81\u7834", "\u5883\u754c\u7a81\u7834", "\u7834\u5883", "\u67e5\u770b\u7a81\u7834", "\u7a81\u7834\u72b6\u6001", "\u6563\u529f", "\u91cd\u4fee", "\u81ea\u5e9f\u4fee\u4e3a"}
-CULTIVATION_RANK_TEXTS = {"\u4fee\u4e3a\u699c", "\u7fa4\u4fee\u4e3a\u699c", "\u5883\u754c\u699c", "\u6392\u884c", "\u6392\u884c\u699c"}
-POWER_RANK_TEXTS = {"战力榜", "群战力榜"}
-POWER_TEXTS = {"战力", "我的战力"}
-ADVENTURE_TEXTS = {"历练", "历练面板", "历练帮助"}
-NEWBIE_TUTORIAL_TEXTS = {"新手教程"}
-ARTIFACT_LIST_TEXTS = {"\u7075\u5668", "\u6211\u7684\u7075\u5668", "\u7075\u5668\u5217\u8868", "\u88c5\u5907\u5217\u8868"}
-METHOD_LIST_TEXTS = {"功法", "我的功法", "功法列表"}
-ARRAY_LIST_TEXTS = {"阵盘", "我的阵盘", "阵盘列表", "阵法", "我的阵法"}
-PUPPET_LIST_TEXTS = {"傀儡", "我的傀儡", "傀儡列表"}
-PLANT_LIST_TEXTS = {"灵植", "我的灵植", "灵植列表"}
-ITEM_LIST_TEXTS = {"\u9053\u5177", "\u6211\u7684\u9053\u5177", "\u80cc\u5305", "\u7269\u54c1", "\u6211\u7684\u7269\u54c1", "\u5305\u88f9"}
-ACQUIRED_ROOT_TEXTS = {"\u540e\u5929\u7075\u6839", "\u4e39\u7075\u6839", "\u5668\u7075\u6839", "\u70bc\u5316\u7075\u6839", "\u4e94\u884c\u8865\u5168"}
-SPECIAL_ABILITY_TEXTS = {"神通", "我的神通"}
-SPECIAL_ABILITY_CATALOG_TEXTS = {"神通图鉴"}
-ROUTE_TEXTS = {"\u4fee\u70bc\u8def\u7ebf", "\u8def\u7ebf", "\u8eab\u4efd", "\u8eab\u4efd\u4ee4\u724c", "\u5b97\u95e8\u8eab\u4efd"}
-TASK_TEXTS = {"每日任务", "任务", "我的任务", "今日任务", "接取任务", "领取任务"}
-SHOP_TEXTS = {"商店", "坊市", "每日商店"}
-ALCHEMY_TEXTS = {"炼丹", "丹方"}
-REFINING_TEXTS = {'炼器', '炼器图鉴', '炼器帮助'}
-ARRAY_DEDUCTION_TEXTS = {'阵法推演', '推演阵法'}
-IMMORTAL_SEED_TEXTS = {'仙源', '我的仙源', '仙源图鉴', '仙种', '我的仙种', '仙种图鉴'}
-EMPEROR_CATALOG_TEXTS = {'唯一装备图鉴'}
-TALISMAN_DRAW_TEXTS = {"\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7b26\u7b93\u7ed8\u5236", "\u7ed8\u7b26"}
-TIANJI_MYSTIC_TEXTS = {"天机秘境", "天机探索", "天机示警"}
-UNEQUIP_TEXTS = {"卸下灵器", "卸下装备"}
-EQUIP_PREFIXES = ("装备灵器", "装备")
-ARTIFACT_SLOT_NAMES = ("主手", "副手", "护甲", "护盾")
-TALISMAN_EQUIP_PREFIXES = ("装备符箓", "佩戴符箓", "符箓栏")
-TALISMAN_UNEQUIP_TEXTS = {"卸下符箓", "卸下符箓栏"}
-METHOD_EQUIP_PREFIXES = ("参悟功法", "修炼功法", "装备功法")
-METHOD_DETAIL_PREFIXES = ("学习功法", "查看功法", "功法详情", "功法页面")
-ARRAY_EQUIP_PREFIXES = ("布置阵盘", "装备阵盘", "布阵", "布置阵法")
-PUPPET_EQUIP_PREFIXES = ("装备傀儡", "唤醒傀儡", "启用傀儡")
-PLANT_EQUIP_PREFIXES = ("栽种灵植", "种植灵植", "种灵植")
-PILL_USE_PREFIXES = ("使用丹药", "服用丹药", "服丹", "吃丹药")
-PILL_BATCH_USE_PREFIXES = ("批量使用丹药", "批量服用丹药", "批量服丹", "一键服丹", "一键使用丹药")
-TALISMAN_USE_PREFIXES = ("使用符箓", "激发符箓", "用符")
-STONE_USE_PREFIXES = ("炼化灵石", "使用灵石", "吸收灵石")
-STONE_BATCH_USE_PREFIXES = ("批量炼化灵石", "批量使用灵石", "批量吸收灵石", "一键炼化灵石", "一键使用灵石")
-DEMON_CORE_USE_PREFIXES = ("炼化妖丹", "吸收妖丹", "使用妖丹")
-DEMON_CORE_BATCH_USE_PREFIXES = ("批量炼化妖丹", "批量吸收妖丹", "一键炼化妖丹", "一键吸收妖丹")
-SPIRIT_LIQUID_USE_PREFIXES = ("炼化灵液", "炼化精纯灵液", "吸收灵液", "吸收精纯灵液", "使用灵液", "使用精纯灵液")
-FOOD_USE_PREFIXES = ("使用灵食", "食用灵食", "吃灵食")
-FOOD_BATCH_USE_PREFIXES = ("批量使用灵食", "批量食用灵食", "批量吃灵食", "一键吃灵食", "一键使用灵食")
-BATCH_USE_ALL_WORDS = {"全部", "全", "all", "ALL", "All"}
-CURIO_USE_PREFIXES = ("使用奇物", "催动奇物", "参悟奇物")
-MISC_USE_PREFIXES = ("鉴定杂物", "鉴定")
-DAN_ROOT_PREFIXES = ("\u70bc\u5316\u4e39\u7075\u6839", "\u51dd\u7ec3\u4e39\u7075\u6839", "\u8865\u5168\u4e39\u7075\u6839")
-ARTIFACT_ROOT_PREFIXES = ("\u70bc\u5316\u5668\u7075\u6839", "\u51dd\u7ec3\u5668\u7075\u6839", "\u8865\u5168\u5668\u7075\u6839", "\u70bc\u5668\u4e3a\u6839")
-ROUTE_SELECT_PREFIXES = ("选择路线", "切换路线")
-IDENTITY_SELECT_PREFIXES = ("选择身份", "加入身份", "晋升身份")
-EVIL_SELECT_TEXTS = {"选择邪修", "加入邪修", "同修邪修"}
-EVIL_QUIT_TEXTS = {"退出邪修", "脱离邪修"}
-TASK_COMPLETE_PREFIXES = ("完成任务", "提交任务")
-BUY_PREFIXES = ("购买", "买入")
-SELL_PREFIXES = ("出售", "卖出")
-ALCHEMY_PREFIXES = ("炼丹",)
-REFINING_PREFIXES = ('炼器',)
-ARRAY_DEDUCTION_PREFIXES = ('阵法推演', '推演阵法')
-LIFE_ARTIFACT_PREFIXES = ('祭炼本命灵器', '本命灵器', '祭炼本命')
-IMMORTAL_SEED_EQUIP_PREFIXES = ('装备仙源', '纳入仙源', '装备仙种', '纳入仙种')
-BATCH_SELL_PREFIXES = ('批量出售', '批量卖出', '一键出售')
-LOW_REALM_ARTIFACT_BATCH_SELL_PREFIXES = ('批量出售低阶灵器', '批量卖出低阶灵器', '一键出售低阶灵器', '清理低阶灵器')
-TRADE_OFFER_PREFIXES = ('交易', '出售给')
-TRADE_ACCEPT_PREFIXES = ('接受交易', '购买交易')
-TRADE_CANCEL_PREFIXES = ('取消交易', '撤销交易')
-MARKET_TEXTS = {'万宝楼', '万宝楼列表', '万宝阁', '寄售列表'}
-MARKET_OFFER_PREFIXES = ('万宝楼挂售', '万宝楼寄售', '挂售', '寄售')
-MARKET_BUY_PREFIXES = ('万宝楼购买', '万宝楼买入', '购买万宝楼')
-MARKET_CANCEL_PREFIXES = ('万宝楼下架', '下架寄售', '下架')
-RESCUE_REQUEST_PREFIXES = ('秘境救援', '发起救援')
-RESCUE_TAKE_PREFIXES = ('救援', '接受救援')
-TALISMAN_DRAW_PREFIXES = ("\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7ed8\u7b26")
-SPECIAL_ABILITY_LEARN_PREFIXES = ("\u9886\u609f\u795e\u901a", "\u53c2\u609f\u795e\u901a")
-DUEL_PREFIXES = ("pk", "PK", "切磋", "挑战")
-NORMAL_DUEL_TEXTS = {"申请普通斗法", "普通斗法", "普通斗法申请", "申请斗法", "斗法匹配"}
-FISHING_TEXTS = ("\u5782\u9493", "\u9493\u9c7c", "\u8bf8\u5929\u4e07\u754c\u5782\u9493")
-COMMAND_PREFIX_CHARS = "/!！.。"
-PENDING_FISHING_TTL = 120
-NORMAL_DUEL_PREPARE_SECONDS = 60
-NORMAL_DUEL_DURATION_SECONDS = 60
-NORMAL_DUEL_ACTION_SEGMENT_LABELS = {
-    "face": "\u8868\u60c5\u672f\u5f0f",
-    "mface": "\u6536\u85cf\u8868\u60c5\u672f\u5f0f",
-    "image": "\u5f71\u50cf\u672f\u5f0f",
-    "record": "\u97f3\u6d6a\u672f\u5f0f",
-    "video": "\u955c\u5f71\u672f\u5f0f",
-    "dice": "\u9ab0\u7075\u672f\u5f0f",
-    "rps": "\u62f3\u4ee4\u672f\u5f0f",
-    "poke": "\u6307\u52b2\u672f\u5f0f",
-    "share": "\u501f\u52bf\u672f\u5f0f",
-    "json": "\u5f02\u6587\u672f\u5f0f",
-    "xml": "\u5f02\u6587\u672f\u5f0f",
-}
-NORMAL_DUEL_IGNORED_SEGMENT_TYPES = {"at", "reply", "node"}
-RANK_SETTLE_HOUR = 22
-RANK_SETTLE_MINUTE = 0
 # 共享可变状态（钓鱼待结算、斗法队列、牌桌等）统一定义在 state.py，
 # 此处只沿用上方 `from .state import ...` 的引用。曾经在这里重新赋值为新的
 # 空字典，导致入口模块与 commands/ 子模块各持一份、互不可见（F811）。
-BEAST_REALM_ICON = "beast_realm"
 rank_scheduler_task: Optional[asyncio.Task] = None
 mystic_recovery_task: Optional[asyncio.Task] = None
 # 秘境背景图外置包的后台下载任务（R-09）：不阻塞启动，失败只降级为占位背景。
@@ -483,1924 +658,120 @@ asset_download_task: Optional[asyncio.Task] = None
 admin_http_server = None
 
 
-def normalized_plain_text(event: MessageEvent) -> str:
-    return event.message.extract_plain_text().strip().lstrip(COMMAND_PREFIX_CHARS).strip()
-
-
-def normal_duel_action_text(event: MessageEvent) -> str:
-    text = normalized_plain_text(event)
-    if text:
-        return text
-    labels: list[str] = []
-    for segment in event.message:
-        segment_type = str(getattr(segment, "type", "") or "")
-        if not segment_type or segment_type in NORMAL_DUEL_IGNORED_SEGMENT_TYPES:
-            continue
-        label = NORMAL_DUEL_ACTION_SEGMENT_LABELS.get(segment_type)
-        if not label:
-            continue
-        data = getattr(segment, "data", None) or {}
-        if segment_type == "face":
-            face_id = str(data.get("id") or data.get("face_id") or "").strip()
-            if face_id:
-                label = f"{label}{face_id}"
-        elif segment_type == "mface":
-            summary = str(data.get("summary") or data.get("text") or data.get("name") or "").strip()
-            if summary:
-                label = f"{label}{summary[:12]}"
-        labels.append(label)
-    return "\u3001".join(labels).strip()
-
-
-def parse_fishing_arg(text: str) -> Optional[str]:
-    for command in FISHING_TEXTS:
-        if text == command:
-            return ""
-        if text.startswith(command):
-            return text[len(command):].strip()
-    return None
-
-
-
-
-
-
-
-
-# 头像获取收敛到 net.py：共享 httpx 客户端 + 带 TTL 的字节 LRU（R-13）。
-from .net import close_shared_http_client, fetch_avatar
-
-
-def nickname_from_event(event: MessageEvent) -> str:
-    sender = getattr(event, "sender", None)
-    if sender:
-        card = getattr(sender, "card", "") or ""
-        nickname = getattr(sender, "nickname", "") or ""
-        return card or nickname
-    return ""
-
-
-def short_name(name: str, limit: int = 12) -> str:
-    name = name.strip()
-    if len(name) <= limit:
-        return name
-    return f"{name[:limit - 1]}…"
-
-
-async def remember_group_member(event: MessageEvent) -> None:
-    if not isinstance(event, GroupMessageEvent):
-        return
-    await store.touch_group_member(
-        group_id=str(event.group_id),
-        user_id=event.get_user_id(),
-        date_text=local_today().isoformat(),
-        nickname=nickname_from_event(event),
-    )
-
-
-async def group_member_display_name(event: GroupMessageEvent, user_id: str) -> str:
-    group_id = str(event.group_id)
-    cached = await store.get_group_member_nickname(group_id, user_id)
-    if cached:
-        return cached
-    try:
-        bot = get_bot()
-        info = await bot.get_group_member_info(
-            group_id=int(event.group_id),
-            user_id=int(user_id),
-            no_cache=False,
-        )
-        name = str(info.get("card") or info.get("nickname") or "").strip()
-        if name:
-            await store.touch_group_member(group_id, user_id, local_today().isoformat(), name)
-            return name
-    except Exception as exc:
-        logger.debug(f"获取群成员昵称失败: {exc}")
-    return f"QQ {user_id}"
-
-
-def at_user_ids(event: MessageEvent) -> list[str]:
-    result = []
-    for segment in event.message:
-        if segment.type != "at":
-            continue
-        user_id = str(segment.data.get("qq", ""))
-        if user_id and user_id != "all":
-            result.append(user_id)
-    return result
-
-
-def parse_artifact_slot(text: str) -> Optional[str]:
-    for slot in ARTIFACT_SLOT_NAMES:
-        if slot in text:
-            return "护甲" if slot == "护盾" else slot
-    return None
-
-
-def is_equip_command_text(text: str) -> bool:
-    if text in UNEQUIP_TEXTS:
-        return True
-    if any(text.startswith(f"{prefix} ") or text.startswith(f"{prefix}　") for prefix in UNEQUIP_TEXTS):
-        return parse_artifact_slot(text) is not None
-    if is_equip_method_command_text(text) or is_equip_array_command_text(text) or is_equip_talisman_command_text(text):
-        return False
-    for prefix in EQUIP_PREFIXES:
-        if text == prefix:
-            return False
-        if text.startswith(prefix):
-            rest = text[len(prefix):].strip()
-            return bool(re.search(r"\d+", rest))
-    return False
-
-
-def parse_equip_index(text: str) -> Optional[int]:
-    for prefix in EQUIP_PREFIXES:
-        if not text.startswith(prefix):
-            continue
-        rest = text[len(prefix):].strip()
-        match = re.search(r"\d+", rest)
-        if match:
-            return int(match.group(0))
-    return None
-
-
-def parse_equip_artifact_command(text: str) -> tuple[Optional[int], Optional[str]]:
-    return parse_equip_index(text), parse_artifact_slot(text)
-
-
-def parse_unequip_artifact_slot(text: str) -> Optional[str]:
-    return parse_artifact_slot(text)
-
-
-def is_prefixed_index_command(text: str, prefixes: tuple[str, ...]) -> bool:
-    for prefix in prefixes:
-        if text == prefix:
-            return False
-        if text.startswith(prefix):
-            rest = text[len(prefix):].strip()
-            return bool(re.search(r"\d+", rest))
-    return False
 
 
-def parse_prefixed_index(text: str, prefixes: tuple[str, ...]) -> Optional[int]:
-    for prefix in prefixes:
-        if not text.startswith(prefix):
-            continue
-        rest = text[len(prefix):].strip()
-        match = re.search(r"\d+", rest)
-        if match:
-            return int(match.group(0))
-    return None
 
 
-def parse_spirit_liquid_use(text: str) -> Optional[int]:
-    for prefix in SPIRIT_LIQUID_USE_PREFIXES:
-        if text == prefix:
-            return None
-        if text.startswith(prefix):
-            rest = text[len(prefix):].strip()
-            if not rest or rest in {"\u5168\u90e8", "all", "ALL"}:
-                return None
-            match = re.search(r"\d+", rest)
-            if match:
-                return int(match.group(0))
-            return 0
-    return None
 
 
-def is_spirit_liquid_use_command_text(text: str) -> bool:
-    return any(text == prefix or text.startswith(prefix) for prefix in SPIRIT_LIQUID_USE_PREFIXES)
 
 
-def is_item_use_command_text(text: str) -> bool:
-    if parse_batch_item_use(text) is not None:
-        return True
-    return any(
-        is_prefixed_index_command(text, prefixes)
-        for prefixes in (
-            PILL_USE_PREFIXES,
-            TALISMAN_USE_PREFIXES,
-            STONE_USE_PREFIXES,
-            FOOD_USE_PREFIXES,
-            CURIO_USE_PREFIXES,
-            MISC_USE_PREFIXES,
-            DEMON_CORE_USE_PREFIXES,
-        )
-    )
 
 
-def is_equip_talisman_command_text(text: str) -> bool:
-    return text in TALISMAN_UNEQUIP_TEXTS or is_prefixed_index_command(text, TALISMAN_EQUIP_PREFIXES)
 
 
-def parse_equip_talisman_index(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, TALISMAN_EQUIP_PREFIXES)
 
 
-def is_equip_puppet_command_text(text: str) -> bool:
-    return is_prefixed_index_command(text, PUPPET_EQUIP_PREFIXES)
 
 
-def is_plant_command_text(text: str) -> bool:
-    return is_prefixed_index_command(text, PLANT_EQUIP_PREFIXES)
 
 
-def is_route_command_text(text: str) -> bool:
-    return (
-        text in ROUTE_TEXTS
-        or parse_prefixed_name(text, ROUTE_SELECT_PREFIXES) is not None
-        or parse_prefixed_name(text, IDENTITY_SELECT_PREFIXES) is not None
-        or text in EVIL_SELECT_TEXTS
-        or text in EVIL_QUIT_TEXTS
-    )
 
 
-def is_task_command_text(text: str) -> bool:
-    return text in TASK_TEXTS or is_prefixed_index_command(text, TASK_COMPLETE_PREFIXES)
 
 
-def is_shop_command_text(text: str) -> bool:
-    return (
-        text in SHOP_TEXTS
-        or parse_shop_buy_index(text) is not None
-        or parse_sell_item(text) is not None
-        or parse_low_realm_artifact_batch_sell(text) is not None
-        or parse_batch_sell(text) is not None
-    )
 
 
-def is_alchemy_command_text(text: str) -> bool:
-    return text in ALCHEMY_TEXTS or parse_alchemy_name(text) is not None
 
 
-def is_talisman_draw_command_text(text: str) -> bool:
-    return parse_talisman_draw_index(text) is not None
 
-
-def is_special_ability_command_text(text: str) -> bool:
-    return text in SPECIAL_ABILITY_TEXTS or text in SPECIAL_ABILITY_CATALOG_TEXTS
 
 
-def is_special_ability_learn_command_text(text: str) -> bool:
-    return is_prefixed_index_command(text, SPECIAL_ABILITY_LEARN_PREFIXES)
 
 
-def is_tianji_mystic_command_text(text: str) -> bool:
-    return text in TIANJI_MYSTIC_TEXTS
 
 
 
-def parse_refining_name(text: str) -> Optional[str]:
-    stripped = text.strip()
-    if stripped in REFINING_TEXTS:
-        return ""
-    for prefix in REFINING_PREFIXES:
-        if stripped.startswith(f"{prefix} "):
-            return stripped[len(prefix):].strip()
-    return None
 
 
-def parse_array_deduction_index(text: str) -> Optional[int]:
-    if text in ARRAY_DEDUCTION_TEXTS:
-        return 0
-    return parse_prefixed_index(text, ARRAY_DEDUCTION_PREFIXES)
 
 
-def parse_life_artifact_index(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, LIFE_ARTIFACT_PREFIXES)
 
 
-def parse_immortal_seed_equip_index(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, IMMORTAL_SEED_EQUIP_PREFIXES)
 
 
-def parse_batch_sell(text: str) -> Optional[tuple[str, int]]:
-    for prefix in BATCH_SELL_PREFIXES:
-        if not text.startswith(prefix):
-            continue
-        rest = text[len(prefix):].strip()
-        if not rest:
-            return None
-        parts = rest.split()
-        category = parts[0]
-        limit = 999
-        if len(parts) > 1 and parts[1].isdigit():
-            limit = int(parts[1])
-        return category, limit
-    return None
 
 
-def parse_low_realm_artifact_batch_sell(text: str) -> Optional[int]:
-    for prefix in LOW_REALM_ARTIFACT_BATCH_SELL_PREFIXES:
-        if text == prefix:
-            return 999
-        if not text.startswith(prefix):
-            continue
-        rest = text[len(prefix):].strip()
-        if not rest or rest in BATCH_USE_ALL_WORDS:
-            return 999
-        if rest.isdigit():
-            return int(rest)
-    return None
 
 
-TRADE_CATEGORIES = ("仙缘", "灵器", "功法", "丹药", "阵盘", "灵材", "符箓", "傀儡", "灵植", "灵石", "杂物", "奇物", "神通", "灵食", "仙源", "仙种")
 
 
-def parse_catalog_query(text: str) -> Optional[str]:
-    stripped = text.strip()
-    for prefix in CATALOG_QUERY_PREFIXES:
-        if stripped == prefix:
-            return None
-        if stripped.startswith(prefix):
-            rest = stripped[len(prefix):].strip()
-            return rest or None
-    return None
 
 
-def parse_trade_offer(text: str) -> Optional[tuple[str, str, int, int]]:
-    for prefix in TRADE_OFFER_PREFIXES:
-        if not text.startswith(prefix):
-            continue
-        rest = text[len(prefix):].strip()
-        match = re.search(r"(\d{5,})", rest)
-        target_id = ""
-        if match:
-            target_id = match.group(1)
-            rest = (rest[:match.start()] + rest[match.end():]).strip()
-        for category in TRADE_CATEGORIES:
-            if category not in rest:
-                continue
-            tail = rest.split(category, 1)[1]
-            nums = [int(item) for item in re.findall(r"\d+", tail)]
-            if len(nums) >= 2:
-                return target_id, category, nums[0], nums[1]
-    return None
 
 
-def parse_trade_accept(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, TRADE_ACCEPT_PREFIXES)
 
 
-def parse_trade_cancel(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, TRADE_CANCEL_PREFIXES)
 
 
-def parse_market_offer(text: str) -> Optional[tuple[str, int]]:
-    for prefix in MARKET_OFFER_PREFIXES:
-        if not text.startswith(prefix):
-            continue
-        rest = text[len(prefix):].strip()
-        for category in TRADE_CATEGORIES:
-            if category not in rest:
-                continue
-            tail = rest.split(category, 1)[1]
-            nums = [int(item) for item in re.findall(r"\d+", tail)]
-            if nums:
-                return category, nums[0]
-    return None
 
 
-def parse_market_buy(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, MARKET_BUY_PREFIXES)
 
 
-def parse_market_cancel(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, MARKET_CANCEL_PREFIXES)
 
 
-def parse_rescue_request(text: str) -> Optional[int]:
-    for prefix in RESCUE_REQUEST_PREFIXES:
-        if text == prefix:
-            return 0
-        if text.startswith(prefix):
-            match = re.search(r"\d+", text[len(prefix):])
-            return int(match.group(0)) if match else 0
-    return None
 
 
-def parse_rescue_take(text: str) -> Optional[str]:
-    for prefix in RESCUE_TAKE_PREFIXES:
-        if text == prefix:
-            return ""
-        if text.startswith(prefix):
-            return text[len(prefix):].strip()
-    return None
 
 
-def is_refining_command_text(text: str) -> bool:
-    return parse_refining_name(text) is not None
-
 
-def is_array_deduction_command_text(text: str) -> bool:
-    return parse_array_deduction_index(text) is not None
 
 
-def is_life_artifact_command_text(text: str) -> bool:
-    return parse_life_artifact_index(text) is not None
 
 
-def is_immortal_seed_command_text(text: str) -> bool:
-    return text in IMMORTAL_SEED_TEXTS or parse_immortal_seed_equip_index(text) is not None
 
 
-def is_trade_command_text(text: str) -> bool:
-    return parse_trade_offer(text) is not None or parse_trade_accept(text) is not None or parse_trade_cancel(text) is not None or text in {"\u4ea4\u6613\u5217\u8868", "\u6211\u7684\u4ea4\u6613"}
 
 
-def is_market_command_text(text: str) -> bool:
-    return text in MARKET_TEXTS or parse_market_offer(text) is not None or parse_market_buy(text) is not None or parse_market_cancel(text) is not None
 
 
-def is_rescue_command_text(text: str) -> bool:
-    return parse_rescue_request(text) is not None or parse_rescue_take(text) is not None or text in {"\u6551\u63f4\u5217\u8868", "\u79d8\u5883\u6551\u63f4\u5217\u8868"}
 
 
-def is_dual_cultivation_command_text(text: str) -> bool:
-    return text.startswith("双修") or text == "随机双修"
 
 
-def parse_batch_use_limit(rest: str) -> Optional[int]:
-    stripped = str(rest or "").strip()
-    if not stripped or stripped in BATCH_USE_ALL_WORDS:
-        return 999
-    if any(word in stripped for word in BATCH_USE_ALL_WORDS):
-        return 999
-    match = re.search(r"\d+", stripped)
-    if match:
-        return max(1, min(999, int(match.group(0))))
-    return None
-
-
-def parse_batch_item_use(text: str) -> Optional[tuple[str, int]]:
-    mapping = [
-        ("丹药", PILL_BATCH_USE_PREFIXES),
-        ("灵石", STONE_BATCH_USE_PREFIXES),
-        ("灵食", FOOD_BATCH_USE_PREFIXES),
-        ("妖丹", DEMON_CORE_BATCH_USE_PREFIXES),
-    ]
-    for category, prefixes in mapping:
-        for prefix in prefixes:
-            if text == prefix:
-                return category, 999
-            if text.startswith(prefix):
-                limit = parse_batch_use_limit(text[len(prefix):])
-                if limit is not None:
-                    return category, limit
-    direct_mapping = [
-        ("丹药", PILL_USE_PREFIXES),
-        ("灵石", STONE_USE_PREFIXES),
-        ("灵食", FOOD_USE_PREFIXES),
-        ("妖丹", DEMON_CORE_USE_PREFIXES),
-    ]
-    for category, prefixes in direct_mapping:
-        for prefix in prefixes:
-            if not text.startswith(prefix):
-                continue
-            rest = text[len(prefix):].strip()
-            if rest and any(word in rest for word in BATCH_USE_ALL_WORDS):
-                return category, 999
-    return None
-
-
-def parse_item_use(text: str) -> Optional[tuple[str, int]]:
-    mapping = [
-        ("丹药", PILL_USE_PREFIXES),
-        ("符箓", TALISMAN_USE_PREFIXES),
-        ("灵石", STONE_USE_PREFIXES),
-        ("灵食", FOOD_USE_PREFIXES),
-        ("妖丹", DEMON_CORE_USE_PREFIXES),
-        ("奇物", CURIO_USE_PREFIXES),
-        ("杂物", MISC_USE_PREFIXES),
-    ]
-    for category, prefixes in mapping:
-        index = parse_prefixed_index(text, prefixes)
-        if index is not None:
-            return category, index
-    return None
-
-
-def parse_acquired_root_command(text: str) -> Optional[tuple[str, Optional[int]]]:
-    if text in ACQUIRED_ROOT_TEXTS:
-        return ("status", None)
-    dan_index = parse_prefixed_index(text, DAN_ROOT_PREFIXES)
-    if dan_index is not None:
-        return ("dan", dan_index)
-    artifact_index = parse_prefixed_index(text, ARTIFACT_ROOT_PREFIXES)
-    if artifact_index is not None:
-        return ("artifact", artifact_index)
-    return None
 
 
-def is_acquired_root_command_text(text: str) -> bool:
-    return parse_acquired_root_command(text) is not None
 
 
-def parse_prefixed_name(text: str, prefixes: tuple[str, ...]) -> Optional[str]:
-    for prefix in prefixes:
-        if text == prefix:
-            return ""
-        if text.startswith(prefix):
-            return text[len(prefix):].strip()
-    return None
 
 
-def parse_shop_buy_index(text: str) -> Optional[int]:
-    return parse_prefixed_index(text, BUY_PREFIXES)
 
-
-def parse_sell_item(text: str) -> Optional[tuple[str, int]]:
-    categories = ("灵器", "功法", "丹药", "阵盘", "灵材", "符箓", "傀儡", "灵植", "灵石", "杂物", "奇物", "灵食", "神通")
-    for prefix in SELL_PREFIXES:
-        if not text.startswith(prefix):
-            continue
-        rest = text[len(prefix):].strip()
-        for category in categories:
-            if rest.startswith(category):
-                match = re.search(r"\d+", rest[len(category):].strip())
-                if match:
-                    return category, int(match.group(0))
-    return None
-
-
-def parse_alchemy_name(text: str) -> Optional[str]:
-    stripped = text.strip()
-    if stripped == "炼丹":
-        return ""
-    for prefix in ALCHEMY_PREFIXES:
-        if stripped.startswith(f"{prefix} "):
-            return stripped[len(prefix):].strip()
-    return None
-
-
-def parse_talisman_draw_index(text: str) -> Optional[int]:
-    stripped = text.strip()
-    if stripped in TALISMAN_DRAW_TEXTS:
-        return 0
-    for prefix in TALISMAN_DRAW_PREFIXES:
-        if not stripped.startswith(prefix):
-            continue
-        rest = stripped[len(prefix):].strip()
-        if not rest:
-            return 0
-        match = re.search(r"\d+", rest)
-        if match:
-            return int(match.group(0))
-    return None
-
-
-def parse_short_index_text(text: str) -> Optional[int]:
-    aliases = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5}
-    stripped = text.strip()
-    if stripped in aliases:
-        return aliases[stripped]
-    if re.fullmatch(r"\d+", stripped):
-        return int(stripped)
-    match = re.fullmatch(r"(?:选择|进入|秘境)\s*(\d+|[一二三四五])", stripped)
-    if not match:
-        return None
-    token = match.group(1)
-    return aliases.get(token, int(token) if token.isdigit() else None)
-
-
-def conversation_pending_key(event: MessageEvent) -> str:
-    if isinstance(event, GroupMessageEvent):
-        return f"group:{event.group_id}:{event.get_user_id()}"
-    return f"private:{event.get_user_id()}"
-
-
-def is_equip_method_command_text(text: str) -> bool:
-    return is_prefixed_index_command(text, METHOD_EQUIP_PREFIXES)
-
-
-def is_method_detail_command_text(text: str) -> bool:
-    return is_prefixed_index_command(text, METHOD_DETAIL_PREFIXES)
-
-
-def is_normal_duel_apply_text(text: str) -> bool:
-    return text.strip() in NORMAL_DUEL_TEXTS
-
-
-def is_equip_array_command_text(text: str) -> bool:
-    return is_prefixed_index_command(text, ARRAY_EQUIP_PREFIXES)
-
-
-def is_duel_command_text(text: str) -> bool:
-    stripped = text.strip()
-    lowered = stripped.lower()
-    return lowered.startswith("pk") or any(stripped.startswith(prefix) for prefix in DUEL_PREFIXES[2:])
-
-
-def parse_duel_target(event: MessageEvent) -> Optional[str]:
-    targets = at_user_ids(event)
-    if targets:
-        return targets[0]
-    text = normalized_plain_text(event)
-    match = re.search(r"(?:pk|PK|切磋|挑战)\s*(\d{5,})", text)
-    return match.group(1) if match else None
-
-
-def is_managed_command_text(text: str) -> bool:
-    return (
-        parse_mystic_group_command(text) is not None
-        or text in SIGNIN_TEXTS
-        or text in STATUS_TEXTS
-        or text in HELP_TEXTS
-        or text in NEWBIE_TUTORIAL_TEXTS
-        or text in CATALOG_TEXTS
-        or parse_catalog_query(text) is not None
-        or text in BREAKTHROUGH_TEXTS
-        or text in CULTIVATION_RANK_TEXTS
-        or text in POWER_RANK_TEXTS
-        or text in POWER_TEXTS
-        or text in ADVENTURE_TEXTS
-        or text in ARTIFACT_LIST_TEXTS
-        or text in METHOD_LIST_TEXTS
-        or text in ARRAY_LIST_TEXTS
-        or text in PUPPET_LIST_TEXTS
-        or text in PLANT_LIST_TEXTS
-        or text in ITEM_LIST_TEXTS
-        or is_acquired_root_command_text(text)
-        or is_special_ability_command_text(text)
-        or is_special_ability_learn_command_text(text)
-        or is_route_command_text(text)
-        or is_task_command_text(text)
-        or is_shop_command_text(text)
-        or is_alchemy_command_text(text)
-        or is_refining_command_text(text)
-        or is_array_deduction_command_text(text)
-        or is_life_artifact_command_text(text)
-        or is_immortal_seed_command_text(text)
-        or text in EMPEROR_CATALOG_TEXTS
-        or is_trade_command_text(text)
-        or is_market_command_text(text)
-        or is_rescue_command_text(text)
-        or is_talisman_draw_command_text(text)
-        or is_tianji_mystic_command_text(text)
-        or is_doudizhu_command_text(text)
-        or beast_realm_game.is_beast_realm_group_command(text)
-        or beast_realm_game.is_beast_realm_private_command(text)
-        or is_dual_cultivation_command_text(text)
-        or text in UNEQUIP_TEXTS
-        or is_equip_talisman_command_text(text)
-        or parse_fishing_arg(text) is not None
-        or is_equip_command_text(text)
-        or is_equip_method_command_text(text)
-        or is_method_detail_command_text(text)
-        or is_normal_duel_apply_text(text)
-        or is_equip_array_command_text(text)
-        or is_equip_puppet_command_text(text)
-        or is_plant_command_text(text)
-        or is_item_use_command_text(text)
-        or is_spirit_liquid_use_command_text(text)
-        or is_duel_command_text(text)
-    )
-
-
-def panel_accent(record=None) -> str:
-    root = getattr(record, "root", None)
-    return getattr(root, "color", "#3589d8") if root else "#3589d8"
-
-
-def panel_segment(
-    title: str,
-    content: str | list[str],
-    record=None,
-    subtitle: str = "",
-    icon: str = "scroll",
-    footer: str = "",
-) -> MessageSegment:
-    if icon == BEAST_REALM_ICON:
-        image_bytes = render_beast_realm_panel(
-            title=title,
-            content=content,
-            subtitle=subtitle,
-            width=config.xiuxian_signin_image_width,
-            footer=footer,
-        )
-    else:
-        image_bytes = render_text_panel(
-            title=title,
-            content=content,
-            subtitle=subtitle,
-            icon=icon,
-            accent=panel_accent(record),
-            width=config.xiuxian_signin_image_width,
-            footer=footer,
-        )
-    return MessageSegment.image(BytesIO(image_bytes))
-
-
-async def send_panel(
-    matcher: Matcher,
-    title: str,
-    content: str | list[str],
-    record=None,
-    subtitle: str = "",
-    icon: str = "scroll",
-    footer: str = "",
-) -> None:
-    segment = await render_in_thread(panel_segment, title, content, record, subtitle, icon, footer)
-    await matcher.send(segment)
-
-
-async def finish_panel(
-    matcher: Matcher,
-    title: str,
-    content: str | list[str],
-    record=None,
-    subtitle: str = "",
-    icon: str = "scroll",
-    footer: str = "",
-) -> None:
-    segment = await render_in_thread(panel_segment, title, content, record, subtitle, icon, footer)
-    await matcher.finish(segment)
-
-
-async def send_private_panel(
-    user_id: str,
-    title: str,
-    content: str | list[str],
-    record=None,
-    subtitle: str = "",
-    icon: str = "scroll",
-    footer: str = "",
-) -> bool:
-    try:
-        segment = await render_in_thread(panel_segment, title, content, record, subtitle, icon, footer)
-        await get_bot().send_private_msg(
-            user_id=int(user_id),
-            message=segment,
-        )
-        return True
-    except Exception as exc:
-        logger.debug(f"发送私聊面板失败: {user_id} {title} {exc}")
-        return False
-
-
-async def finish_private_or_current_panel(
-    matcher: Matcher,
-    event: MessageEvent,
-    title: str,
-    content: str | list[str],
-    record=None,
-    subtitle: str = "",
-    icon: str = "scroll",
-    footer: str = "",
-    group_success: str = "已通过私聊发送，请查看私聊。",
-) -> None:
-    if isinstance(event, GroupMessageEvent):
-        sent = await send_private_panel(event.get_user_id(), title, content, record, subtitle, icon, footer)
-        if sent:
-            await finish_panel(matcher, title, group_success, record, icon=icon)
-        await finish_panel(matcher, "私聊发送失败", f"{title}已生成，但私聊发送失败，请检查好友或临时会话权限。", record, icon="warning")
-    await finish_panel(matcher, title, content, record, subtitle=subtitle, icon=icon, footer=footer)
-
-
-async def send_image(matcher: Matcher, image_bytes: bytes) -> None:
-    await matcher.send(MessageSegment.image(BytesIO(image_bytes)))
-
-
-async def build_signin_image(event: MessageEvent, result: SigninResult) -> bytes:
-    avatar = await fetch_avatar(event.get_user_id())
-    return await render_in_thread(
-        render_signin_card,
-        result=result,
-        nickname=nickname_from_event(event),
-        avatar_bytes=avatar,
-        width=config.xiuxian_signin_image_width,
-    )
-
-
-async def build_signin_calendar_image(
-    user_id: str,
-    record,
-    nickname: str,
-    year: int,
-    month: int,
-) -> bytes:
-    """构造签到日历图（含头像）。"""
-    avatar = await fetch_avatar(user_id)
-    return await render_in_thread(
-        render_signin_calendar_card,
-        history=record.sign_history or {},
-        nickname=nickname,
-        avatar_bytes=avatar,
-        year=year,
-        month=month,
-        today=local_today(),
-        width=config.xiuxian_signin_image_width,
-    )
-
-
-def parse_calendar_target(text: str) -> tuple[int, int] | None:
-    """解析日历翻月参数，返回 (year, month)；无参数返回当月，非法返回 None。"""
-    today = local_today()
-    normalized = text.strip()
-    for word in sorted(SIGNIN_CALENDAR_TEXTS, key=len, reverse=True):
-        if normalized.startswith(word):
-            normalized = normalized[len(word):].strip()
-            break
-    if not normalized:
-        return today.year, today.month
-    if normalized in {"上月", "上个月", "前一个月"}:
-        first = today.replace(day=1)
-        prev = first - timedelta(days=1)
-        return prev.year, prev.month
-    if normalized in {"下月", "下个月"}:
-        first = today.replace(day=1)
-        nxt = (first + timedelta(days=32)).replace(day=1)
-        return nxt.year, nxt.month
-    match = re.fullmatch(r"(\d{4})[-/年](\d{1,2})月?", normalized)
-    if match:
-        year, month = int(match.group(1)), int(match.group(2))
-        if 1 <= month <= 12:
-            return year, month
-    match = re.fullmatch(r"(\d{1,2})月?", normalized)
-    if match:
-        month = int(match.group(1))
-        if 1 <= month <= 12:
-            return today.year, month
-    return None
-
-
-def parse_makeup_target(text: str) -> date | None:
-    """解析补签目标日期：支持「补签 15」「补签 10月15」；非法返回 None。"""
-    normalized = text.strip()
-    for prefix in MAKEUP_SIGN_PREFIXES:
-        if normalized.startswith(prefix):
-            normalized = normalized[len(prefix):].strip()
-            break
-    today = local_today()
-    match = re.fullmatch(r"(\d{1,2})月(\d{1,2})日?", normalized)
-    if match:
-        month, day = int(match.group(1)), int(match.group(2))
-        try:
-            return date(today.year, month, day)
-        except ValueError:
-            return None
-    match = re.fullmatch(r"(\d{1,2})日?", normalized)
-    if match:
-        day = int(match.group(1))
-        try:
-            return date(today.year, today.month, day)
-        except ValueError:
-            return None
-    return None
-
-
-async def build_fishing_image(
-    event: MessageEvent,
-    record,
-    rewards,
-) -> bytes:
-    avatar = await fetch_avatar(event.get_user_id())
-    return await render_in_thread(
-        render_fishing_card,
-        record=record,
-        rewards=rewards,
-        nickname=nickname_from_event(event),
-        avatar_bytes=avatar,
-        width=config.xiuxian_signin_image_width,
-    )
-
-
-
-
-def normal_duel_prepare_cards(record, nickname: str) -> list[tuple[str, str, str]]:
-    ensure_combat_profile(record)
-    techniques = available_battle_techniques(record)
-    technique_lines = []
-    for index, tech in enumerate(techniques[:6], start=1):
-        technique_lines.append(f"{index}. {tech}\uff1a\u8017\u7075{technique_mana_cost(record, tech)}\uff0cCD{technique_cooldown(tech)}\u606f")
-    if not technique_lines:
-        technique_lines.append("\u6682\u65e0\u6218\u6280\uff0c\u53ef\u53d1\u9001\u8868\u60c5\u6216\u5373\u5174\u53f0\u8bcd\u5c1d\u8bd5\u7275\u52a8\u57fa\u7840\u672f\u5f0f\u3002")
-    abilities = "\u3001".join(record.special_abilities or []) or "\u6682\u65e0\u663e\u5316"
-    talismans = available_talismans(record)
-    talisman_lines = []
-    for index, talisman in enumerate(talismans[:6], start=1):
-        talisman_lines.append(f"{index}. {reward_display_name(talisman)}")
-    if not talisman_lines:
-        talisman_lines.append("\u6682\u65e0\u53ef\u7528\u7b26\u7b93\uff1b\u672c\u573a\u53ef\u4f9d\u9760\u6218\u6280\u3001\u795e\u901a\u3001\u4f53\u672f\u548c\u4f53\u8d28\u7279\u6027\u3002")
-    equipped_talisman = reward_display_name(record.equipped_talisman) if record.equipped_talisman else "\u672a\u88c5\u5907\u7b26\u7b93"
-    array_text = reward_display_name(record.equipped_array) if record.equipped_array else "\u672a\u5e03\u7f6e\u9635\u76d8"
-    cards = [
-        (
-            "\u6597\u6cd5\u51c6\u5907\u00b7\u4fee\u4e3a\u786e\u8ba4",
-            "\n".join(
-                [
-                    f"{nickname or '\u5bbf\u4e3b'}\uff0c\u666e\u901a\u6597\u6cd5\u5c06\u572860\u79d2\u540e\u5f00\u59cb\u3002",
-                    f"\u5883\u754c\uff1a{record.realm if record.root else '\u672a\u5165\u95e8'}",
-                    f"\u5883\u754c\u54c1\u76f8\uff1a{record.realm_quality}",
-                    f"\u6218\u529b\uff1a{battle_power(record)}",
-                    f"\u7075\u529b\u4e0a\u9650\uff1a{combat_max_mana(record)}",
-                    f"\u7075\u6839\uff1a{record.root_summary}",
-                    f"\u79cd\u65cf\uff1a{record.combat_race or '\u672a\u8bb0\u5f55'}",
-                    f"\u4f53\u8d28\uff1a{record.physique or '\u672a\u8bb0\u5f55'}",
-                ]
-            ),
-            "realm",
-        ),
-        (
-            "\u6597\u6cd5\u51c6\u5907\u00b7\u6218\u6280\u914d\u7f6e",
-            "\n".join(
-                [
-                    f"\u5f53\u524d\u529f\u6cd5\uff1a{reward_display_name(record.equipped_method) if record.equipped_method else '\u672a\u53c2\u609f\u529f\u6cd5'}",
-                    "\u53ef\u7528\u6218\u6280\uff1a",
-                    *technique_lines,
-                    f"\u795e\u901a\uff1a{abilities}",
-                    "\u6218\u6280\u4f1a\u6d88\u8017\u7075\u529b\u5e76\u8fdb\u5165CD\uff1b\u672a\u547d\u4e2d\u7684\u53d1\u8a00\u4f1a\u4f5c\u4e3a\u5373\u5174\u672f\u5f0f\u3002",
-                ]
-            ),
-            "method",
-        ),
-        (
-            "\u6597\u6cd5\u51c6\u5907\u00b7\u9635\u76d8\u914d\u7f6e",
-            "\n".join(
-                [
-                    f"\u5f53\u524d\u9635\u76d8\uff1a{array_text}",
-                    f"\u9635\u6cd5\u500d\u7387\uff1a{array_multiplier(record):.1f}x",
-                    "\u9635\u76d8\u4f1a\u5f71\u54cd\u529f\u6cd5\u6536\u76ca\u4e0e\u90e8\u5206\u6218\u6597\u9762\u677f\u8ba1\u7b97\uff1b\u719f\u7ec3\u5ea6\u8d8a\u9ad8\u8d8a\u7a33\u5b9a\u3002",
-                ]
-            ),
-            "array",
-        ),
-        (
-            "\u6597\u6cd5\u51c6\u5907\u00b7\u7b26\u7b93\u51c6\u5907",
-            "\n".join(
-                [
-                    f"\u5f53\u524d\u7b26\u7b93\u680f\uff1a{equipped_talisman}",
-                    "\u53ef\u7528\u7b26\u7b93\uff1a",
-                    *talisman_lines,
-                    "\u53d1\u9001\u201c\u88c5\u5907\u7b26\u7b93 \u7f16\u53f7\u201d\u53ef\u653e\u5165\u7b26\u7b93\u680f\uff1b\u666e\u901a\u6597\u6cd5\u751f\u6548\u4e14\u4e0d\u6d88\u8017\u3002",
-                    "\u53d1\u9001\u201c\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7\u201d\u4ecd\u4f1a\u4f5c\u4e3a\u4e00\u6b21\u6027\u7b26\u7b93\u6fc0\u53d1\u5e76\u6d88\u8017\u3002",
-                ]
-            ),
-            "talisman",
-        ),
-    ]
-    return cards
-
-
-async def send_normal_duel_prepare_cards(user_id: str, record, nickname: str) -> None:
-    bot = get_bot()
-    for title, content, icon in normal_duel_prepare_cards(record, nickname):
-        try:
-            segment = await render_in_thread(panel_segment, title, content, record, icon=icon)
-            await bot.send_private_msg(
-                user_id=int(user_id),
-                message=segment,
-            )
-        except Exception as exc:
-            logger.debug(f"\u53d1\u9001\u6597\u6cd5\u51c6\u5907\u79c1\u804a\u5931\u8d25: {user_id} {exc}")
-
-
-async def send_normal_duel_prepare_messages(session: dict[str, Any]) -> None:
-    left_id = str(session.get("left_id"))
-    right_id = str(session.get("right_id"))
-    left_record, right_record = await asyncio.gather(store.get_user(left_id), store.get_user(right_id))
-    ensure_combat_profile(left_record)
-    ensure_combat_profile(right_record)
-    await asyncio.gather(store.save_user(left_record), store.save_user(right_record))
-    await asyncio.gather(
-        send_normal_duel_prepare_cards(left_id, left_record, str(session.get("left_name") or left_id)),
-        send_normal_duel_prepare_cards(right_id, right_record, str(session.get("right_name") or right_id)),
-    )
-
-
-def mystic_prepare_cards(
-    record, nickname: str, prepare_hint: str = "", monster_info: str = ""
-) -> list[tuple[str, str, str]]:
-    """秘境战备面板，结构与斗法战备一致，文案适配秘境战斗。
-
-    之前 boss 战/遭遇战进入准备阶段时只给玩家发了“秘境配装”四个字，
-    没有任何战斗信息。这里复用斗法战备的渲染逻辑，让玩家在秘境里也能
-    看到自己的修为、战技、阵盘、符箓配置，再决定是否调整装备并确认配装。
-
-    prepare_hint 为准备阶段的倒计时提示（如“剩余 45 秒”），为空则不显示。
-    """
-    ensure_combat_profile(record)
-    techniques = available_battle_techniques(record)
-    technique_lines = []
-    for index, tech in enumerate(techniques[:6], start=1):
-        technique_lines.append(
-            f"{index}. {tech}：耗灵{technique_mana_cost(record, tech)}，CD{technique_cooldown(tech)}息"
-        )
-    if not technique_lines:
-        technique_lines.append("暂无战技，可发表情或即兴台词尝试牵动基础术式。")
-    abilities = "、".join(record.special_abilities or []) or "暂无显化"
-    talismans = available_talismans(record)
-    talisman_lines = []
-    for index, talisman in enumerate(talismans[:6], start=1):
-        talisman_lines.append(f"{index}. {reward_display_name(talisman)}")
-    if not talisman_lines:
-        talisman_lines.append("暂无可用符箓；本场可依靠战技、神通、体质和体质特性。")
-    equipped_talisman = (
-        reward_display_name(record.equipped_talisman)
-        if record.equipped_talisman
-        else "未装备符箓"
-    )
-    array_text = (
-        reward_display_name(record.equipped_array)
-        if record.equipped_array
-        else "未布置阵盘"
-    )
-    intro_lines = [
-        f"{nickname or '宿主'}，秘境战斗已进入准备阶段，请检查配装后私聊发送“确认配装”。"
-    ]
-    if prepare_hint:
-        # 倒计时放在最显眼的第一行之后，让玩家知道还剩多少时间调整装备。
-        intro_lines.append(prepare_hint)
-    intro_lines.extend(
-        [
-            f"境界：{record.realm if record.root else '未入门'}",
-            f"境界品相：{record.realm_quality}",
-            f"战力：{battle_power(record)}",
-            f"灵力上限：{combat_max_mana(record)}",
-            f"灵根：{record.root_summary}",
-            f"种族：{record.combat_race or '未记录'}",
-            f"体质：{record.physique or '未记录'}",
-        ]
-    )
-    cards = [
-        (
-            "秘境战备·修为确认",
-            "\n".join(intro_lines),
-            "realm",
-        ),
-        (
-            "秘境战备·战技配置",
-            "\n".join(
-                [
-                    f"当前功法：{reward_display_name(record.equipped_method) if record.equipped_method else '未参悟功法'}",
-                    "可用战技：",
-                    *technique_lines,
-                    f"神通：{abilities}",
-                    "战技会消耗灵力并进入CD；未命中的发言会作为即兴术式。",
-                ]
-            ),
-            "method",
-        ),
-        (
-            "秘境战备·阵盘配置",
-            "\n".join(
-                [
-                    f"当前阵盘：{array_text}",
-                    f"阵法倍率：{array_multiplier(record):.1f}x",
-                    "阵盘会影响功法收益与部分战斗面板计算；熟练度越高越稳定。",
-                ]
-            ),
-            "array",
-        ),
-        (
-            "秘境战备·符箓准备",
-            "\n".join(
-                [
-                    f"当前符箓栏：{equipped_talisman}",
-                    "可用符箓：",
-                    *talisman_lines,
-                    "发送“装备符箓 编号”可放入符箓栏；普通战法生效且不消耗。",
-                    "发送“使用符箓 编号”仍会作为一次性符箓激发并消耗。",
-                ]
-            ),
-            "talisman",
-        ),
-    ]
-    if monster_info:
-        # 神识探查：敌方信息。原本战备面板只有己方配置，玩家不知道要面对什么，
-        # 这里补一张敌方情报卡（境界/灵根/战力/血量等），便于针对性配装。
-        cards.append(
-            (
-                "秘境战备·神识探查",
-                monster_info,
-                "mystic",
-            )
-        )
-    return cards
-
-
-async def send_mystic_prepare_cards(
-    user_id: str, record, nickname: str, prepare_hint: str = "", monster_info: str = ""
-) -> None:
-    """把秘境战备面板逐张私聊发给指定玩家。"""
-    bot = get_bot()
-    for title, content, icon in mystic_prepare_cards(
-        record, nickname, prepare_hint, monster_info
-    ):
-        try:
-            segment = await render_in_thread(panel_segment, title, content, record, icon=icon)
-            await bot.send_private_msg(
-                user_id=int(user_id),
-                message=segment,
-            )
-        except Exception as exc:
-            logger.debug(f"发送秘境战备私聊失败: {user_id} {exc}")
-
-
-async def _mystic_prepare_info(run) -> tuple[str, str]:
-    """读取秘境遭遇信息，返回 (倒计时提示, 神识探查敌方情报)。
-
-    倒计时：准备阶段默认仅 60 秒，玩家很容易没赶上就被自动确认。把剩余时间
-    显示在战备面板上，让玩家知道得抓紧。
-    神识探查：战备面板原本只有己方配置，补上敌方情报（境界/灵根/战力/血量），
-    让玩家能针对性配装。任一项解析失败返回空串（不显示）。
-    """
-    hint = ""
-    monster_info = ""
-    if run is None or not getattr(run, "active_encounter_id", None):
-        return hint, monster_info
-    try:
-        encounter = await store.get_mystic_encounter(run.active_encounter_id)
-    except Exception:
-        return hint, monster_info
-    if encounter is None:
-        return hint, monster_info
-
-    # 倒计时
-    deadline_raw = getattr(encounter, "phase_deadline", None)
-    if deadline_raw:
-        try:
-            deadline = datetime.fromisoformat(str(deadline_raw))
-            remaining = int((deadline - datetime.now(deadline.tzinfo)).total_seconds())
-            if remaining > 0:
-                minutes, seconds = divmod(remaining, 60)
-                if minutes > 0:
-                    hint = f"⏰ 准备阶段剩余 {minutes} 分 {seconds} 秒，超时将按当前配装自动开战。"
-                else:
-                    hint = f"⏰ 准备阶段剩余 {seconds} 秒，超时将按当前配装自动开战。"
-        except ValueError:
-            pass
-
-    # 神识探查：解析怪物存档，构造敌方情报
-    try:
-        monster_record_data = encounter.monster_record or {}
-        if monster_record_data:
-            from .domain import UserRecord, combat_max_hp
-
-            monster = UserRecord.from_dict(monster_record_data)
-            kind_label = "Boss" if encounter.kind.value == "boss" else "秘境怪物"
-            lines = [
-                f"敌方：{kind_label}",
-                f"境界：{monster.realm if monster.root else '未知'}",
-                f"灵根：{monster.root_summary}",
-                f"推测战力：{battle_power(monster)}",
-                f"生命上限：{combat_max_hp(monster)}",
-                f"灵力上限：{combat_max_mana(monster)}",
-                f"种族：{monster.combat_race or '未记录'}",
-                f"体质：{monster.physique or '未记录'}",
-            ]
-            monster_info = "\n".join(lines)
-    except Exception:
-        logger.debug("神识探查敌方情报构造失败")
-
-    return hint, monster_info
-
-
-async def build_normal_duel_image(result: dict[str, Any]) -> bytes:
-    left = result.get("left", {})
-    right = result.get("right", {})
-    left_avatar, right_avatar = await asyncio.gather(
-        fetch_avatar(str(left.get("user_id", ""))),
-        fetch_avatar(str(right.get("user_id", ""))),
-    )
-    return await render_in_thread(
-        render_battle_card,
-        result,
-        left_avatar=left_avatar,
-        right_avatar=right_avatar,
-        width=config.xiuxian_signin_image_width,
-    )
-
-
-def group_duel_session(group_id: str) -> Optional[dict[str, Any]]:
-    session = normal_duel_sessions.get(group_id)
-    if not session:
-        return None
-    now = time.monotonic()
-    if now > float(session.get("end_at", 0)) + 10:
-        normal_duel_sessions.pop(group_id, None)
-        return None
-    return session
-
-
-async def finish_normal_duel(group_id: str, session: dict[str, Any]) -> None:
-    try:
-        await asyncio.sleep(max(0.0, float(session["start_at"]) - time.monotonic()))
-        session["active"] = True
-        bot = get_bot()
-        await bot.send_group_msg(
-            group_id=int(group_id),
-            message=await render_in_thread(
-                panel_segment,
-                "\u666e\u901a\u6597\u6cd5",
-                "\u6597\u6cd5\u5df2\u5f00\u59cb\uff0c60\u79d2\u5185\u53d1\u9001\u6218\u6280\u3001\u795e\u901a\u3001\u8868\u60c5\u6216\u5373\u5174\u672f\u5f0f\u3002",
-                icon="duel",
-            ),
-        )
-        await asyncio.sleep(max(0.0, float(session["end_at"]) - time.monotonic()))
-        current = normal_duel_sessions.get(group_id)
-        if current is not session:
-            return
-        left_id = str(session["left_id"])
-        right_id = str(session["right_id"])
-        left_record, right_record = await asyncio.gather(store.get_user(left_id), store.get_user(right_id))
-        ensure_combat_profile(left_record)
-        ensure_combat_profile(right_record)
-        result = simulate_normal_duel(
-            left_record,
-            right_record,
-            str(session.get("left_name") or left_id),
-            str(session.get("right_name") or right_id),
-            list(session.get("actions", {}).get(left_id, [])),
-            list(session.get("actions", {}).get(right_id, [])),
-            NORMAL_DUEL_DURATION_SECONDS,
-        )
-        await store.save_user(left_record)
-        await store.save_user(right_record)
-        image = await build_normal_duel_image(result)
-        await bot.send_group_msg(group_id=int(group_id), message=MessageSegment.image(BytesIO(image)))
-    except Exception:
-        logger.exception("\u666e\u901a\u6597\u6cd5\u7ed3\u7b97\u5931\u8d25")
-    finally:
-        if normal_duel_sessions.get(group_id) is session:
-            normal_duel_sessions.pop(group_id, None)
-
-
-def append_normal_duel_action(event: GroupMessageEvent, text: str) -> bool:
-    group_id = str(event.group_id)
-    session = group_duel_session(group_id)
-    if not session or not session.get("active"):
-        return False
-    now = time.monotonic()
-    if now < float(session.get("start_at", 0)) or now > float(session.get("end_at", 0)):
-        return False
-    user_id = event.get_user_id()
-    if user_id not in {str(session.get("left_id")), str(session.get("right_id"))}:
-        return False
-    actions = session.setdefault("actions", {}).setdefault(user_id, [])
-    actions.append({"text": text, "time": now})
-    return True
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def is_settle_time(now: datetime) -> bool:
-    return (now.hour, now.minute) >= (RANK_SETTLE_HOUR, RANK_SETTLE_MINUTE)
-
-
-def rank_entries_from_group(group_data: dict[str, Any]) -> list[dict[str, Any]]:
-    users = group_data.get("users", {})
-    if not isinstance(users, dict):
-        return []
-    entries = [entry for entry in users.values() if isinstance(entry, dict)]
-    entries.sort(key=lambda item: int(item.get("count", 0)), reverse=True)
-    return entries
-
-
-async def group_cultivation_rank_entries(group_id: str) -> list[dict[str, Any]]:
-    entries = await store.get_group_user_records(group_id)
-    entries = [
-        entry
-        for entry in entries
-        if entry["record"].root is not None
-        or entry["record"].total_exp > 0
-        or entry["record"].pending_exp > 0
-    ]
-    entries.sort(
-        key=lambda item: (
-            item["record"].total_exp + item["record"].pending_exp,
-            item["record"].realm_index,
-            item["record"].realm_exp,
-        ),
-        reverse=True,
-    )
-    return entries
-
-
-async def group_power_rank_entries(group_id: str) -> list[dict[str, Any]]:
-    entries = await store.get_group_user_records(group_id)
-    entries = [
-        entry
-        for entry in entries
-        if entry["record"].root is not None
-        or entry["record"].total_exp > 0
-        or entry["record"].equipped_artifact
-        or entry["record"].equipped_method
-        or entry["record"].equipped_array
-        or entry["record"].equipped_puppet
-        or entry["record"].planted_spirit_plant
-    ]
-    entries.sort(key=lambda item: battle_power(item["record"]), reverse=True)
-    return entries
-
-
-def format_cultivation_rank(entries: list[dict[str, Any]], title: str) -> str:
-    lines = [title]
-    if not entries:
-        lines.append("暂无入榜修士。")
-        return "\n".join(lines)
-    for index, entry in enumerate(entries[:10], start=1):
-        record = entry["record"]
-        nickname = short_name(str(entry.get("nickname") or entry.get("user_id")))
-        score = record.total_exp + record.pending_exp
-        pending = f"，待领 {record.pending_exp}" if record.pending_exp else ""
-        realm = record.realm if record.root else "未入门"
-        lines.append(f"{index}. {nickname}：{realm}，修为 {score}{pending}")
-    return "\n".join(lines)
-
-
-def format_power_rank(entries: list[dict[str, Any]], title: str) -> str:
-    lines = [title]
-    if not entries:
-        lines.append("暂无入榜修士。")
-        return "\n".join(lines)
-    for index, entry in enumerate(entries[:10], start=1):
-        record = entry["record"]
-        nickname = short_name(str(entry.get("nickname") or entry.get("user_id")))
-        artifact = record.equipped_artifact
-        puppet = record.equipped_puppet
-        artifact_name = str(artifact.get("name")) if artifact else "未装备灵器"
-        puppet_name = str(puppet.get("name")) if puppet else "未唤醒傀儡"
-        lines.append(f"{index}. {nickname}：战力 {battle_power(record)}，{artifact_name}，{puppet_name}")
-    return "\n".join(lines)
-
-
-def format_artifact_list(record) -> str:
-    artifacts = available_artifacts(record)
-    summary = battle_summary(record)
-    lines = ["\u3010\u6211\u7684\u7075\u5668\u3011"]
-    lines.append(f"\u5f53\u524d\u69fd\u4f4d\uff1a{summary['artifact_slots']}")
-    lines.append("\u69fd\u4f4d\u8bf4\u660e\uff1a\u4e3b\u624b100%\u6218\u529b\uff0c\u526f\u624b65%\u6218\u529b\uff0c\u62a4\u7532/\u62a4\u76fe85%\u6218\u529b\uff1b\u540c\u540d\u7075\u5668\u4e0d\u53ef\u53cc\u6301\uff0c\u62a4\u7532\u69fd\u53ea\u63a5\u53d7\u62a4\u7532/\u62a4\u76fe\u7c7b\u7075\u5668\u3002")
-    if not artifacts:
-        lines.append("\u6682\u65e0\u53ef\u88c5\u5907\u7075\u5668\uff0c\u8fdb\u884c\u8bf8\u5929\u4e07\u754c\u5782\u9493\u3001\u79d8\u5883\u6216\u5546\u5e97\u6709\u673a\u4f1a\u83b7\u5f97\u3002")
-        return "\n".join(lines)
-    for index, artifact in enumerate(artifacts, start=1):
-        required = artifact.get("required_attribute")
-        required_realm = item_required_realm_index(artifact)
-        realm_text = REALMS[required_realm] if required_realm < len(REALMS) else "未知"
-        realm_ok = record.realm_index >= required_realm
-        compatible = "\u53ef\u88c5\u5907" if realm_ok and (not required or required in record.root_attributes) else ("\u4fee\u4e3a\u672a\u8db3" if not realm_ok else "\u7075\u6839\u4e0d\u5951\u5408")
-        bonus = artifact_power(artifact, record)
-        default_slot = parse_artifact_slot(str(artifact.get("name") or "")) or "\u4e3b\u624b"
-        lines.append(
-            f"{index}. {reward_display_name(artifact)}\uff0c\u9ed8\u8ba4{default_slot}\uff0c\u9700\u6c42{required or '\u65e0'}\u7075\u6839\uff0c"
-            f"\u6700\u4f4e{realm_text}\uff0c{compatible}\uff0c\u57fa\u7840\u6218\u529b+{bonus}"
-        )
-    lines.append("\u53d1\u9001\u201c\u88c5\u5907\u7075\u5668 \u7f16\u53f7 \u4e3b\u624b/\u526f\u624b/\u62a4\u7532\u201d\u88c5\u5907\u5230\u6307\u5b9a\u69fd\uff1b\u4e0d\u5199\u69fd\u4f4d\u4f1a\u6309\u7075\u5668\u7c7b\u578b\u81ea\u52a8\u5224\u65ad\u3002\u5929\u9636\u7075\u5668\u9700\u81f3\u5c11\u5316\u795e\u671f\u624d\u80fd\u9a7e\u9a6d\uff1b\u975e\u5251\u5929\u9636\u7075\u5668\u5df2\u6309\u5668\u578b\u8865\u8db3\u6218\u529b\u3002")
-    lines.append("\u53d1\u9001\u201c\u5378\u4e0b\u7075\u5668 \u526f\u624b\u201d\u53ef\u5378\u4e0b\u6307\u5b9a\u69fd\uff1b\u53d1\u9001\u201c\u5378\u4e0b\u7075\u5668\u201d\u5378\u4e0b\u5168\u90e8\u7075\u5668\u3002")
-    return "\n".join(lines)
-
-
-def format_method_list(record) -> str:
-    ensure_combat_profile(record)
-    methods = available_methods(record)
-    lines = ["\u3010\u6211\u7684\u529f\u6cd5\u3011"]
-    lines.append(f"\u5f53\u524d\u529f\u6cd5\uff1a{reward_display_name(record.equipped_method) if record.equipped_method else '\u672a\u53c2\u609f\u529f\u6cd5'}")
-    if not methods:
-        lines.append("\u6682\u65e0\u529f\u6cd5\uff0c\u8fdb\u884c\u8bf8\u5929\u4e07\u754c\u5782\u9493\u3001\u79d8\u5883\u6216\u5546\u5e97\u6709\u673a\u4f1a\u83b7\u5f97\u3002")
-        return "\n".join(lines)
-    for index, method in enumerate(methods, start=1):
-        required = method.get("required_attribute")
-        compatible = "\u53ef\u53c2\u609f" if not required or required in record.root_attributes else "\u7075\u6839\u4e0d\u5951\u5408"
-        bonus = method_power(method, record)
-        profile = method_profile(method, record)
-        tech_count = len(profile.get("techniques", []))
-        lines.append(
-            f"{index}. {reward_display_name(method)}\uff0c{profile['kind']}\uff0c\u7b2c{profile['layer']}/{profile['max_layer_text']}\u5c42\uff0c"
-            f"\u6218\u6280{tech_count}\u5f0f\uff0c\u9700\u6c42{required or '\u65e0'}\u7075\u6839\uff0c{compatible}\uff0c\u6218\u529b+{bonus}"
-        )
-    lines.append("\u53d1\u9001\u201c\u5b66\u4e60\u529f\u6cd5 \u7f16\u53f7\u201d\u67e5\u770b\u529f\u6cd5\u9875\uff1b\u53d1\u9001\u201c\u53c2\u609f\u529f\u6cd5 \u7f16\u53f7\u201d\u8bbe\u4e3a\u5f53\u524d\u529f\u6cd5\u3002")
-    return "\n".join(lines)
-
-
-def format_array_list(record) -> str:
-    arrays = available_arrays(record)
-    lines = ["【我的阵盘】"]
-    lines.append(f"当前阵盘：{reward_display_name(record.equipped_array) if record.equipped_array else '未布置阵盘'}")
-    lines.append(f"当前阵法倍率：{array_multiplier(record):.1f}x")
-    if not arrays:
-        lines.append("暂无阵盘，进行灵河垂钓、秘境探索或交易有机会获得。")
-        return "\n".join(lines)
-    for index, array in enumerate(arrays, start=1):
-        layer = array_layer(record, array)
-        proficiency = array_proficiency_value(record, array)
-        cap = array_proficiency_cap(array, layer)
-        lines.append(
-            f"{index}. {reward_display_name(array)}，第{layer}/{array_layer_cap_text(array)}层，熟练度 {proficiency}/{cap}，倍率上限约{1 + cap / 100:.1f}x"
-        )
-    lines.append("发送“布置阵盘 编号”即可布置；重复获得同名阵盘会自动推演，仙阶极品后可无限提升。")
-    return "\n".join(lines)
-
-def format_puppet_list(record) -> str:
-    puppets = available_puppets(record)
-    lines = ["【我的傀儡】"]
-    lines.append(f"当前傀儡：{reward_display_name(record.equipped_puppet) if record.equipped_puppet else '未唤醒傀儡'}")
-    if not puppets:
-        lines.append("暂无傀儡，灵河垂钓、炼器或秘境探索有机会获得。")
-        return "\n".join(lines)
-    for index, puppet in enumerate(puppets, start=1):
-        lines.append(f"{index}. {reward_display_name(puppet)}，战力+{puppet_power(puppet, record)}")
-    lines.append("发送“装备傀儡 编号”或“唤醒傀儡 编号”即可启用。")
-    return "\n".join(lines)
-
-
-def format_plant_list(record) -> str:
-    plants = available_plants(record)
-    lines = ["【我的灵植】"]
-    lines.append(f"当前灵植：{reward_display_name(record.planted_spirit_plant) if record.planted_spirit_plant else '未栽种灵植'}")
-    if not plants:
-        lines.append("暂无灵植，灵河垂钓、秘境探索或商店刷新有机会获得。")
-        return "\n".join(lines)
-    for index, plant in enumerate(plants, start=1):
-        lines.append(f"{index}. {reward_display_name(plant)}，栽种后签到修为获得灵植加成")
-    lines.append("发送“栽种灵植 编号”即可移入洞府。")
-    return "\n".join(lines)
-
-
-def append_item_lines(lines: list[str], title: str, items: list[dict[str, Any]], usage: str) -> None:
-    lines.append(f"【{title}】")
-    if not items:
-        lines.append("暂无")
-    else:
-        for index, item in enumerate(items, start=1):
-            lines.append(f"{index}. {item_list_display(item)}")
-    lines.append(usage)
-
-
-def item_list_display(item: dict[str, Any]) -> str:
-    title = reward_display_name(item)
-    if str(item.get("category")) == "\u7075\u6750" and "\u5996\u4e39" in str(item.get("name", "")):
-        exp = item.get("cultivation_exp") or item.get("exp")
-        realm = item.get("beast_realm") or "\u672a\u77e5"
-        element = item.get("element") or item.get("required_attribute") or "\u672a\u5b9a"
-        if exp:
-            title += f"｜{element}行{realm}，炼化修为+{exp}"
-    return title
-
-def format_item_list(record) -> str:
-    lines = ["\u3010\u80cc\u5305\u9053\u5177\u3011"]
-    summary = battle_summary(record)
-    lines.append(f"\u7075\u77f3\u50a8\u5907\uff1a{spirit_stone_text(record.spirit_stones)}\uff1b\u5782\u9493\u6b21\u6570\uff1a{record.fishing_chances}")
-    lines.append(f"\u7cbe\u7eaf\u7075\u6db2\uff1a{summary['spirit_liquid']}\uff1b\u74f6\u9888\u6c89\u6dc0\uff1a{summary['bottleneck_days']} \u5929")
-    lines.append(f"\u540e\u5929\u7075\u6839\uff1a{acquired_root_summary(record, limit=3)}")
-    lines.append("\u7528\u6cd5\uff1a\u70bc\u5316\u7075\u6db2 \u53ef\u5168\u90e8\u8f6c\u4e3a\u4fee\u4e3a\uff1b\u70bc\u5316\u7075\u6db2 100 \u53ef\u6307\u5b9a\u6570\u91cf\u3002")
-    if summary.get("is_bottleneck"):
-        lines.append(f"\u5f53\u524d\u74f6\u9888\uff1a\u9700 {summary['breakthrough_required']} \u624d\u80fd\u7a81\u7834\u3002")
-    if summary.get("cultivation_lock"):
-        lines.append(f"\u72b6\u6001\uff1a{summary['cultivation_lock']}")
-    sections = [
-        ("\u4e39\u836f", available_pills(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u4e39\u836f \u7f16\u53f7\uff1b\u7a81\u7834\u9053\u5177\u8bf7\u53d1\u9001\u201c\u7a81\u7834\u201d"),
-        ("\u7b26\u7b93", available_talismans(record), "\u7528\u6cd5\uff1a\u88c5\u5907\u7b26\u7b93 \u7f16\u53f7 \u653e\u5165\u7b26\u7b93\u680f\uff0c\u666e\u901a\u6597\u6cd5\u751f\u6548\u4e14\u4e0d\u6d88\u8017\uff1b\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7 \u4e3a\u4e00\u6b21\u6027\u6fc0\u53d1\uff1b\u7ed8\u5236\u7b26\u7b93 \u7f16\u53f7\u53ef\u81ea\u884c\u5236\u7b26"),
-        ("\u7075\u77f3", available_spirit_stones(record), "\u7528\u6cd5\uff1a\u70bc\u5316\u7075\u77f3 \u7f16\u53f7\uff1b\u74f6\u9888\u65f6\u4f1a\u8f6c\u4e3a\u7cbe\u7eaf\u7075\u6db2"),
-        ("\u7075\u6750", available_materials(record), "\u7528\u6cd5\uff1a\u70bc\u4e39\u6750\u6599\uff1b\u5996\u4e39\u53ef\u53d1\u9001\u201c\u70bc\u5316\u5996\u4e39 \u7f16\u53f7\u201d\u63d0\u5347\u4fee\u4e3a\uff0c\u6216\u201c\u70bc\u5316\u4e39\u7075\u6839 \u7f16\u53f7\u201d\u8865\u5168\u4e94\u884c\uff1b\u51fa\u552e\u7075\u6750 \u7f16\u53f7\u53ef\u6362\u7075\u77f3"),
-        ("\u795e\u901a", available_special_ability_items(record), "\u7528\u6cd5\uff1a\u9886\u609f\u795e\u901a \u7f16\u53f7\uff1b\u53ef\u83b7\u5f97星律、初阈、重阈、归极域等能力"),
-        ("\u7075\u98df", available_foods(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u7075\u98df \u7f16\u53f7\uff1b\u74f6\u9888\u65f6\u4f1a\u8f6c\u4e3a\u7cbe\u7eaf\u7075\u6db2"),
-        ("\u5947\u7269", available_curios(record), "\u7528\u6cd5\uff1a\u4f7f\u7528\u5947\u7269 \u7f16\u53f7\uff1b\u53ef\u80fd\u5f97\u5230\u4fee\u4e3a\u3001\u5782\u9493\u6216\u5939\u5c42\u9053\u5177"),
-        ("\u6742\u7269", available_misc_items(record), "\u7528\u6cd5\uff1a\u9274\u5b9a\u6742\u7269 \u7f16\u53f7\uff1b\u53ef\u80fd\u9274\u51fa\u7269\u54c1\u6216\u6b8b\u4f59\u7075\u6c14"),
-    ]
-    for title, items, usage in sections:
-        lines.append("")
-        lines.append(f"\u3010{title}\uff08{len(items)}\uff09\u3011")
-        if not items:
-            lines.append("\u6682\u65e0")
-        else:
-            for index, item in enumerate(items, start=1):
-                lines.append(f"{index}. {item_list_display(item)}")
-        lines.append(usage)
-    return "\n".join(lines)
-
-def format_help_text() -> str:
-    return "\n".join(
-        [
-            "【修仙帮助】",
-            "新手三步：1. 发送 签到 入门；2. 发送 面板 和 历练 看状态；3. 发送 背包 和 图鉴 了解物品用途。",
-            "每天建议：签到 -> 灵河垂钓 -> 背包处理资源 -> 历练查看配置 -> 突破或秘境。",
-            "",
-            "【修为与突破】",
-            "突破：境界圆满后发送 突破，系统会提示需要的道具。",
-            "灵液：瓶颈后多余修为会变成精纯灵液，突破后发送 炼化灵液。",
-            "妖丹：发送 炼化妖丹 1 或 批量炼化妖丹 全部，可按妖丹参数获得修为。",
-            "五行：化神破炼虚需要五行补全，发送 后天灵根 查看丹灵根和器灵根。",
-            "",
-            "【物品与图鉴】",
-            "背包：查看丹药、符箓、灵石、妖丹、灵食、奇物、材料和神通传承。",
-            "图鉴：发送 图鉴 查看分类入口；发送 图鉴 物品名 查看用途、故事、来源和配方。",
-            "常用分类：境界图鉴 / 突破图鉴 / 品相图鉴 / 灵器图鉴 / 功法图鉴 / 阵盘图鉴 / 神通图鉴 / 唯一装备图鉴。",
-            "",
-            "【灵器与战力】",
-            "灵器按境界绑定：元婴只能装备元婴修士能驾驭的灵器，同阶内也有凡品到天阶。",
-            "装备：灵器 / 装备灵器 1 主手 / 装备灵器 2 副手 / 装备灵器 3 护甲 / 卸下灵器。",
-            "成长：祭炼本命灵器 1 可设为本命；假仙后可获得仙器；仙帝兵和其他唯一装备可看 唯一装备图鉴。",
-            "历练面板：发送 历练 或 历练面板，可查看灵器槽位、功法、阵盘、符箓、神通、战力和常用入口。",
-            "",
-            "【功法、阵盘、神通】",
-            "功法：功法 / 学习功法 1 / 参悟功法 1。功法唯一存在，重复获得会推演升层。",
-            "阵盘：阵盘 / 布置阵盘 1 / 阵法推演 1。重复阵盘可升品升阶，熟练度继承。",
-            "神通：神通 / 神通图鉴 / 领悟神通 1。斗法中可发送神通名或新别名，如 开启初阈、星律流影、风掣疾行。",
-            "",
-            "【秘境副本】",
-            MYSTIC_HELP_SUMMARY,
-            "常用：创建单人秘境 普通 / 创建单人秘境 高风险 / 秘境状态 / 秘境地图 / 投骰。",
-            "组队：创建秘境队伍 普通 / 加入秘境队伍 / 秘境准备 / 开始秘境。",
-            "战斗：群聊应战，私聊确认配装与出招；失败后可用 救援列表 / 秘境救援 1000。",
-            "",
-            "【任务与路线】",
-            "任务：每日任务 / 接取任务 / 完成任务 1。路线：修炼路线 / 选择路线 剑修 / 选择身份 天机阁弟子。",
-            "御兽秘境：群聊发送 御兽秘境开局 PVE 或 御兽秘境开局 PVP；开始后私聊任务堂购买随从、施放法术、升堂并完成招募。",
-            "",
-            "【交易、休闲、后台】",
-            "商店：商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20 / 批量出售低阶灵器。",
-            "万宝楼：万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1 / 万宝楼下架 1。",
-            "休闲：斗地主 / 斗地主帮助 / 御兽秘境 / 排行 / 战力榜。",
-            "后台：服主可在浏览器访问 /xiuxian-admin，查看玩家档案、物品属性、灵器规则和秘境掉落配置。",
-        ]
-    )
-
-def format_newbie_tutorial_text(record=None, nickname: str = "") -> str:
-    if record is not None and getattr(record, "root", None):
-        status = f"当前状态：{nickname or '宿主'}已入门，境界为{record.realm}，进度{record.realm_exp}/{record.progress_required}。"
-    else:
-        status = "当前状态：尚未入门，先私聊发送 签到，即可抽取灵根并获得第一份修为。"
-    return "\n".join(
-        [
-            "【新手教程】",
-            "这是一套慢慢养成的修仙小游戏：每天签到拿修为，修为满了突破境界，物品和装备会让你更容易变强。",
-            status,
-            "私聊发送 新手教程 可随时重复打开；大多数玩法也可以在群聊使用。",
-            "",
-            "【先认识三个数】",
-            "修为：可以理解为经验值。签到、丹药、灵石、妖丹、灵食、秘境和任务都可能增加修为。",
-            "境界：可以理解为等级。修为进度满后会进入瓶颈，发送 突破 查看所需道具。",
-            "灵根：开局天赋和属性，首次签到抽取；它影响每日修为收益和面板配色。",
-            "",
-            "【第一天推荐】",
-            "1. 签到：抽取灵根，获得修为和 1 次灵河垂钓。",
-            "2. 面板：查看境界、灵根、修为、灵石、装备和当前进度。",
-            "3. 灵河垂钓：签到后会提示是否垂钓，回复 是/好/y/十连 即可抽取资源。",
-            "4. 背包：查看钓到或获得的丹药、符箓、灵石、妖丹、材料和奇物。",
-            "5. 图鉴：不知道物品用途时，发送 图鉴 或 图鉴 物品名。",
-            "",
-            "【接下来做什么】",
-            "历练面板：发送 历练 或 历练面板，查看战力、灵器槽位、功法、阵盘、符箓、神通和常用入口。",
-            "突破：境界满了发送 突破；缺道具时看 突破图鉴 或继续垂钓、秘境。",
-            "装备：发送 灵器、功法、阵盘、神通 查看可用内容，再按面板编号装备或领悟。",
-            "秘境和任务：发送 秘境、每日任务，可获得更多资源；失败反噬时可使用 秘境救援。",
-            "",
-            "【不确定时】",
-            "编号永远以当前面板为准；刚看完 背包/灵器/功法 后再操作最稳。",
-            "常用求助：帮助 / 图鉴 / 新手教程。先每天签到和垂钓，后面的系统会自然接上。",
-        ]
-    )
-def reward_catalog_lines(category: str, title: str) -> list[str]:
-    tier_order = ["仙帝兵", "仙阶", "\u5929\u9636", "\u5730\u9636", "\u7384\u9636", "\u9ec4\u9636", "\u51e1\u54c1"]
-    seen: dict[str, set[str]] = {tier: set() for tier in tier_order}
-    for tier, _grade, item_category, name, _desc, _weight in FISHING_REWARDS:
-        if item_category == category:
-            seen.setdefault(tier, set()).add(name)
-    lines = [f"\u3010{title}\u3011", "\u6309\u54c1\u9636\u6536\u5f55\u5df2\u52a0\u5165\u5782\u9493\u3001\u79d8\u5883\u3001\u5546\u5e97\u6216\u70bc\u5236\u4f53\u7cfb\u7684\u7269\u54c1\u3002"]
-    for tier in tier_order:
-        names = sorted(seen.get(tier, set()))
-        if not names:
-            continue
-        lines.append(f"\u3010{tier}\u3011")
-        lines.append("\u3001".join(names))
-    return lines
-
-
-def format_catalog_text(text: str) -> str:
-    query = parse_catalog_query(text)
-    if query:
-        detail = catalog_item_detail_text(query)
-        if detail:
-            return detail
-        return f"【{query}图鉴】\n暂未收录这个条目的图鉴。可尝试发送“丹药图鉴 / 符箓图鉴 / 材料图鉴 / 唯一装备图鉴”查看完整分类。"
-    if text in {"\u56fe\u9274", "\u56fe\u5f55"}:
-        return "\n".join(
-            [
-                "【图鉴入口】",
-                "图鉴 名称：查询单个物品的类型、品阶、用途、故事、获取方式和制作素材。",
-                "境界图鉴：查看所有境界、阶段和瓶颈位置。",
-                "突破图鉴：查看每个瓶颈需要的突破道具。",
-                "品相图鉴：查看突破道具名与突破品相上限。",
-                "丹药图鉴 / 符箓图鉴 / 材料图鉴：查看消耗品、制作材料和使用方式。",
-                "灵器图鉴：查看普通灵器、仙器和境界装备规则。",
-                "功法图鉴 / 阵盘图鉴：查看可获得功法、阵盘和成长方式。",
-                "神通图鉴：查看星律、初阈、重阈、归极域和其他神通传承。",
-                "仙源图鉴 / 唯一装备图鉴：查看真仙后仙源、仙帝兵和其他唯一装备。",
-            ]
-        )
-    if text == "\u5883\u754c\u56fe\u9274":
-        lines = ["\u3010\u5883\u754c\u56fe\u9274\u3011", "\u9636\u6bb5\uff1a\u521d\u671f / \u4e2d\u671f30% / \u540e\u671f60% / \u5706\u6ee1100% / \u5dc5\u5cf0\uff08\u74f6\u9888\u672a\u7a81\u7834\uff09"]
-        for index, realm in enumerate(REALMS, start=1):
-            requirement_key = breakthrough_requirement_key_for_realm_index(index - 1)
-            suffix = "\uff08\u6709\u74f6\u9888\uff09" if requirement_key in BREAKTHROUGH_REQUIREMENTS else ""
-            lines.append(f"{index}. {realm}{suffix}")
-        return "\n".join(lines)
-    if text in {"品相图鉴", "突破品相图鉴", "道具品相图鉴"}:
-        return breakthrough_quality_relation_text()
-    if text == "\u7a81\u7834\u56fe\u9274":
-        lines = ["\u3010\u7a81\u7834\u56fe\u9274\u3011", "\u4fee\u4e3a\u8fbe\u5230\u5706\u6ee1\u540e\u4f1a\u8fdb\u5165\u74f6\u9888\uff0c\u9700\u6d88\u8017\u5bf9\u5e94\u9053\u5177\u624d\u80fd\u7a81\u7834\u3002", "\u9053\u5177\u540d\u79f0\u51b3\u5b9a\u54c1\u76f8\u4e0a\u9650\uff1b\u54c1\u9636/\u54c1\u8d28\u53ea\u5728\u8be5\u4e0a\u9650\u5185\u63d0\u5347\u7ed3\u679c\uff0c\u57fa\u7840\u9053\u5177\u5373\u4f7f\u62bd\u5230\u5929\u9636\u4e5f\u4e0d\u4f1a\u76f4\u63a5\u89e3\u9501\u6700\u9ad8\u54c1\u76f8\u3002"]
-        for realm_index, requirement in BREAKTHROUGH_REQUIREMENTS.items():
-            source_index = breakthrough_source_realm_index(realm_index)
-            target_index = breakthrough_target_realm_index(realm_index)
-            current = REALMS[source_index]
-            target = breakthrough_target_realm(realm_index, requirement)
-            items = " / ".join(
-                f"{item}\uff08{breakthrough_item_quality_cap_text(str(item), target_index)}\uff09"
-                for item in requirement.get("items", [])
-            )
-            lines.append(f"{current} -> {target}\uff1a{items}")
-        lines.append("\u5047\u4ed9\u5883\u662f\u6e21\u52ab\u540e\u7684\u4e03\u65e5\u4ed9\u5143\u529b\u8f6c\u5316\u9636\u6bb5\uff0c\u4e0d\u989d\u5916\u6d88\u8017\u7a81\u7834\u9053\u5177\uff1b\u5b8c\u6210\u540e\u8fdb\u5165\u771f\u4ed9\u5883\u3002")
-        lines.append("\u74f6\u9888\u65f6\u7b7e\u5230/\u5782\u9493\u83b7\u5f97\u7a81\u7834\u9053\u5177\u7684\u6982\u7387\u4f1a\u5927\u5e45\u63d0\u5347\uff0c\u4f46\u6700\u7ec8\u54c1\u76f8\u9700\u540c\u65f6\u770b\u9053\u5177\u540d\u79f0\u3001\u54c1\u9636\u548c\u54c1\u8d28\u3002")
-        return "\n".join(lines)
-    if text in SPECIAL_ABILITY_CATALOG_TEXTS:
-        return special_ability_catalog_text()
-    if text in EMPEROR_CATALOG_TEXTS:
-        return emperor_artifact_catalog_text()
-    if text == "\u70bc\u5668\u56fe\u9274":
-        lines = ["\u3010\u70bc\u5668\u56fe\u9274\u3011", "\u70bc\u5668\u5e08\u53ef\u6309\u914d\u65b9\u6d88\u8017\u7075\u6750\u548c\u7075\u77f3\u70bc\u5236\u7075\u5668\uff1b\u6750\u6599\u54c1\u8d28\u4f1a\u5f71\u54cd\u6210\u54c1\u54c1\u8d28\u3002"]
-        for name, recipe in ARTIFACT_REFINING_RECIPES.items():
-            mats = "\u3001".join(recipe["materials"][:8])
-            if len(recipe["materials"]) > 8:
-                mats += f"\u7b49{len(recipe['materials'])}\u4ef6"
-            lines.append(f"{name}\uff1a{recipe['tier']}{recipe['grade']}{recipe.get('category', '\u7075\u5668')}\uff5c\u9700{REALMS[int(recipe.get('required_realm', 0))]}\uff5c\u6750\u6599\uff1a{mats}")
-        return "\n".join(lines)
-    if text in {"仙源图鉴", "仙种图鉴"}:
-        lines = ["【仙源图鉴】", "仙源主要来自高危险秘境和真仙后机缘，真仙境后可纳入；部分仙源具有全局唯一性。"]
-        for name, info in IMMORTAL_SEED_INFOS.items():
-            lines.append(f"{name}\uff1a{info.get('effect', '')}")
-        return "\n".join(lines)
-    category_map = {
-        "\u4e39\u836f\u56fe\u9274": ("\u4e39\u836f", "\u4e39\u836f\u56fe\u9274"),
-        "\u7b26\u7b93\u56fe\u9274": ("\u7b26\u7b93", "\u7b26\u7b93\u56fe\u9274"),
-        "\u7075\u5668\u56fe\u9274": ("\u7075\u5668", "\u7075\u5668\u56fe\u9274"),
-        "\u529f\u6cd5\u56fe\u9274": ("\u529f\u6cd5", "\u529f\u6cd5\u56fe\u9274"),
-        "\u9635\u76d8\u56fe\u9274": ("\u9635\u76d8", "\u9635\u76d8\u56fe\u9274"),
-        "\u6750\u6599\u56fe\u9274": ("\u7075\u6750", "\u7075\u6750/\u6750\u6599\u56fe\u9274"),
-        "\u7075\u6750\u56fe\u9274": ("\u7075\u6750", "\u7075\u6750/\u6750\u6599\u56fe\u9274"),
-    }
-    category, title = category_map.get(text, ("", "\u56fe\u9274"))
-    if category:
-        lines = reward_catalog_lines(category, title)
-        if category == "\u4e39\u836f":
-            lines.append("\u7528\u6cd5\uff1a\u4f7f\u7528\u4e39\u836f \u7f16\u53f7\uff1b\u7a81\u7834\u4e39\u8bf7\u5728\u74f6\u9888\u65f6\u53d1\u9001\u201c\u7a81\u7834\u201d\u3002")
-        if category == "\u7b26\u7b93":
-            lines.append("\u7528\u6cd5\uff1a\u4f7f\u7528\u7b26\u7b93 \u7f16\u53f7\uff1b\u7ed8\u5236\u7b26\u7b93 \u7f16\u53f7\u53ef\u81ea\u884c\u5236\u7b26\u3002")
-        if category == "\u7075\u5668":
-            lines.append("\u7528\u6cd5\uff1a\u7075\u5668 / \u88c5\u5907\u7075\u5668 \u7f16\u53f7\uff1b\u7075\u6839\u5951\u5408\u624d\u80fd\u88c5\u5907\u90e8\u5206\u7075\u5668\u3002")
-            lines.append(artifact_realm_catalog_summary_text())
-        if category == "\u529f\u6cd5":
-            lines.append("\u7528\u6cd5\uff1a\u529f\u6cd5 / \u5b66\u4e60\u529f\u6cd5 \u7f16\u53f7 / \u53c2\u609f\u529f\u6cd5 \u7f16\u53f7\uff1b\u529f\u6cd5\u4f1a\u5f71\u54cd\u4fee\u4e3a\u3001\u8840\u91cf\u3001\u795e\u9b42\u611f\u77e5\u548c\u6597\u6cd5\u6218\u6280\u3002")
-        return "\n".join(lines)
-    return format_catalog_text("\u56fe\u9274")
-
-
-def item_icon_for_category(category: str) -> str:
-    return {
-        "灵器": "artifact",
-        "功法": "method",
-        "阵盘": "array",
-        "傀儡": "puppet",
-        "灵植": "plant",
-        "丹药": "pill",
-        "符箓": "talisman",
-        "灵石": "stone",
-        "灵食": "food",
-        "奇物": "curio",
-        "灵材": "stone",
-        "杂物": "misc",
-        "神通": "ability",
-    }.get(category, "bag")
-
-
-def format_power_status(record, nickname: str) -> str:
-    summary = battle_summary(record)
-    lines = [
-        f"\u3010{nickname or '\u5bbf\u4e3b'}\u7684\u6218\u529b\u3011",
-        f"\u6218\u529b\uff1a{summary['power']}",
-        f"\u7075\u529b\u4e0a\u9650\uff1a{summary['mana']}",
-        f"\u5883\u754c\uff1a{summary['realm']}",
-        f"\u5883\u754c\u54c1\u76f8\uff1a{summary['realm_quality']}",
-        f"\u7d2f\u8ba1\u4fee\u4e3a\uff1a{summary['total_exp']}",
-        f"\u7cbe\u7eaf\u7075\u6db2\uff1a{summary['spirit_liquid']}",
-        f"\u74f6\u9888\u6c89\u6dc0\uff1a{summary['bottleneck_days']} \u5929",
-        f"\u7075\u5668\u69fd\uff1a{summary['artifact_slots']}",
-        f"\u7b26\u7b93\u680f\uff1a{summary['talisman']}\uff08\u6218\u529b+{summary['talisman_power']}\uff09",
-        f"\u529f\u6cd5\uff1a{summary['method']}",
-        f"\u9635\u76d8\uff1a{summary['array']}\uff08{summary['array_multiplier']:.1f}x\uff09",
-        f"\u5080\u5121\uff1a{summary['puppet']}\uff08\u6218\u529b+{summary['puppet_power']}\uff09",
-        f"\u7075\u690d\uff1a{summary['plant']}",
-        f"\u7075\u77f3\u50a8\u5907\uff1a{summary['spirit_stones_text']}",
-        f"\u4fee\u70bc\u8def\u7ebf\uff1a{summary['route']}",
-        f"\u8eab\u4efd\u4ee4\u724c\uff1a{summary['identity']}",
-        f"\u795e\u901a\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd\uff1b\u6218\u529b+{summary['special_ability_power']}",
-        f"\u53cc\u4fee\u6b21\u6570\uff1a{summary['hehuan_remaining']}",
-        f"\u79d8\u5883\uff1a{summary['mystic_realm']}",
-        f"\u88c5\u5907\u52a0\u6210\uff1a{summary['equipment_power']}",
-    ]
-    if summary.get("is_bottleneck"):
-        lines.append(f"\u5f53\u524d\u74f6\u9888\uff1a\u9700 {summary['breakthrough_required']} \u624d\u80fd\u7a81\u7834")
-    if summary.get("cultivation_lock"):
-        lines.append(f"\u7981\u4fee\u72b6\u6001\uff1a{summary['cultivation_lock']}")
-    return "\n".join(lines)
-
-def format_adventure_panel(record) -> str:
-    summary = battle_summary(record)
-    return "\n".join(
-        [
-            "\u3010\u5386\u7ec3\u3011",
-            f"\u5f53\u524d\u6218\u529b\uff1a{summary['power']}\uff1b{summary['mana_label']}\u4e0a\u9650\uff1a{summary['mana']}",
-            f"\u5f53\u524d\u7075\u5668\u69fd\uff1a{summary['artifact_slots']}",
-            f"\u672c\u547d\u7075\u5668\uff1a{summary['life_artifact']}",
-            f"仙源：{summary['immortal_seed']}（战力+{summary['immortal_seed_power']}）",
-            f"\u5f53\u524d\u7b26\u7b93\u680f\uff1a{summary['talisman']}\uff08\u6218\u529b+{summary['talisman_power']}\uff09",
-            f"\u5f53\u524d\u529f\u6cd5\uff1a{summary['method']}",
-            f"\u5f53\u524d\u9635\u76d8\uff1a{summary['array']}\uff08{summary['array_multiplier']:.1f}x\uff09",
-            f"\u5f53\u524d\u5080\u5121\uff1a{summary['puppet']}",
-            f"\u5f53\u524d\u7075\u690d\uff1a{summary['plant']}",
-            f"\u7075\u77f3\u50a8\u5907\uff1a{summary['spirit_stones_text']}",
-            f"\u7cbe\u7eaf\u7075\u6db2\uff1a{summary['spirit_liquid']}\uff1b\u74f6\u9888\u6c89\u6dc0\uff1a{summary['bottleneck_days']} \u5929",
-            f"\u4fee\u70bc\u8def\u7ebf\uff1a{summary['route']}",
-            f"\u8eab\u4efd\u4ee4\u724c\uff1a{summary['identity']}\uff08\u53cc\u4fee\uff1a{summary['hehuan_remaining']}\uff09",
-            f"\u795e\u901a\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd",
-            "\u8def\u7ebf / \u9009\u62e9\u8def\u7ebf \u5251\u4fee / \u9009\u62e9\u8def\u7ebf \u70bc\u5668\u5e08 / \u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50",
-            "\u6bcf\u65e5\u4efb\u52a1 / \u5b8c\u6210\u4efb\u52a1 1 / \u5546\u5e97 / \u8d2d\u4e70 1 / \u51fa\u552e \u4e39\u836f 1",
-            "\u70bc\u4e39 / \u70bc\u5668 / \u70bc\u5668\u56fe\u9274 / \u9635\u6cd5\u63a8\u6f14 1 / \u796d\u70bc\u672c\u547d\u7075\u5668 1",
-            "\u7075\u5668 / \u529f\u6cd5 / \u9635\u76d8 / \u795e\u901a / \u4ed9\u79cd / \u552f\u4e00\u88c5\u5907\u56fe\u9274\uff1a\u67e5\u770b\u53ef\u7528\u914d\u7f6e",
-            "\u5080\u5121 / \u7075\u690d / \u80cc\u5305\uff1a\u67e5\u770b\u5386\u7ec3\u8d44\u6e90",
-            "\u88c5\u5907\u7075\u5668 1 \u4e3b\u624b / \u88c5\u5907\u7075\u5668 2 \u526f\u624b / \u88c5\u5907\u7075\u5668 3 \u62a4\u7532 / \u88c5\u5907\u7b26\u7b93 1",
-            "\u53c2\u609f\u529f\u6cd5 1 / \u5e03\u7f6e\u9635\u76d8 1 / \u88c5\u5907\u4ed9\u79cd 1 / \u5378\u4e0b\u7075\u5668 \u526f\u624b",
-            "\u4ea4\u6613\u5217\u8868 / \u4ea4\u6613 @\u5bf9\u65b9 \u7075\u5668 1 100 / \u6279\u91cf\u51fa\u552e \u6742\u7269 20 / \u79d8\u5883\u6551\u63f4 1000",
-            "\u79d8\u5883\uff1a\u67e5\u770b60\u79d2\u9650\u65f6\u79d8\u5883\u5165\u53e3\uff1b\u9ad8\u5371\u9669\u5730\u6709\u66f4\u5c11\u751f\u8def\u4e14\u65e0\u9996\u9886\u6311\u6218\uff1b\u666e\u901a\u79d8\u5883\u9996\u9886\u80dc\u5229\u53ef\u6298\u7b9710\u6b21\u63a2\u7d22\u5956\u52b1",
-            "\u7a81\u7834\uff1a\u5883\u754c\u5706\u6ee1\u540e\u4f7f\u7528\u7a81\u7834\u9053\u5177\uff1b\u6563\u529f\uff1a\u56de\u9000\u91cd\u4fee\u6539\u5584\u54c1\u76f8",
-            "\u6218\u529b / pk @\u5bf9\u65b9 / \u7533\u8bf7\u666e\u901a\u6597\u6cd5 / \u6218\u529b\u699c\uff1a\u67e5\u770b\u6218\u529b\u4e0e\u5207\u78cb",
-        ]
-    )
-
-def format_shop_panel(record, date_text: str) -> str:
-    items = shop_items_for_date(date_text, record)
-    lines = ["【每日商店】", f"今日灵石：{spirit_stone_text(record.spirit_stones)}"]
-    for index, item in enumerate(items, start=1):
-        price = int(item.get("price", 0))
-        required = item.get("required_attribute")
-        extra = f"，需{required}灵根" if required else ""
-        lines.append(f"{index}. {reward_display_name(item)}：{spirit_stone_text(price)}{extra}")
-    lines.append("发送“购买 编号”购买；发送“出售 类别 编号”出售背包物品。")
-    return "\n".join(lines)
-
-
-def format_duel_result(attacker_name: str, defender_name: str, result) -> str:
-    winner = attacker_name if result.attacker_win else defender_name
-    chance = int(result.chance * 100)
-    return "\n".join(
-        [
-            "【历练切磋】",
-            f"{attacker_name} 战力 {result.attacker_power}",
-            f"{defender_name} 战力 {result.defender_power}",
-            f"胜者：{winner}",
-            f"推演胜率：{chance}%",
-            result.detail,
-            "切磋不消耗修为，也不会损毁灵器。",
-        ]
-    )
-
-
-def format_rank_message(
-    group_id: str,
-    date_text: str,
-    entries: list[dict[str, Any]],
-    rewards: dict[str, RankReward],
-    cultivation_entries: list[dict[str, Any]],
-    power_entries: list[dict[str, Any]],
-) -> str:
-    lines = [
-        f"【每日话痨榜】{date_text}",
-        f"群 {group_id} 今日修炼热度结算：",
-    ]
-    for index, entry in enumerate(entries[:10], start=1):
-        user_id = str(entry.get("user_id", ""))
-        nickname = str(entry.get("nickname") or user_id)
-        count = int(entry.get("count", 0))
-        reward = rewards.get(user_id)
-        reward_text = reward.label if reward else "无奖励"
-        lines.append(f"{index}. {nickname}：{count} 句，{reward_text}")
-    lines.append("")
-    lines.append("奖励已发放；未觉醒灵根者的修为会暂存到首次签到后领取。")
-    lines.append("")
-    lines.append(format_cultivation_rank(cultivation_entries, "【群修为榜】"))
-    lines.append("")
-    lines.append(format_power_rank(power_entries, "【群战力榜】"))
-    return "\n".join(lines)
-
-
-def _is_likely_sent_despite_error(exc: Exception) -> bool:
-    """判断 ActionFailed 是否属于"消息实际已送达但 ACK 超时"的场景。
-
-    NapCat/QQ NT 内核发图时，sendMsg 的 ACK 可能慢于超时阈值，
-    导致 retcode=1200 ActionFailed，但消息实际已发出。
-    """
-    msg = str(getattr(exc, "wording", "") or getattr(exc, "message", "") or str(exc))
-    return "1200" in msg or "Timeout" in msg or "sendMsg" in msg
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 async def settle_daily_chat_ranks() -> None:
@@ -2610,410 +981,6 @@ async def stop_admin_http_server() -> None:
     chat_flush_task = None
 
 
-def beast_realm_group_key_from_event(event: GroupMessageEvent) -> str:
-    return beast_realm_game.group_key(str(event.group_id))
-
-
-def beast_realm_group_id_from_key(group_key: str) -> str:
-    return str(group_key).split(":", 1)[-1]
-
-
-def cleanup_beast_realm_table(group_key: str) -> None:
-    table = beast_realm_tables.pop(group_key, None)
-    if not table:
-        return
-    for player in beast_realm_game.active_human_players(table):
-        user_id = str(player.get("id"))
-        if beast_realm_private_routes.get(user_id) == group_key:
-            beast_realm_private_routes.pop(user_id, None)
-
-
-def route_beast_realm_players(table: dict[str, Any]) -> None:
-    group_key = str(table.get("group_id"))
-    for player in beast_realm_game.active_human_players(table):
-        beast_realm_private_routes[str(player.get("id"))] = group_key
-
-
-async def send_beast_realm_leader_panel(table: dict[str, Any], player: dict[str, Any]) -> bool:
-    route_beast_realm_players(table)
-    user_id = str(player.get("id"))
-    record = await store.get_user(user_id)
-    return await send_private_panel(
-        user_id,
-        "峰主选择",
-        beast_realm_game.leader_choice_text(player),
-        record,
-        icon=BEAST_REALM_ICON,
-        footer="开局前发送“选择峰主 1/2/3”。所有修士选定峰主后，群聊由峰主发送“开始御兽秘境”。",
-    )
-
-
-async def send_beast_realm_recruit_panels(table: dict[str, Any]) -> None:
-    route_beast_realm_players(table)
-    group_key = str(table.get("group_id"))
-    mode = str(table.get("mode", "pve"))
-    footer = (
-        "私聊完成招募后发送“完成招募”，会立即结算本回合1V2战报。"
-        if mode == "solo_pve"
-        else "私聊完成招募后发送“完成招募”，全员准备后群聊自动播报战报。"
-    )
-    failed: list[str] = []
-    for player in beast_realm_game.live_human_players(table):
-        user_id = str(player.get("id"))
-        record = await store.get_user(user_id)
-        sent = await send_private_panel(
-            user_id,
-            "任务堂",
-            beast_realm_game.player_text(player, table),
-            record,
-            icon=BEAST_REALM_ICON,
-            footer=footer,
-        )
-        if not sent:
-            failed.append(str(player.get("name") or user_id))
-    if failed and group_key.startswith("group:"):
-        try:
-            await get_bot().send_group_msg(
-                group_id=int(beast_realm_group_id_from_key(group_key)),
-                message=panel_segment(
-                    "任务堂私聊失败",
-                    "、".join(failed) + " 的任务堂私聊发送失败，请检查好友或临时会话权限。",
-                    icon="warning",
-                ),
-            )
-        except Exception:
-            logger.debug("发送任务堂私聊失败提示失败")
-
-
-async def send_beast_realm_group_report(table: dict[str, Any], title: str, content: str) -> None:
-    group_key = str(table.get("group_id"))
-    if not group_key.startswith("group:"):
-        return
-    await get_bot().send_group_msg(
-        group_id=int(beast_realm_group_id_from_key(group_key)),
-        message=panel_segment(title, content, icon=BEAST_REALM_ICON),
-    )
-async def is_help_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in HELP_TEXTS
-
-
-async def is_newbie_tutorial_message(event: MessageEvent) -> bool:
-    return isinstance(event, PrivateMessageEvent) and normalized_plain_text(event) in NEWBIE_TUTORIAL_TEXTS
-
-async def is_catalog_message(event: MessageEvent) -> bool:
-    text = normalized_plain_text(event)
-    return text in CATALOG_TEXTS or parse_catalog_query(text) is not None
-
-
-async def is_signin_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in SIGNIN_TEXTS
-
-
-async def is_signin_calendar_message(event: MessageEvent) -> bool:
-    text = normalized_plain_text(event)
-    if text in SIGNIN_CALENDAR_TEXTS:
-        return True
-    return any(text.startswith(word) for word in SIGNIN_CALENDAR_TEXTS)
-
-
-async def is_makeup_sign_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event).startswith(MAKEUP_SIGN_PREFIXES)
-
-
-async def is_status_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in STATUS_TEXTS
-
-
-async def is_breakthrough_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in BREAKTHROUGH_TEXTS
-
-
-async def is_puppet_list_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in PUPPET_LIST_TEXTS
-
-
-async def is_plant_list_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in PLANT_LIST_TEXTS
-
-
-async def is_item_list_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in ITEM_LIST_TEXTS
-
-
-async def is_special_ability_message(event: MessageEvent) -> bool:
-    return is_special_ability_command_text(normalized_plain_text(event))
-
-
-async def is_special_ability_learn_message(event: MessageEvent) -> bool:
-    return is_special_ability_learn_command_text(normalized_plain_text(event))
-
-
-async def is_route_message(event: MessageEvent) -> bool:
-    return is_route_command_text(normalized_plain_text(event))
-
-
-async def is_task_message(event: MessageEvent) -> bool:
-    return is_task_command_text(normalized_plain_text(event))
-
-
-async def is_shop_message(event: MessageEvent) -> bool:
-    return is_shop_command_text(normalized_plain_text(event))
-
-
-async def is_alchemy_message(event: MessageEvent) -> bool:
-    return is_alchemy_command_text(normalized_plain_text(event))
-
-
-
-async def is_refining_message(event: MessageEvent) -> bool:
-    return is_refining_command_text(normalized_plain_text(event))
-
-
-async def is_array_deduction_message(event: MessageEvent) -> bool:
-    return is_array_deduction_command_text(normalized_plain_text(event))
-
-
-async def is_life_artifact_message(event: MessageEvent) -> bool:
-    return is_life_artifact_command_text(normalized_plain_text(event))
-
-
-async def is_immortal_seed_message(event: MessageEvent) -> bool:
-    return is_immortal_seed_command_text(normalized_plain_text(event))
-
-
-async def is_emperor_catalog_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in EMPEROR_CATALOG_TEXTS
-
-
-async def is_trade_message(event: MessageEvent) -> bool:
-    return is_trade_command_text(normalized_plain_text(event))
-
-
-async def is_market_message(event: MessageEvent) -> bool:
-    return is_market_command_text(normalized_plain_text(event))
-
-
-async def is_rescue_message(event: MessageEvent) -> bool:
-    return is_rescue_command_text(normalized_plain_text(event))
-
-async def is_talisman_draw_message(event: MessageEvent) -> bool:
-    return is_talisman_draw_command_text(normalized_plain_text(event))
-
-
-async def is_tianji_mystic_message(event: MessageEvent) -> bool:
-    return is_tianji_mystic_command_text(normalized_plain_text(event))
-
-
-async def is_mystic_group_message(event: MessageEvent) -> bool:
-    return (
-        isinstance(event, GroupMessageEvent)
-        and parse_mystic_group_command(normalized_plain_text(event)) is not None
-    )
-
-
-async def is_mystic_private_message(event: MessageEvent) -> bool:
-    if not isinstance(event, PrivateMessageEvent):
-        return False
-    return await mystic_coordinator.accepts_private_message(
-        event.get_user_id(),
-        normalized_plain_text(event),
-    )
-
-
-@event_preprocessor
-async def block_other_plugins_during_mystic_battle(event: MessageEvent) -> None:
-    """秘境战斗进行时，屏蔽其它插件对该玩家私聊指令的响应。
-
-    NoneBot 没有“全局暂停其它插件”的 API，这里用事件预处理器实现：在所有
-    matcher 运行前检查——若该玩家正处于秘境战斗相关阶段，且本次私聊不是秘境
-    自己的指令，就给一条提示并抛 IgnoredException 终止事件传播，避免签到、
-    装备、炼化等指令在战斗中途打断状态。秘境自己的指令正常放行。
-    """
-    if not isinstance(event, PrivateMessageEvent):
-        return
-    user_id = event.get_user_id()
-    try:
-        in_battle = await mystic_coordinator.is_in_mystic_battle(user_id)
-    except Exception as exc:  # noqa: BLE001 — 预处理器异常会丢弃整条事件，必须失败放行
-        logger.warning(f"秘境战斗屏蔽检查失败，放行事件：{exc!r}")
-        return
-    if not in_battle:
-        return
-    text = normalized_plain_text(event)
-    # 是秘境自己的私聊指令 → 放行，交给 mystic_private_cmd 处理
-    if parse_mystic_private_command(text) is not None:
-        return
-    try:
-        await get_bot().send_private_msg(
-            user_id=int(user_id),
-            message=panel_segment(
-                "秘境战斗中",
-                "你正在进行秘境战斗，请先完成当前战斗（确认配装 / 普通攻击 / 秘境技能 / 自动战斗）。\n如需查看状态，发送“秘境状态”。",
-                icon="mystic",
-            ),
-        )
-    except (ActionFailed, NetworkError, RuntimeError, ValueError):
-        logger.debug(f"秘境战斗拦截提示发送失败: {user_id}")
-    raise IgnoredException("玩家正在进行秘境战斗，已拦截其它私聊指令")
-
-
-async def is_dual_cultivation_message(event: MessageEvent) -> bool:
-    return isinstance(event, GroupMessageEvent) and is_dual_cultivation_command_text(normalized_plain_text(event))
-
-
-async def is_equip_puppet_message(event: MessageEvent) -> bool:
-    return is_equip_puppet_command_text(normalized_plain_text(event))
-
-
-async def is_plant_message(event: MessageEvent) -> bool:
-    return is_plant_command_text(normalized_plain_text(event))
-
-
-async def is_item_use_message(event: MessageEvent) -> bool:
-    return is_item_use_command_text(normalized_plain_text(event))
-
-
-async def is_acquired_root_message(event: MessageEvent) -> bool:
-    return is_acquired_root_command_text(normalized_plain_text(event))
-
-
-async def is_spirit_liquid_use_message(event: MessageEvent) -> bool:
-    return is_spirit_liquid_use_command_text(normalized_plain_text(event))
-
-
-async def is_fishing_message(event: MessageEvent) -> bool:
-    return parse_fishing_arg(normalized_plain_text(event)) is not None
-
-
-async def is_fishing_reply(event: MessageEvent) -> bool:
-    user_id = event.get_user_id()
-    expires_at = pending_fishing_users.get(user_id)
-    if expires_at is None:
-        return False
-    if expires_at < time.monotonic():
-        pending_fishing_users.pop(user_id, None)
-        return False
-    text = normalized_plain_text(event).lower()
-    if text not in CONFIRM_WORDS and text not in CANCEL_WORDS:
-        return False
-    record = await store.get_user(user_id)
-    if record.fishing_chances <= 0:
-        pending_fishing_users.pop(user_id, None)
-        return False
-    return True
-
-
-async def is_group_chat_for_rank(event: MessageEvent) -> bool:
-    if not isinstance(event, GroupMessageEvent):
-        return False
-    text = normalized_plain_text(event)
-    if not text:
-        return False
-    return not is_managed_command_text(text)
-
-
-async def is_cultivation_rank_message(event: MessageEvent) -> bool:
-    return isinstance(event, GroupMessageEvent) and normalized_plain_text(event) in CULTIVATION_RANK_TEXTS
-
-
-async def is_power_rank_message(event: MessageEvent) -> bool:
-    return isinstance(event, GroupMessageEvent) and normalized_plain_text(event) in POWER_RANK_TEXTS
-
-
-async def is_power_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in POWER_TEXTS
-
-
-async def is_adventure_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in ADVENTURE_TEXTS
-
-
-async def is_artifact_list_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in ARTIFACT_LIST_TEXTS
-
-
-async def is_method_list_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in METHOD_LIST_TEXTS
-
-
-async def is_array_list_message(event: MessageEvent) -> bool:
-    return normalized_plain_text(event) in ARRAY_LIST_TEXTS
-
-
-async def is_equip_artifact_message(event: MessageEvent) -> bool:
-    return is_equip_command_text(normalized_plain_text(event))
-
-
-async def is_equip_talisman_message(event: MessageEvent) -> bool:
-    return is_equip_talisman_command_text(normalized_plain_text(event))
-
-
-async def is_equip_method_message(event: MessageEvent) -> bool:
-    return is_equip_method_command_text(normalized_plain_text(event))
-
-
-async def is_method_detail_message(event: MessageEvent) -> bool:
-    return is_method_detail_command_text(normalized_plain_text(event))
-
-
-async def is_normal_duel_apply_message(event: MessageEvent) -> bool:
-    return isinstance(event, GroupMessageEvent) and is_normal_duel_apply_text(normalized_plain_text(event))
-
-
-async def is_normal_duel_chat_message(event: MessageEvent) -> bool:
-    if not isinstance(event, GroupMessageEvent):
-        return False
-    plain_text = normalized_plain_text(event)
-    action_text = normal_duel_action_text(event)
-    if not action_text:
-        return False
-    if plain_text and is_managed_command_text(plain_text):
-        return False
-    session = group_duel_session(str(event.group_id))
-    if not session or not session.get("active"):
-        return False
-    return event.get_user_id() in {str(session.get("left_id")), str(session.get("right_id"))}
-
-
-async def is_equip_array_message(event: MessageEvent) -> bool:
-    return is_equip_array_command_text(normalized_plain_text(event))
-
-
-
-
-async def is_duel_message(event: MessageEvent) -> bool:
-    return isinstance(event, GroupMessageEvent) and is_duel_command_text(normalized_plain_text(event))
-
-
-
-async def is_beast_realm_group_message(event: MessageEvent) -> bool:
-    if not isinstance(event, GroupMessageEvent):
-        return False
-    text = normalized_plain_text(event)
-    if not text:
-        return False
-    group_key = beast_realm_group_key_from_event(event)
-    return beast_realm_game.is_beast_realm_group_command(text) or (
-        group_key in beast_realm_tables and beast_realm_game.is_beast_realm_group_command(text)
-    )
-
-
-async def is_beast_realm_private_message(event: MessageEvent) -> bool:
-    if not isinstance(event, PrivateMessageEvent):
-        return False
-    text = normalized_plain_text(event)
-    if beast_realm_game.is_beast_realm_private_entry_command(text):
-        return True
-    if not beast_realm_game.is_beast_realm_private_command(text):
-        return False
-    group_key = beast_realm_private_routes.get(event.get_user_id())
-    if not group_key:
-        return False
-    table = beast_realm_tables.get(group_key)
-    if not table or table.get("phase") not in {"lobby", "recruit"}:
-        return False
-    player = beast_realm_game.table_player(table, event.get_user_id())
-    return bool(player and not player.get("bot"))
 
 beast_realm_group_cmd = on_message(rule=Rule(is_beast_realm_group_message), priority=10, block=True)
 beast_realm_private_cmd = on_message(rule=Rule(is_beast_realm_private_message), priority=7, block=True)

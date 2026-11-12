@@ -19,7 +19,9 @@ from nonebot.rule import Rule
 
 from ..state import store, doudizhu_tables, normal_duel_sessions
 
-# 插件入口模块引用（由 commands/__init__.py 注入），用于延迟访问 finish_panel 等 helper。
+# 插件入口模块引用（由插件 __init__.py 注入），用于延迟访问 finish_panel 等 helper。
+# TODO(R-18)：finish_panel/nickname_from_event 等已下沉到 commands/panels.py、
+# commands/parsing.py，后续改为直接 import 并删掉 _g。
 _g = None
 
 DOUDIZHU_HELP_TEXTS = {"斗地主帮助", "斗地主规则", "斗牌帮助"}
