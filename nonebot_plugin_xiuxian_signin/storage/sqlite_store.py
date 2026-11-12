@@ -78,7 +78,6 @@ class SqliteStore(ChatCountAggregatorMixin):
         self.user_file_path = self.data_dir / "users.json"
         self.rank_file_path = self.data_dir / "daily_chat_rank.json"
         self.group_file_path = self.data_dir / "group_members.json"
-        self.tianji_hall_file_path = self.data_dir / "tianji_divination_hall.json"
         self.unique_artifact_file_path = self.data_dir / "unique_artifacts.json"
         self.trade_file_path = self.data_dir / "trade_offers.json"
         self.rescue_file_path = self.data_dir / "mystic_rescue.json"
@@ -340,105 +339,6 @@ class SqliteStore(ChatCountAggregatorMixin):
             if isinstance(group_data, dict) and group_data.get("date") == date_text:
                 group_data["settled"] = True
                 self._upsert(connection, "chat_rank", "group_id", str(group_id), group_data)
-
-    # --- 天机阁（R-32/33 将删除，直译平移） -----------------------------------
-    async def register_tianji_sitter(
-        self,
-        group_id: str,
-        user_id: str,
-        date_text: str,
-        nickname: str = "",
-    ) -> tuple[bool, dict[str, Any]]:
-        with self._txn() as connection:
-            row = connection.execute(
-                "SELECT data FROM tianji_hall WHERE group_id=?", (str(group_id),)
-            ).fetchone()
-            group_data = _loads(row["data"]) if row is not None else None
-            if not isinstance(group_data, dict) or group_data.get("date") != date_text:
-                sitter = {"user_id": user_id, "nickname": nickname or user_id}
-                group_data = {
-                    "date": date_text,
-                    "sitter_id": user_id,
-                    "sitter_name": nickname or user_id,
-                    "sitters": [sitter],
-                    "divination_count": 0,
-                    "income": 0,
-                }
-                self._upsert(connection, "tianji_hall", "group_id", str(group_id), group_data)
-                return True, dict(group_data)
-            return False, dict(group_data)
-
-    async def join_tianji_sitter(
-        self,
-        group_id: str,
-        user_id: str,
-        date_text: str,
-        nickname: str = "",
-    ) -> tuple[bool, dict[str, Any] | None]:
-        with self._txn() as connection:
-            row = connection.execute(
-                "SELECT data FROM tianji_hall WHERE group_id=?", (str(group_id),)
-            ).fetchone()
-            group_data = _loads(row["data"]) if row is not None else None
-            if not isinstance(group_data, dict) or group_data.get("date") != date_text:
-                return False, None
-            sitters = group_data.get("sitters")
-            if not isinstance(sitters, list) or not sitters:
-                primary_id = str(group_data.get("sitter_id") or user_id)
-                sitters = [
-                    {
-                        "user_id": primary_id,
-                        "nickname": str(group_data.get("sitter_name") or primary_id),
-                    }
-                ]
-            normalized = []
-            seen = set()
-            for item in sitters:
-                if not isinstance(item, dict):
-                    continue
-                sitter_id = str(item.get("user_id") or "")
-                if not sitter_id or sitter_id in seen:
-                    continue
-                seen.add(sitter_id)
-                normalized.append({"user_id": sitter_id, "nickname": str(item.get("nickname") or sitter_id)})
-            created = user_id not in seen
-            if created:
-                normalized.append({"user_id": user_id, "nickname": nickname or user_id})
-            group_data["sitters"] = normalized
-            self._upsert(connection, "tianji_hall", "group_id", str(group_id), group_data)
-            return created, dict(group_data)
-
-    async def get_tianji_hall(self, group_id: str, date_text: str) -> dict[str, Any] | None:
-        with _FILE_LOCK:
-            row = self._db.execute(
-                "SELECT data FROM tianji_hall WHERE group_id=?", (str(group_id),)
-            ).fetchone()
-        if row is None:
-            return None
-        group_data = _loads(row["data"])
-        if not isinstance(group_data, dict) or group_data.get("date") != date_text:
-            return None
-        return dict(group_data)
-
-    async def add_tianji_divination_income(
-        self,
-        group_id: str,
-        date_text: str,
-        amount: int,
-    ) -> dict[str, Any] | None:
-        with self._txn() as connection:
-            row = connection.execute(
-                "SELECT data FROM tianji_hall WHERE group_id=?", (str(group_id),)
-            ).fetchone()
-            if row is None:
-                return None
-            group_data = _loads(row["data"])
-            if not isinstance(group_data, dict) or group_data.get("date") != date_text:
-                return None
-            group_data["divination_count"] = int(group_data.get("divination_count", 0)) + 1
-            group_data["income"] = int(group_data.get("income", 0)) + max(0, int(amount))
-            self._upsert(connection, "tianji_hall", "group_id", str(group_id), group_data)
-            return dict(group_data)
 
     # --- 唯一道具 -------------------------------------------------------------
     async def get_unique_artifacts(self) -> dict[str, Any]:

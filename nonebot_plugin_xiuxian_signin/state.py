@@ -113,7 +113,6 @@ mystic_coordinator = MysticCommandCoordinator(
 
 # 可变游戏状态字典（各命令子模块共享）。
 pending_fishing_users: dict[str, float] = {}
-pending_divinations: dict[str, dict[str, Any]] = {}
 normal_duel_queue: dict[str, dict[str, Any]] = {}
 normal_duel_sessions: dict[str, dict[str, Any]] = {}
 doudizhu_tables: dict[str, dict[str, Any]] = {}

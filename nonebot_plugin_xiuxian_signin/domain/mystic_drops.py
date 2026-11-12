@@ -383,12 +383,3 @@ def _count_token(record: UserRecord, name: str) -> int:
         for reward in (record.rewards or [])
         if reward_name(reward) == name
     )
-
-def tianji_mystic_available(record: UserRecord, today: date) -> tuple[bool, str]:
-    cooldown = TIANJI_COOLDOWN_DAYS.get(record.faction_identity or "")
-    if not cooldown:
-        return False, "当前没有天机阁身份，无法开启天机秘境。"
-    last = parse_lock_until(record.last_tianji_mystic_date)
-    if last is not None and (today - last).days < cooldown:
-        return False, f"天机秘境仍在冷却，{_domain.tianji_status_text(record, today)}。"
-    return True, ""

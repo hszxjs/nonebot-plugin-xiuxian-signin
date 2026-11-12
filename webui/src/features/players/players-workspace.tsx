@@ -416,14 +416,6 @@ function PlayerRecordEditor({
               }
             />
           </Form.Item>
-          <Form.Item label="上次天机秘境 (last_tianji_mystic_date)">
-            <Input
-              value={stringValue(record.last_tianji_mystic_date)}
-              onChange={(event) =>
-                updateField("last_tianji_mystic_date", event.target.value)
-              }
-            />
-          </Form.Item>
         </div>
       </Card>
 

@@ -73,7 +73,6 @@ TEXT_PANEL_BACKGROUND_FILES = {
     "mystic": "mystic_background.png",
     "mystic_list_normal": "mystic_list_normal_background.png",
     "mystic_list_high": "mystic_list_high_background.png",
-    "divination": "mystic_background.png",
     "beast_realm": "beast_realm_background.png",
     "fishing": "fishing_guide_background.png",
     "adventure": "adventure_background.png",
@@ -1593,12 +1592,6 @@ PANEL_ICON_ALIASES = {
     "初阈": "ability",
     "归极": "ability",
     "\u4f20\u627f": "ability",
-    "\u5929\u673a\u5360\u535c": "divination",
-    "\u5360\u535c": "divination",
-    "\u7b97\u547d": "divination",
-    "\u95ee\u5366": "divination",
-    "\u8d77\u5366": "divination",
-    "\u535c\u5366": "divination",
     "\u6597\u5730\u4e3b": "poker",
     "\u6597\u724c": "poker",
     "\u6251\u514b": "poker",
@@ -1802,19 +1795,6 @@ def draw_panel_icon(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], i
         for i, height_ratio in enumerate((0.52, 0.70, 0.38)):
             left = 0.24 + i * 0.18
             rect((left, 0.82 - height_ratio, left + 0.12, 0.82), fill=(*accent_rgb, 90), radius=6)
-    elif icon_key == "divination":
-        outer = (x1 + int(0.22 * w), y1 + int(0.18 * h), x1 + int(0.78 * w), y1 + int(0.74 * h))
-        draw.ellipse(outer, fill=(255, 255, 255, 150), outline=dark, width=max(3, w // 16))
-        draw.pieslice(outer, 90, 270, fill=dark)
-        draw.pieslice(outer, 270, 90, fill=(255, 255, 255, 165))
-        dot_r = max(3, w // 18)
-        draw.ellipse((cx - dot_r, y1 + int(0.32 * h) - dot_r, cx + dot_r, y1 + int(0.32 * h) + dot_r), fill=(255, 255, 255, 220))
-        draw.ellipse((cx - dot_r, y1 + int(0.60 * h) - dot_r, cx + dot_r, y1 + int(0.60 * h) + dot_r), fill=dark)
-        for yy in (0.82, 0.90):
-            line([(x1 + int(0.26 * w), y1 + int(yy * h)), (x1 + int(0.42 * w), y1 + int(yy * h))], fill=accent, width=max(2, w // 24))
-            line([(x1 + int(0.58 * w), y1 + int(yy * h)), (x1 + int(0.74 * w), y1 + int(yy * h))], fill=accent, width=max(2, w // 24))
-        line([(x1 + int(0.47 * w), y1 + int(0.82 * h)), (x1 + int(0.53 * w), y1 + int(0.82 * h))], fill=dark, width=max(2, w // 24))
-        line([(x1 + int(0.47 * w), y1 + int(0.90 * h)), (x1 + int(0.53 * w), y1 + int(0.90 * h))], fill=dark, width=max(2, w // 24))
     elif icon_key == "poker":
         back = (x1 + int(0.22 * w), y1 + int(0.18 * h), x1 + int(0.60 * w), y1 + int(0.76 * h))
         front = (x1 + int(0.38 * w), y1 + int(0.26 * h), x1 + int(0.80 * w), y1 + int(0.86 * h))

@@ -235,7 +235,6 @@ class UserRecord:
     daily_tasks: Optional[dict[str, Any]] = None
     dual_cultivation_date: Optional[str] = None
     dual_cultivation_used: int = 0
-    last_tianji_mystic_date: Optional[str] = None
     combat_race: Optional[str] = None
     physique: Optional[str] = None
     special_abilities: Optional[list[str]] = None
@@ -371,7 +370,6 @@ class UserRecord:
             "daily_tasks": self.daily_tasks or None,
             "dual_cultivation_date": self.dual_cultivation_date,
             "dual_cultivation_used": self.dual_cultivation_used,
-            "last_tianji_mystic_date": self.last_tianji_mystic_date,
             "combat_race": self.combat_race,
             "physique": self.physique,
             "special_abilities": self.special_abilities or [],
@@ -434,7 +432,6 @@ class UserRecord:
             daily_tasks=(dict(data["daily_tasks"]) if isinstance(data.get("daily_tasks"), dict) else None),
             dual_cultivation_date=(str(data["dual_cultivation_date"]) if data.get("dual_cultivation_date") else None),
             dual_cultivation_used=int(data.get("dual_cultivation_used", 0)),
-            last_tianji_mystic_date=(str(data["last_tianji_mystic_date"]) if data.get("last_tianji_mystic_date") else None),
             combat_race=(str(data["combat_race"]) if data.get("combat_race") else None),
             physique=(str(data["physique"]) if data.get("physique") else None),
             special_abilities=[str(item) for item in (data.get("special_abilities") or []) if item],

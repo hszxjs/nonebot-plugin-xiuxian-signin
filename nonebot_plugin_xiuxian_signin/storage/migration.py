@@ -31,7 +31,6 @@ _JSON_FILES = (
     "users.json",
     "daily_chat_rank.json",
     "group_members.json",
-    "tianji_divination_hall.json",
     "unique_artifacts.json",
     "trade_offers.json",
     "mystic_rescue.json",
@@ -125,8 +124,6 @@ def _import_file(connection, source: Path) -> int:
         return _import_simple_table(connection, "chat_rank", "group_id", source)
     if name == "group_members.json":
         return _import_simple_table(connection, "group_members", "group_id", source)
-    if name == "tianji_divination_hall.json":
-        return _import_simple_table(connection, "tianji_hall", "group_id", source)
     if name == "unique_artifacts.json":
         return _import_simple_table(connection, "unique_artifacts", "item_name", source)
     if name == "trade_offers.json":
@@ -143,7 +140,6 @@ def _row_counts(connection) -> dict[str, int]:
         "users": connection.execute("SELECT COUNT(*) FROM users").fetchone()[0],
         "chat_rank": connection.execute("SELECT COUNT(*) FROM chat_rank").fetchone()[0],
         "group_members": connection.execute("SELECT COUNT(*) FROM group_members").fetchone()[0],
-        "tianji_hall": connection.execute("SELECT COUNT(*) FROM tianji_hall").fetchone()[0],
         "unique_artifacts": connection.execute("SELECT COUNT(*) FROM unique_artifacts").fetchone()[0],
         "trade_offers": connection.execute("SELECT COUNT(*) FROM trade_offers").fetchone()[0],
         "mystic_rescue": connection.execute("SELECT COUNT(*) FROM mystic_rescue").fetchone()[0],
@@ -152,6 +148,100 @@ def _row_counts(connection) -> dict[str, int]:
         "mystic_active_by_user": connection.execute("SELECT COUNT(*) FROM mystic_active_by_user").fetchone()[0],
         "mystic_private_routes": connection.execute("SELECT COUNT(*) FROM mystic_private_routes").fetchone()[0],
     }
+
+
+# --- 版本化结构步骤（R-36） --------------------------------------------------
+#
+# 阶段 3 的字段清理不再是「一次性脚本」：每个步骤有稳定 id，执行后记入 meta 的
+# ``applied_schema_steps``，因此可以「现在清一部分、以后再追加一部分」，进程
+# 重启或重复启动都不会重复执行，也不会要求第二次全量数据迁移。
+
+_APPLIED_STEPS_META_KEY = "applied_schema_steps"
+
+
+def _drop_last_tianji_mystic_date(connection) -> int:
+    """R-41 前半：清掉已退役的 last_tianji_mystic_date 字段。
+
+    该字段的写入方（坐堂分润 / 天机秘境冷却）已随 R-41 退役，不再有任何读写方，
+    属纯历史残留；``faction_identity`` 与 ``identity_sign_days`` 一律不动。
+    """
+    rows = connection.execute("SELECT user_id, data FROM users").fetchall()
+    changed = 0
+    for row in rows:
+        try:
+            data = json.loads(row["data"])
+        except json.JSONDecodeError:
+            logger.warning(f"玩家 {row['user_id']} 存档损坏，跳过字段清理")
+            continue
+        if not isinstance(data, dict) or "last_tianji_mystic_date" not in data:
+            continue
+        data.pop("last_tianji_mystic_date", None)
+        connection.execute(
+            "UPDATE users SET data=? WHERE user_id=?",
+            (json.dumps(data, ensure_ascii=False), row["user_id"]),
+        )
+        changed += 1
+    return changed
+
+
+_SCHEMA_STEPS: tuple[tuple[str, Any], ...] = (
+    ("2026-11-r41-drop-last-tianji-mystic-date", _drop_last_tianji_mystic_date),
+)
+
+# 已下线子系统的旧存档：只改名归档，不删除，便于人工核查或回退。
+_ARCHIVED_JSON_FILES = ("tianji_divination_hall.json",)
+
+
+def _load_applied_steps(connection) -> set[str]:
+    raw = db.get_meta(connection, _APPLIED_STEPS_META_KEY)
+    if not raw:
+        return set()
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning(f"{_APPLIED_STEPS_META_KEY} 内容不可解析，按未记录处理：{raw!r}")
+        return set()
+    return {str(item) for item in value} if isinstance(value, list) else set()
+
+
+def apply_schema_steps(connection) -> list[str]:
+    """执行尚未应用过的结构步骤；返回本次实际执行的 step id 列表。"""
+    applied = _load_applied_steps(connection)
+    pending = [(step_id, fn) for step_id, fn in _SCHEMA_STEPS if step_id not in applied]
+    if not pending:
+        return []
+    executed: list[str] = []
+    for step_id, fn in pending:
+        with _txn_of(connection):
+            changed = fn(connection)
+            applied.add(step_id)
+            db.set_meta(
+                connection,
+                _APPLIED_STEPS_META_KEY,
+                json.dumps(sorted(applied), ensure_ascii=False),
+            )
+        executed.append(step_id)
+        logger.info(f"存储结构步骤已执行：{step_id}（影响 {changed} 行）")
+    return executed
+
+
+def archive_retired_stores(data_dir: str | Path) -> list[str]:
+    """把已下线子系统的旧存档改名为 ``*.archived.bak``（幂等，不删除数据）。"""
+    data_dir = Path(data_dir)
+    archived: list[str] = []
+    for name in _ARCHIVED_JSON_FILES:
+        source = data_dir / name
+        if not source.is_file():
+            continue
+        target = source.with_name(source.name + ".archived.bak")
+        if target.exists():
+            logger.warning(f"归档目标已存在，保留原文件待人工处理：{source.name}")
+            continue
+        source.replace(target)
+        archived.append(name)
+    if archived:
+        logger.info(f"已下线子系统的旧存档已归档（未删除）：{archived}")
+    return archived
 
 
 def migrate_json_to_sqlite(data_dir: str | Path, store: SqliteStore) -> bool:
@@ -217,11 +307,13 @@ class _txn_of:
 
 
 def ensure_sqlite_backend(data_dir: str | Path) -> SqliteStore:
-    """state.py 入口：建库 → 按需迁移 → 返回就绪的 SqliteStore。"""
+    """state.py 入口：建库 → 按需迁移 → 结构步骤 → 归档下线存档。"""
     store = SqliteStore(Path(data_dir))
     migrated = migrate_json_to_sqlite(data_dir, store)
     if migrated:
         logger.info("存储后端：SQLite（WAL），已完成 JSON 存档自动迁移")
     else:
         logger.info(f"存储后端：SQLite（WAL），库文件 {store.db_path}")
+    apply_schema_steps(store._db)  # noqa: SLF001 - 同包协作
+    archive_retired_stores(data_dir)
     return store

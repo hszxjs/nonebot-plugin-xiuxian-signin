@@ -73,63 +73,12 @@ def sell_reward(record: UserRecord, category: str, item_index: int) -> tuple[boo
             extra = f"\n该灵器所系 {removed} 条器灵根随器离身而失效。"
     return True, f"出售 {reward_display_name(result)}，获得 {spirit_stone_text(price)}，当前共有 {spirit_stone_text(record.spirit_stones)}。{extra}"
 
-def divination_topic(question: str) -> str:
-    text = question.strip()
-    if any(token in text for token in ("修行", "突破", "境界", "功法", "秘境", "渡劫", "签到")):
-        return "修行"
-    if any(token in text for token in ("情", "缘", "爱", "复合", "姻", "双修")):
-        return "情缘"
-    if any(token in text for token in ("财", "钱", "灵石", "买", "卖", "商店", "事业", "工作")):
-        return "财事"
-    return "通用"
-
-def divination_pick_pair(options: Sequence[str], seed: str) -> str:
-    if len(options) <= 1:
-        return "、".join(options)
-    first = stable_int(seed + ":a") % len(options)
-    second = stable_int(seed + ":b") % len(options)
-    if second == first:
-        second = (second + 1) % len(options)
-    return f"{options[first]}、{options[second]}"
-
-def tianji_divination_text(record: UserRecord, question: str, today: Optional[date] = None) -> str:
-    clean_question = " ".join(str(question or "").strip().split())[:80] or "未言之事"
-    today = today or date.today()
-    seed = f"divination:{record.user_id}:{today.isoformat()}:{clean_question}:{record.realm_index}:{record.sign_count}"
-    hexagram = stable_choice(DIVINATION_HEXAGRAMS, seed + ":hexagram")
-    upper = stable_choice(DIVINATION_TRIGRAMS, seed + ":upper")
-    lower = stable_choice(DIVINATION_TRIGRAMS, seed + ":lower")
-    changed_yao = stable_choice(DIVINATION_YAO, seed + ":yao")
-    image = stable_choice(DIVINATION_IMAGES, seed + ":image")
-    fortune, fortune_text = stable_choice(DIVINATION_FORTUNES, seed + ":fortune")
-    topic = divination_topic(clean_question)
-    advice = stable_choice(DIVINATION_TOPIC_ADVICES[topic], seed + ":advice")
-    yi = divination_pick_pair(DIVINATION_YI, seed + ":yi")
-    ji = divination_pick_pair(DIVINATION_JI, seed + ":ji")
-    realm = record.realm if record.root else "未入门"
-    root_text = record.root_summary if record.root else "未觉醒灵根"
-    lines = [
-        "【天机占卜】",
-        f"所问：{clean_question}",
-        f"命盘：{realm}，{root_text}",
-        f"起卦：{hexagram}；变爻：{changed_yao}；签等：{fortune}",
-        f"卦象：{upper[0]}{upper[1]}在上，{lower[0]}{lower[1]}在下；{image}",
-        f"签语：{fortune_text}",
-        f"断曰：上卦为{upper[2]}，下卦为{lower[2]}，此事须看时、势、心三处是否相合。",
-        f"宜：{yi}",
-        f"忌：{ji}",
-        f"修士建议：{advice}",
-        "注：此为趣味占卜，天机只露一线，取舍仍在宿主自心。",
-    ]
-    return "\n".join(lines)
-
 def route_status_text(record: UserRecord) -> str:
     lines = [
         "\u3010\u4fee\u70bc\u8def\u7ebf\u3011",
         f"\u5f53\u524d\u4e3b\u8def\u7ebf\uff1a{record.cultivation_route or '\u672a\u9009\u62e9'}",
         f"\u90aa\u4fee\u540c\u4fee\uff1a{'\u5df2\u5f00\u542f' if record.evil_cultivator else '\u672a\u5f00\u542f'}",
         f"\u5b97\u95e8\u8eab\u4efd\uff1a{record.identity_summary}",
-        f"\u5929\u673a\u79d8\u5883\uff1a{tianji_status_text(record)}",
         f"\u53cc\u4fee\u6b21\u6570\uff1a{hehuan_remaining_text(record)}",
         "",
         "\u3010\u4e3b\u4fee\u8def\u7ebf\u3011",
@@ -237,17 +186,6 @@ def apply_dual_cultivation(actor: UserRecord, target: UserRecord, today: date) -
         actor.dual_cultivation_used = 0
     actor.dual_cultivation_used += 1
     return True, f"双修完成，双方各得修为：发起者 +{actor_exp}，对象 +{target_exp}。今日剩余 {hehuan_remaining(actor, today)} 次。"
-
-def tianji_status_text(record: UserRecord, today: Optional[date] = None) -> str:
-    cooldown = TIANJI_COOLDOWN_DAYS.get(record.faction_identity or "")
-    if not cooldown:
-        return "无"
-    today = today or date.today()
-    last = parse_lock_until(record.last_tianji_mystic_date)
-    if last is None:
-        return "可用"
-    remain = cooldown - (today - last).days
-    return "可用" if remain <= 0 else f"冷却{remain}天"
 
 def generate_daily_tasks(record: UserRecord, today: date) -> list[dict[str, Any]]:
     seed = int(hashlib.sha256(f"{record.user_id}:{today.isoformat()}".encode("utf-8")).hexdigest()[:16], 16)

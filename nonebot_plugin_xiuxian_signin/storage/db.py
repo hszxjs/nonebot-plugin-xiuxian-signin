@@ -29,7 +29,6 @@ _SCHEMA_STATEMENTS = (
     "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, data TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS chat_rank (group_id TEXT PRIMARY KEY, data TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS group_members (group_id TEXT PRIMARY KEY, data TEXT NOT NULL)",
-    "CREATE TABLE IF NOT EXISTS tianji_hall (group_id TEXT PRIMARY KEY, data TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS unique_artifacts (item_name TEXT PRIMARY KEY, data TEXT NOT NULL)",
     """
     CREATE TABLE IF NOT EXISTS trade_offers (

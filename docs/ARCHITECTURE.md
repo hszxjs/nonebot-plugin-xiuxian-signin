@@ -75,7 +75,7 @@ Layer 3（复合子系统）
   abilities.py    神通系统
   crafting.py     炼丹/炼器/消耗品使用
   mystic_drops.py 秘境掉落配置 + apply_admin_config + 运行时可变状态
-  economy.py      商店/出售/交易/每日任务/路线身份/双修/天机占卜
+  economy.py      商店/出售/交易/每日任务/路线身份/双修
 
 Layer 4（顶层）
   combat.py       战斗引擎/战力/pk/排行奖励

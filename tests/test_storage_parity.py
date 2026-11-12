@@ -49,7 +49,6 @@ def _dump(store: Any) -> dict[str, Any]:
             "users": store.read_users_sync(),
             "chat_rank": store._read_rows("chat_rank", "group_id"),
             "group_members": store.read_group_members_sync(),
-            "tianji": store._read_rows("tianji_hall", "group_id"),
             "unique": store._read_rows("unique_artifacts", "item_name"),
             "trade": store._load_trade_doc(),
             "rescue": store._load_rescue_doc(),
@@ -60,7 +59,6 @@ def _dump(store: Any) -> dict[str, Any]:
         "users": read(store.user_file_path),
         "chat_rank": read(store.rank_file_path),
         "group_members": read(store.group_file_path),
-        "tianji": read(store.tianji_hall_file_path),
         "unique": read(store.unique_artifact_file_path),
         "trade": read(store.trade_file_path),
         "rescue": store._read_rescue_state_locked(),
@@ -108,12 +106,7 @@ def test_scenario_replay_produces_identical_state(tmp_path: Path, store_factory)
         # 4. 唯一道具
         claimed, owner = await store.claim_unique_artifact("青莲剑", "10001", "玩家一")
         assert claimed
-        # 5. 天机阁
-        registered, _hall = await store.register_tianji_sitter("g1", "10001", "2026-07-16", "玩家一")
-        assert registered
-        await store.join_tianji_sitter("g1", "10002", "2026-07-16", "玩家二")
-        await store.add_tianji_divination_income("g1", "2026-07-16", 120)
-        # 6. 救援（建单 → 接单 → 失败 → 过期退款）
+        # 5. 救援（建单 → 接单 → 失败 → 过期退款）
         request = MysticRescueRequest(
             request_id="r1",
             run_id="run-1",
@@ -133,7 +126,7 @@ def test_scenario_replay_produces_identical_state(tmp_path: Path, store_factory)
         await store.fail_rescue_attempt("r1", "10002")
         expired = await store.expire_rescue_request("r1")
         assert expired.status == "expired"
-        # 7. 秘境 lobby → 更新 → 终结
+        # 6. 秘境 lobby → 更新 → 终结
         service = MysticDungeonService(MysticTemplateCatalog.from_files(), now=lambda: NOW)
         run = service.create_lobby("run-p", "g1", "10001", DungeonRisk.NORMAL)
         service.join_lobby(run, "10002")
@@ -235,7 +228,6 @@ def test_both_backends_end_with_identical_state(tmp_path: Path) -> None:
             )
             await store.take_trade_offer("g1", created["id"], "10002")
             await store.claim_unique_artifact("青莲剑", "10001", "玩家一")
-            await store.register_tianji_sitter("g1", "10001", "2026-07-16", "玩家一")
 
         asyncio.run(scenario())
         dumps[backend] = _dump(store)
@@ -244,7 +236,6 @@ def test_both_backends_end_with_identical_state(tmp_path: Path) -> None:
     assert json_dump["users"] == sqlite_dump["users"]
     assert json_dump["chat_rank"] == sqlite_dump["chat_rank"]
     assert json_dump["group_members"] == sqlite_dump["group_members"]
-    assert json_dump["tianji"] == sqlite_dump["tianji"]
     assert json_dump["unique"] == sqlite_dump["unique"]
     # trade doc：键集合与挂单内容一致（next_id 同步）
     assert json_dump["trade"]["next_id"] == sqlite_dump["trade"]["next_id"]

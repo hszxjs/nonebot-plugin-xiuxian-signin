@@ -693,7 +693,6 @@ def battle_summary(record: UserRecord) -> dict[str, Any]:
         "route": record.route_summary,
         "identity": record.identity_summary,
         "hehuan_remaining": hehuan_remaining_text(record),
-        "tianji_status": tianji_status_text(record),
         "spirit_stones_text": spirit_stone_text(record.spirit_stones),
         "special_abilities": normalize_special_abilities(record.special_abilities),
         "special_ability_materials": len(_domain.available_special_ability_items(record)),

@@ -279,6 +279,8 @@ class AdminManager:
 
     def _config_revision(self) -> int:
         revision = self.load_config().get("revision")
+        if revision is None:
+            return -1
         try:
             return int(revision)
         except (TypeError, ValueError):

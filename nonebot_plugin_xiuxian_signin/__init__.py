@@ -162,7 +162,6 @@ from .domain import (
     makeup_used_this_month,
     signin_streak,
     talisman_draw_text,
-    tianji_divination_text,
     unequip_artifact,
     unequip_talisman,
     use_curio,
@@ -201,7 +200,7 @@ from . import state as _state  # 共享单例（config/store/admin_manager/mysti
 from .state import (  # noqa: F401
     config, store, admin_manager, mystic_coordinator, mystic_catalog,
     local_now, local_today, get_data_dir,
-    pending_fishing_users, pending_divinations,
+    pending_fishing_users,
     normal_duel_queue, normal_duel_sessions,
     doudizhu_tables, beast_realm_tables, beast_realm_private_routes,
 )
@@ -287,10 +286,10 @@ PICMENU_NEXT_FUNCS = [
     },
     {
         'func': '休闲与排行',
-        'trigger_method': '天机占卜 / 坐堂 / 斗地主 / 斗地主帮助 / 排行 / 战力榜',
+        'trigger_method': '斗地主 / 斗地主帮助 / 排行 / 战力榜',
         'trigger_condition': '休闲玩法不影响主线修炼；斗地主需群聊',
-        'brief_des': '问卦、斗地主、修为榜、战力榜和每日话痨榜',
-        'detail_des': '`天机占卜` 需要本群有天机阁门人坐堂；`斗地主帮助` 查看牌局规则；`排行`、`战力榜` 查看群内排名。',
+        'brief_des': '斗地主、修为榜、战力榜和每日话痨榜',
+        'detail_des': '`斗地主帮助` 查看牌局规则；`排行`、`战力榜` 查看群内排名。',
     },
     {
         'func': '后台管理',
@@ -400,8 +399,6 @@ IMMORTAL_SEED_TEXTS = {'仙源', '我的仙源', '仙源图鉴', '仙种', '我�
 EMPEROR_CATALOG_TEXTS = {'唯一装备图鉴'}
 TALISMAN_DRAW_TEXTS = {"\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7b26\u7b93\u7ed8\u5236", "\u7ed8\u7b26"}
 TIANJI_MYSTIC_TEXTS = {"天机秘境", "天机探索", "天机示警"}
-DIVINATION_TEXTS = {"\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366"}
-TIANJI_SIT_TEXTS = {"\u5750\u5802", "\u5929\u673a\u5750\u5802", "\u7533\u8bf7\u5750\u5802"}
 UNEQUIP_TEXTS = {"卸下灵器", "卸下装备"}
 EQUIP_PREFIXES = ("装备灵器", "装备")
 ARTIFACT_SLOT_NAMES = ("主手", "副手", "护甲", "护盾")
@@ -452,15 +449,11 @@ RESCUE_REQUEST_PREFIXES = ('秘境救援', '发起救援')
 RESCUE_TAKE_PREFIXES = ('救援', '接受救援')
 TALISMAN_DRAW_PREFIXES = ("\u7ed8\u5236\u7b26\u7b93", "\u753b\u7b26", "\u5236\u7b26", "\u7ed8\u7b26")
 SPECIAL_ABILITY_LEARN_PREFIXES = ("\u9886\u609f\u795e\u901a", "\u53c2\u609f\u795e\u901a")
-DIVINATION_PREFIXES = ("\u5929\u673a\u5360\u535c", "\u5360\u535c", "\u7b97\u547d", "\u95ee\u5366", "\u8d77\u5366", "\u535c\u5366")
 DUEL_PREFIXES = ("pk", "PK", "切磋", "挑战")
 NORMAL_DUEL_TEXTS = {"申请普通斗法", "普通斗法", "普通斗法申请", "申请斗法", "斗法匹配"}
 FISHING_TEXTS = ("\u5782\u9493", "\u9493\u9c7c", "\u8bf8\u5929\u4e07\u754c\u5782\u9493")
 COMMAND_PREFIX_CHARS = "/!！.。"
 PENDING_FISHING_TTL = 120
-DIVINATION_PENDING_TTL = 60
-TIANJI_HALL_IDENTITIES = {"\u5929\u673a\u9601\u5f1f\u5b50", "\u5929\u673a\u9601\u957f\u8001", "\u5929\u673a\u9601\u592a\u4e0a\u957f\u8001"}
-DIVINATION_SITTER_INCOME = 8
 NORMAL_DUEL_PREPARE_SECONDS = 60
 NORMAL_DUEL_DURATION_SECONDS = 60
 NORMAL_DUEL_ACTION_SEGMENT_LABELS = {
@@ -488,43 +481,6 @@ mystic_recovery_task: Optional[asyncio.Task] = None
 # 秘境背景图外置包的后台下载任务（R-09）：不阻塞启动，失败只降级为占位背景。
 asset_download_task: Optional[asyncio.Task] = None
 admin_http_server = None
-
-
-async def send_divination_timeout_notice(
-    key: str,
-    expected_expires_at: float,
-    user_id: str,
-    group_id: Optional[str] = None,
-) -> None:
-    await asyncio.sleep(max(0.0, expected_expires_at - time.monotonic()))
-    pending = pending_divinations.get(key)
-    if pending is None or float(pending.get("expires_at", 0)) != expected_expires_at:
-        return
-    pending_divinations.pop(key, None)
-    try:
-        record = await store.get_user(user_id)
-        message = await render_in_thread(
-            panel_segment,
-            "\u5929\u673a\u5360\u535c",
-            "\u5366\u706b\u5df2\u706d\uff0c\u672c\u6b21\u95ee\u5366\u5df2\u8d85\u65f6\u3002\u5982\u9700\u518d\u95ee\uff0c\u8bf7\u91cd\u65b0\u53d1\u9001\u201c\u5929\u673a\u5360\u535c\u201d\u3002",
-            record,
-            icon="warning",
-        )
-        bot = get_bot()
-        if group_id is not None:
-            await bot.send_group_msg(group_id=int(group_id), message=message)
-        else:
-            await bot.send_private_msg(user_id=int(user_id), message=message)
-    except Exception:
-        logger.exception("\u53d1\u9001\u5929\u673a\u5360\u535c\u8d85\u65f6\u63d0\u793a\u5931\u8d25")
-
-
-
-
-
-
-
-
 
 
 def normalized_plain_text(event: MessageEvent) -> str:
@@ -960,21 +916,6 @@ def is_rescue_command_text(text: str) -> bool:
     return parse_rescue_request(text) is not None or parse_rescue_take(text) is not None or text in {"\u6551\u63f4\u5217\u8868", "\u79d8\u5883\u6551\u63f4\u5217\u8868"}
 
 
-def parse_divination_question(text: str) -> Optional[str]:
-    stripped = text.strip()
-    for prefix in DIVINATION_PREFIXES:
-        if stripped == prefix:
-            return ""
-        if stripped.startswith(prefix):
-            rest = stripped[len(prefix):].strip()
-            return rest.lstrip(" \t:：，,。").strip()
-    return None
-
-
-def is_divination_command_text(text: str) -> bool:
-    return parse_divination_question(text) is not None
-
-
 def is_dual_cultivation_command_text(text: str) -> bool:
     return text.startswith("双修") or text == "随机双修"
 
@@ -1128,10 +1069,6 @@ def conversation_pending_key(event: MessageEvent) -> str:
     return f"private:{event.get_user_id()}"
 
 
-def divination_pending_key(event: MessageEvent) -> str:
-    return conversation_pending_key(event)
-
-
 def is_equip_method_command_text(text: str) -> bool:
     return is_prefixed_index_command(text, METHOD_EQUIP_PREFIXES)
 
@@ -1200,7 +1137,6 @@ def is_managed_command_text(text: str) -> bool:
         or is_rescue_command_text(text)
         or is_talisman_draw_command_text(text)
         or is_tianji_mystic_command_text(text)
-        or is_divination_command_text(text)
         or is_doudizhu_command_text(text)
         or beast_realm_game.is_beast_realm_group_command(text)
         or beast_realm_game.is_beast_realm_private_command(text)
@@ -1323,109 +1259,6 @@ async def finish_private_or_current_panel(
 
 async def send_image(matcher: Matcher, image_bytes: bytes) -> None:
     await matcher.send(MessageSegment.image(BytesIO(image_bytes)))
-
-
-def is_tianji_hall_identity(record: Any) -> bool:
-    return str(getattr(record, "faction_identity", "") or "") in TIANJI_HALL_IDENTITIES
-
-
-def tianji_sitters(hall: dict[str, Any]) -> list[dict[str, str]]:
-    raw_sitters = hall.get("sitters")
-    if not isinstance(raw_sitters, list) or not raw_sitters:
-        primary_id = str(hall.get("sitter_id") or "")
-        if not primary_id:
-            return []
-        raw_sitters = [{"user_id": primary_id, "nickname": str(hall.get("sitter_name") or primary_id)}]
-    result: list[dict[str, str]] = []
-    seen = set()
-    for item in raw_sitters:
-        if not isinstance(item, dict):
-            continue
-        sitter_id = str(item.get("user_id") or "")
-        if not sitter_id or sitter_id in seen:
-            continue
-        seen.add(sitter_id)
-        result.append({"user_id": sitter_id, "nickname": str(item.get("nickname") or f"QQ {sitter_id}")})
-    return result
-
-
-def tianji_sitter_names(hall: dict[str, Any], limit: int = 4) -> str:
-    sitters = tianji_sitters(hall)
-    names = [str(item.get("nickname") or item.get("user_id")) for item in sitters]
-    if not names:
-        return "天机阁门人"
-    if len(names) > limit:
-        return "、".join(names[:limit]) + f"等{len(names)}人"
-    return "、".join(names)
-
-
-async def require_tianji_hall(matcher: Matcher, event: MessageEvent, record: Any) -> dict[str, Any]:
-    if not isinstance(event, GroupMessageEvent):
-        await finish_panel(
-            matcher,
-            "\u5929\u673a\u5360\u535c",
-            "\u5929\u673a\u5360\u535c\u9700\u5728\u7fa4\u5185\u7531\u5929\u673a\u9601\u95e8\u4eba\u5750\u5802\u540e\u5f00\u542f\uff0c\u8bf7\u5230\u7fa4\u804a\u4e2d\u4f7f\u7528\u3002",
-            record,
-            icon="divination",
-        )
-        return {}
-    hall = await store.get_tianji_hall(str(event.group_id), local_today().isoformat())
-    if not hall:
-        await finish_panel(
-            matcher,
-            "\u5929\u673a\u5360\u535c",
-            "\u4eca\u65e5\u5c1a\u65e0\u5929\u673a\u9601\u5f1f\u5b50\u5750\u5802\uff0c\u65e0\u6cd5\u5f00\u542f\u5360\u535c\u3002\n\u8bf7\u7b49\u5f85\u672c\u7fa4\u7b2c\u4e00\u4f4d\u5929\u673a\u9601\u95e8\u4eba\u7b7e\u5230\u5750\u5802\uff0c\u518d\u6765\u95ee\u5366\u3002",
-            record,
-            icon="warning",
-        )
-        return {}
-    return hall
-
-
-async def settle_divination_income(event: MessageEvent, viewer_record: Any = None) -> str:
-    if not isinstance(event, GroupMessageEvent):
-        return ""
-    hall = await store.add_tianji_divination_income(
-        str(event.group_id),
-        local_today().isoformat(),
-        DIVINATION_SITTER_INCOME,
-    )
-    if not hall:
-        return ""
-    sitters = tianji_sitters(hall)
-    if not sitters:
-        return ""
-    base_share = DIVINATION_SITTER_INCOME // len(sitters)
-    remainder = DIVINATION_SITTER_INCOME % len(sitters)
-    shares: list[tuple[dict[str, str], int]] = []
-    for index, sitter in enumerate(sitters):
-        amount = base_share + (1 if index < remainder else 0)
-        if amount > 0:
-            shares.append((sitter, amount))
-
-    for sitter, amount in shares:
-        sitter_id = str(sitter.get("user_id") or "")
-        if not sitter_id:
-            continue
-
-        def updater(record: Any, gain: int = amount) -> None:
-            record.spirit_stones = int(getattr(record, "spirit_stones", 0)) + gain
-
-        await store.apply_to_user(sitter_id, updater)
-        if viewer_record is not None and str(getattr(viewer_record, "user_id", "")) == sitter_id:
-            viewer_record.spirit_stones = int(getattr(viewer_record, "spirit_stones", 0)) + amount
-
-    count = int(hall.get("divination_count", 0))
-    income = int(hall.get("income", 0))
-    share_text = "\u3001".join(
-        f"{sitter.get('nickname') or sitter.get('user_id')}+{spirit_stone_text(amount)}"
-        for sitter, amount in shares
-    )
-    return (
-        f"\n\n\u3010\u5750\u5802\u6da6\u8d44\u3011\u672c\u6b21\u5171 {spirit_stone_text(DIVINATION_SITTER_INCOME)}\uff0c"
-        f"\u7531 {len(sitters)} \u4f4d\u5929\u673a\u9601\u95e8\u4eba\u5e73\u5206\uff1a{share_text}\u3002"
-        f"\n\u4eca\u65e5\u5df2\u5360 {count} \u5366\uff0c\u5750\u5802\u7d2f\u8ba1 {spirit_stone_text(income)}\u3002"
-    )
 
 
 async def build_signin_image(event: MessageEvent, result: SigninResult) -> bytes:
@@ -2278,7 +2111,7 @@ def format_help_text() -> str:
             "【交易、休闲、后台】",
             "商店：商店 / 购买 1 / 出售 丹药 1 / 批量出售 杂物 20 / 批量出售低阶灵器。",
             "万宝楼：万宝楼 / 万宝楼挂售 灵器 1 / 万宝楼购买 1 / 万宝楼下架 1。",
-            "休闲：天机占卜 / 坐堂 / 斗地主 / 斗地主帮助 / 御兽秘境 / 排行 / 战力榜。",
+            "休闲：斗地主 / 斗地主帮助 / 御兽秘境 / 排行 / 战力榜。",
             "后台：服主可在浏览器访问 /xiuxian-admin，查看玩家档案、物品属性、灵器规则和秘境掉落配置。",
         ]
     )
@@ -2461,7 +2294,7 @@ def format_power_status(record, nickname: str) -> str:
         f"\u4fee\u70bc\u8def\u7ebf\uff1a{summary['route']}",
         f"\u8eab\u4efd\u4ee4\u724c\uff1a{summary['identity']}",
         f"\u795e\u901a\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd\uff1b\u6218\u529b+{summary['special_ability_power']}",
-        f"\u5929\u673a\u79d8\u5883\uff1a{summary['tianji_status']}\uff1b\u53cc\u4fee\u6b21\u6570\uff1a{summary['hehuan_remaining']}",
+        f"\u53cc\u4fee\u6b21\u6570\uff1a{summary['hehuan_remaining']}",
         f"\u79d8\u5883\uff1a{summary['mystic_realm']}",
         f"\u88c5\u5907\u52a0\u6210\uff1a{summary['equipment_power']}",
     ]
@@ -2488,7 +2321,7 @@ def format_adventure_panel(record) -> str:
             f"\u7075\u77f3\u50a8\u5907\uff1a{summary['spirit_stones_text']}",
             f"\u7cbe\u7eaf\u7075\u6db2\uff1a{summary['spirit_liquid']}\uff1b\u74f6\u9888\u6c89\u6dc0\uff1a{summary['bottleneck_days']} \u5929",
             f"\u4fee\u70bc\u8def\u7ebf\uff1a{summary['route']}",
-            f"\u8eab\u4efd\u4ee4\u724c\uff1a{summary['identity']}\uff08\u5929\u673a\u79d8\u5883\uff1a{summary['tianji_status']}\uff0c\u53cc\u4fee\uff1a{summary['hehuan_remaining']}\uff09",
+            f"\u8eab\u4efd\u4ee4\u724c\uff1a{summary['identity']}\uff08\u53cc\u4fee\uff1a{summary['hehuan_remaining']}\uff09",
             f"\u795e\u901a\uff1a{len(summary['special_abilities'])} \u9879\uff1b\u4f20\u627f\u6750\u6599\uff1a{summary['special_ability_materials']} \u4efd",
             "\u8def\u7ebf / \u9009\u62e9\u8def\u7ebf \u5251\u4fee / \u9009\u62e9\u8def\u7ebf \u70bc\u5668\u5e08 / \u9009\u62e9\u8eab\u4efd \u5929\u673a\u9601\u5f1f\u5b50",
             "\u6bcf\u65e5\u4efb\u52a1 / \u5b8c\u6210\u4efb\u52a1 1 / \u5546\u5e97 / \u8d2d\u4e70 1 / \u51fa\u552e \u4e39\u836f 1",
@@ -3024,28 +2857,6 @@ async def block_other_plugins_during_mystic_battle(event: MessageEvent) -> None:
     raise IgnoredException("玩家正在进行秘境战斗，已拦截其它私聊指令")
 
 
-async def is_divination_message(event: MessageEvent) -> bool:
-    return is_divination_command_text(normalized_plain_text(event))
-
-
-async def is_tianji_sit_message(event: MessageEvent) -> bool:
-    return isinstance(event, GroupMessageEvent) and normalized_plain_text(event) in TIANJI_SIT_TEXTS
-
-
-async def is_divination_reply(event: MessageEvent) -> bool:
-    key = divination_pending_key(event)
-    pending = pending_divinations.get(key)
-    if pending is None:
-        return False
-    if float(pending.get("expires_at", 0)) < time.monotonic():
-        pending_divinations.pop(key, None)
-        return False
-    text = normalized_plain_text(event)
-    if not text or is_managed_command_text(text):
-        return False
-    return True
-
-
 async def is_dual_cultivation_message(event: MessageEvent) -> bool:
     return isinstance(event, GroupMessageEvent) and is_dual_cultivation_command_text(normalized_plain_text(event))
 
@@ -3235,15 +3046,12 @@ market_cmd = on_message(rule=Rule(is_market_message), priority=10, block=True)
 rescue_cmd = on_message(rule=Rule(is_rescue_message), priority=10, block=True)
 talisman_draw_cmd = on_message(rule=Rule(is_talisman_draw_message), priority=10, block=True)
 tianji_mystic_cmd = on_message(rule=Rule(is_tianji_mystic_message), priority=10, block=True)
-divination_cmd = on_message(rule=Rule(is_divination_message), priority=10, block=True)
-tianji_sit_cmd = on_message(rule=Rule(is_tianji_sit_message), priority=10, block=True)
 dual_cultivation_cmd = on_message(rule=Rule(is_dual_cultivation_message), priority=10, block=True)
 equip_puppet_cmd = on_message(rule=Rule(is_equip_puppet_message), priority=10, block=True)
 plant_cmd = on_message(rule=Rule(is_plant_message), priority=10, block=True)
 item_use_cmd = on_message(rule=Rule(is_item_use_message), priority=10, block=True)
 acquired_root_cmd = on_message(rule=Rule(is_acquired_root_message), priority=10, block=True)
 spirit_liquid_use_cmd = on_message(rule=Rule(is_spirit_liquid_use_message), priority=10, block=True)
-divination_reply = on_message(rule=Rule(is_divination_reply), priority=8, block=True)
 fishing = on_message(rule=Rule(is_fishing_message), priority=10, block=True)
 fishing_reply = on_message(rule=Rule(is_fishing_reply), priority=9, block=True)
 cultivation_rank = on_message(rule=Rule(is_cultivation_rank_message), priority=10, block=True)
@@ -4186,96 +3994,6 @@ async def handle_tianji_mystic(matcher: Matcher, event: MessageEvent) -> None:
     await finish_mystic_command_result(matcher, event.get_user_id(), result)
 
 
-@tianji_sit_cmd.handle()
-async def handle_tianji_sit(matcher: Matcher, event: GroupMessageEvent) -> None:
-    await remember_group_member(event)
-    user_id = event.get_user_id()
-    record = await store.get_user(user_id)
-    if not is_tianji_hall_identity(record):
-        await finish_panel(matcher, "天机阁坐堂", "只有天机阁弟子、长老或太上长老可以坐堂分润占卜收益。", record, icon="warning")
-    hall = await store.get_tianji_hall(str(event.group_id), local_today().isoformat())
-    if not hall:
-        await finish_panel(
-            matcher,
-            "天机阁坐堂",
-            "今日尚无首位天机阁门人签到开堂。\n请先由任意天机阁门人完成今日签到，再发送“坐堂”加入分润。",
-            record,
-            icon="warning",
-        )
-    joined, updated_hall = await store.join_tianji_sitter(
-        str(event.group_id),
-        user_id,
-        local_today().isoformat(),
-        nickname_from_event(event) or f"QQ {user_id}",
-    )
-    updated_hall = updated_hall or hall
-    title = "坐堂成功" if joined else "已在坐堂"
-    message = (
-        f"当前坐堂天机阁门人：{tianji_sitter_names(updated_hall, limit=8)}\n"
-        f"人数：{len(tianji_sitters(updated_hall))}人。本群今日占卜收益将按次平分，不可整除时由先坐堂者优先得一枚余数灵石。\n"
-        f"今日已占：{int(updated_hall.get('divination_count', 0))}卦，累计润资：{spirit_stone_text(int(updated_hall.get('income', 0)))}。"
-    )
-    await finish_panel(matcher, title, message, record, icon="divination")
-
-@divination_cmd.handle()
-async def handle_divination_cmd(matcher: Matcher, event: MessageEvent) -> None:
-    await remember_group_member(event)
-    record = await store.get_user(event.get_user_id())
-    hall = await require_tianji_hall(matcher, event, record)
-    question = parse_divination_question(normalized_plain_text(event))
-    if question:
-        income_text = await settle_divination_income(event, record)
-        await finish_panel(
-            matcher,
-            "\u5929\u673a\u5360\u535c",
-            tianji_divination_text(record, question, local_today()) + income_text,
-            record,
-            icon="divination",
-        )
-    key = divination_pending_key(event)
-    expires_at = time.monotonic() + DIVINATION_PENDING_TTL
-    pending_divinations[key] = {
-        "expires_at": expires_at,
-        "group_id": str(event.group_id) if isinstance(event, GroupMessageEvent) else "",
-        "sitter_id": str(hall.get("sitter_id") or ""),
-    }
-    asyncio.create_task(
-        send_divination_timeout_notice(
-            key,
-            expires_at,
-            event.get_user_id(),
-            str(event.group_id) if isinstance(event, GroupMessageEvent) else None,
-        )
-    )
-    sitter_name = tianji_sitter_names(hall)
-    await finish_panel(
-        matcher,
-        "\u5929\u673a\u5360\u535c",
-        f"\u4eca\u65e5\u5750\u5802\uff1a{sitter_name}\n\u5929\u673a\u672a\u660e\uff0c\u8bf7\u5bbf\u4e3b\u5728 60 \u79d2\u5185\u8bf4\u51fa\u6240\u95ee\u4e4b\u4e8b\u3002\n\u793a\u4f8b\uff1a\u4eca\u65e5\u4fee\u884c\u662f\u5426\u987a\u5229\uff1f\n\u4e5f\u53ef\u76f4\u63a5\u53d1\u9001\uff1a\u5360\u535c \u4eca\u65e5\u8fd0\u52bf",
-        record,
-        subtitle="60\u79d2\u5185\u56de\u590d\u95ee\u9898",
-        icon="divination",
-    )
-
-
-@divination_reply.handle()
-async def handle_divination_reply(matcher: Matcher, event: MessageEvent) -> None:
-    await remember_group_member(event)
-    key = divination_pending_key(event)
-    pending_divinations.pop(key, None)
-    record = await store.get_user(event.get_user_id())
-    await require_tianji_hall(matcher, event, record)
-    question = normalized_plain_text(event)
-    income_text = await settle_divination_income(event, record)
-    await finish_panel(
-        matcher,
-        "\u5929\u673a\u5360\u535c",
-        tianji_divination_text(record, question, local_today()) + income_text,
-        record,
-        icon="divination",
-    )
-
-
 @dual_cultivation_cmd.handle()
 async def handle_dual_cultivation(matcher: Matcher, event: GroupMessageEvent) -> None:
     await remember_group_member(event)
@@ -4411,28 +4129,6 @@ async def handle_signin(matcher: Matcher, event: MessageEvent) -> None:
     record = await store.get_user(user_id)
     result = apply_signin(record, local_today())
     await store.save_user(result.record)
-
-    if not result.already_signed and isinstance(event, GroupMessageEvent) and is_tianji_hall_identity(result.record):
-        sitter_name = nickname_from_event(event) or f"QQ {user_id}"
-        created, hall = await store.register_tianji_sitter(
-            str(event.group_id),
-            user_id,
-            local_today().isoformat(),
-            sitter_name,
-        )
-        if created:
-            await send_panel(
-                matcher,
-                "\u5929\u673a\u9601\u5750\u5802",
-                (
-                    f"\u4eca\u65e5\u7b2c\u4e00\u4f4d\u5929\u673a\u9601\u95e8\u4eba\u5df2\u5750\u5802\uff1a{sitter_name}\u3002\n"
-                    f"\u672c\u7fa4\u4eca\u65e5\u5929\u673a\u5360\u535c\u5c06\u7531\u5176\u6267\u638c\uff0c"
-                    f"\u6bcf\u5b8c\u6210\u4e00\u5366\u83b7\u5f97 {spirit_stone_text(DIVINATION_SITTER_INCOME)} \u6da6\u8d44\u3002\n"
-                    f"\u5f53\u524d\u5750\u5802\u8bb0\u5f55\uff1a{tianji_sitter_names(hall)}"
-                ),
-                result.record,
-                icon="divination",
-            )
 
     if result.is_first and not result.already_signed:
         root = result.record.root
