@@ -127,31 +127,21 @@ def test_full_bot_game_finishes_without_error() -> None:
     assert table["players"][int(winner)]["hand"] == []
 
 
-def test_deferred_g_attributes_match_entry_module() -> None:
-    """``_g.`` 的指向必须与模块边界一致（纯静态检查）。
+def test_no_reference_to_entry_module() -> None:
+    """斗地主必须自包含，不得反向依赖插件入口（R-18）。
 
-    拆分时出现的真实故障：本地定义的 ``start_forced_normal_duel`` 被写成
-    ``_g.start_forced_normal_duel``（入口模块里没有），入口 helper 反而裸用。
-    ruff 的 F821 只能发现后者，前者是合法属性访问、静态检查看不出来。
-
-    这里不用 ``import nonebot_plugin_xiuxian_signin``：几个历史测试会往
-    ``sys.modules`` 塞空壳父包以绕开 NoneBot 初始化，导入顺序会影响结果。
-    直接对两份源码做 AST 比对，不受导入状态影响。
+    历史故障：``_g.start_forced_normal_duel`` 指向入口模块，入口里并没有这个名字，
+    ruff 的 F821 只能发现裸名字、发现不了这种合法属性访问。现在改成直接 import
+    helper 后，任何 ``_g`` 或 ``import nonebot_plugin_xiuxian_signin`` 都应视为回退。
     """
-    entry_source = (DOUDIZHU_SOURCE.parents[1] / "__init__.py").read_text(encoding="utf-8")
     command_source = DOUDIZHU_SOURCE.read_text(encoding="utf-8")
 
-    referenced = set(re.findall(r"_g\.([A-Za-z_][A-Za-z0-9_]*)", command_source))
-    assert referenced, "预期存在 _g 延迟访问"
+    assert not re.search(r"\b_g\b", command_source), "斗地主不应再使用 _g 延迟访问"
+    assert "import nonebot_plugin_xiuxian_signin" not in command_source
 
-    local_names = _top_level_names(command_source)
-    entry_names = _top_level_names(entry_source)
-
-    should_be_local = sorted(referenced & local_names)
-    assert not should_be_local, f"这些名字本地已定义，不该走 _g：{should_be_local}"
-
-    missing = sorted(referenced - entry_names)
-    assert not missing, f"插件入口模块没有这些名字，_g 会 AttributeError：{missing}"
+    # 依赖的 helper 必须来自具体模块，而不是入口
+    imported_from = set(re.findall(r"^from \.(\w+) import", command_source, re.M))
+    assert {"panels", "parsing", "duel", "texts"} <= imported_from
 
 
 def _top_level_names(source: str) -> set[str]:

@@ -116,12 +116,14 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 
 ## __init__.py — 插件入口
 
+726 行，只保留四类内容（R-18 拆分后）：
+
 - `__plugin_meta__` / `__version__`：NoneBot 插件元数据（必须在此）
-- 单例：从 `state.py` 导入（`config`/`store`/`admin_manager`/`mystic_coordinator` + 6 个游戏状态字典）
+- 单例与工具的回导：`store`/`config`/`local_today` 等仍供本文件的生命周期钩子使用
 - 生命周期：`@driver.on_startup`（启动后台/恢复秘境/排行调度）、`@driver.on_shutdown`
-- 命令分发：`on_message` matcher + handler（签到/面板/突破/背包/…/秘境/御兽/交易）
-- 兜底 matcher：`chat_rank_counter`（p99，群聊统计）、`normal_duel_chat`（p8，斗法）
-- **只放这三类东西**：元数据、matcher 注册、生命周期钩子。纯函数与新逻辑一律进 `commands/` 对应层。
+- 命令子模块导入：`commands.matchers`（注册 matcher）与 `commands.handlers`（挂 handler），**靠 import 副作用生效**
+
+**不要再往里加 handler、规则或格式化函数**：`tests/test_plugin_structure.py::test_entry_module_does_not_grow` 会在超过 800 行时失败。
 
 ## state.py — 共享单例
 
@@ -140,20 +142,40 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 | 层 | 模块 | 职责 |
 | --- | --- | --- |
 | L0 | `commands/texts.py` | 触发词、前缀、面板文案常量（纯数据，不引用运行时对象） |
+| L0 | `commands/picmenu.py` | `PICMENU_NEXT_FUNCS` 菜单数据 + `command_hint` 底部提示 |
 | L1 | `commands/parsing.py` | 玩家输入 → 结构化参数；群名片/昵称读取 |
 | L2 | `commands/panels.py` | 唯一发消息出口：群聊/私聊面板、签到场次图片、`BEAST_REALM_ICON` |
 | L2 | `commands/ranking.py` | 修为榜/战力榜取数与结算时刻判定 |
 | L3 | `commands/duel.py` | 普通斗法的准备、结算与招式记录 |
 | L3 | `commands/formatting.py` | 各面板纯文本装配（`format_*`，不发消息、不读写存档） |
 | L3 | `commands/beast.py` | 御兽秘境分组播报 |
-| L3 | `commands/doudizhu.py` | 斗地主完整子系统（触发词 + 卡牌引擎 + matcher + handler） |
-| L4 | `commands/rules.py` | `is_*_message` 判定 + 秘境战斗期阻断其他插件的 `event_preprocessor` |
+| L3 | `commands/rewards.py` | 唯一道具归一化（全服仅存一件的判定与复制） |
+| L4 | `commands/doudizhu.py` | 斗地主完整子系统（触发词 + 卡牌引擎 + matcher + handler） |
+| L4 | `commands/mystic_result.py` | 秘境命令结果 `MysticCommandResult` → 图片/文本的统一播报 |
+| L5 | `commands/rules.py` | `is_*_message` 判定 + 秘境战斗期阻断其他插件的 `event_preprocessor` |
+| L6 | `commands/matchers.py` | 55 个 `on_message` 注册（顺序即同优先级匹配顺序） |
+| L7 | `commands/handlers/*.py` | 按域划分的 `handle_*`，见下表 |
+
+`commands/handlers/` 按业务域拆分，**handler 之间不允许互相 import**（共享逻辑要下沉到 L0–L5 的实现层，测试会拦）：
+
+| 模块 | 覆盖命令 |
+| --- | --- |
+| `signin.py` | 签到、签到日历、补签 |
+| `status.py` | 面板、突破/散功、路线、每日任务、战力、历练、双修 |
+| `collection.py` | 帮助、新手教程、图鉴、背包/灵器/功法/阵盘列表、排行榜、话痨榜 |
+| `inventory.py` | 灵器/符箓/功法/阵盘的装备与卸下、丹药/灵液/灵植使用 |
+| `craft.py` | 商店、炼丹、炼器、阵法推演、本命灵器、仙源、绘制符箓、唯一装备图鉴 |
+| `trade.py` | 直交易、万宝楼、秘境救援 |
+| `mystic.py` | 秘境群聊/私聊入口、天机秘境 |
+| `beast.py` | 御兽秘境群聊/私聊 |
+| `duel.py` | 普通斗法申请、群内招式、结算 |
+| `fishing.py` | 灵河垂钓 |
 
 约定：
 
 - 子模块**不得 import 插件入口**（避免循环），共享单例走 `from ..state import store, config`；
 - 需要入口里的 helper 时，说明该 helper 还没下沉到合适的层，应优先下沉而不是加反向依赖；
-- `commands/doudizhu.py` 是历史遗留：仍用 `_g`（入口模块引用，由 `__init__.py` 注入）延迟访问 `finish_panel` 等，待其 helper 迁移完成后统一改为直接 import。
+- 斗地主已改为直接 `from .panels import finish_panel`，不再有 `_g` 延迟访问（`tests/test_doudizhu_commands.py` 守着）。
 
 ## 添加新功能的指引
 
@@ -162,7 +184,7 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 | 新增修仙规则/数据 | `domain/` 对应子系统；纯数据加 `constants.py` |
 | 新增领域函数 | 归入 `domain/` 的 Layer 2-4 对应模块；跨层调用用 `_domain.` |
 | 新增图片面板 | `cards/`（新 render 函数） |
-| 新增命令 | 判定放 `commands/rules.py`，纯文本放 `commands/formatting.py`，handler 与 matcher 放 `__init__.py`（R-18 后续迁入 `commands/handlers/`） |
+| 新增命令 | 判定 `commands/rules.py` → matcher `commands/matchers.py` → handler `commands/handlers/<域>.py`；文案 `commands/texts.py` |
 | 新增后台页面 | `webui/src/`（前端）+ `admin.py`（API 路由） |
 | 新增资源 | `assets/` 对应子目录 + `pyproject.toml` package-data |
 | 新增秘境内容 | `mystic_dungeon.py`（状态机）/ `assets/mystic_maps/`（地图） |
