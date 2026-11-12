@@ -29,10 +29,9 @@ dependencies = [
     "nonebot-plugin-localstore>=0.7.0",
     "Pillow>=10.0.0",
     "httpx>=0.24.0",
-    "pydantic>=1.10",
-    "starlette>=0.37.0",
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
+    # config_schema.py 用的是 pydantic v2 API（model_validate/field_validator/ConfigDict），
+    # v1 会在导入期直接失败，因此下限必须是 2.0（R-23）。
+    "pydantic>=2.0",
 ]
 
 [project.urls]
@@ -41,10 +40,20 @@ Repository = "https://github.com/hszxjs/nonebot-plugin-xiuxian-signin"
 Issues = "https://github.com/hszxjs/nonebot-plugin-xiuxian-signin/issues"
 
 [project.optional-dependencies]
+# 后台 Web 界面（/xiuxian-admin）。不装也不影响机器人本体运行，只是后台起不来。
+admin = [
+    "starlette>=0.37.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+]
 dev = [
     "mypy>=1.11",
     "pytest>=8.0",
     "ruff>=0.4.0",
+    # 测试大量直接打后台路由，必须带上 admin extra。
+    "starlette>=0.37.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 ]
 
 [tool.nonebot]

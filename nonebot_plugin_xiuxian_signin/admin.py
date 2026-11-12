@@ -11,11 +11,28 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import unquote
 
-import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from nonebot import logger
 from zoneinfo import ZoneInfo
+
+# 后台 HTTP 层是可选依赖（R-23）：`pip install nonebot-plugin-xiuxian-signin[admin]`。
+# 未安装时本模块仍可导入——AdminManager 的配置读写/审计/备份不依赖 FastAPI，
+# 只有 create_admin_app / install_admin_routes / start_admin_server 需要。
+# 注意：路由处理函数的 `request: Request` 依赖 PEP 563（文件首行 future import）延迟求值，
+# 只有 FastAPI 真的去解析标注时才会碰到这些名字，所以此处可以条件导入。
+try:
+    import uvicorn
+    from fastapi import Depends, FastAPI, HTTPException, Query, Request
+    from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+except ModuleNotFoundError:  # pragma: no cover - 仅在缺 admin extra 时命中
+    uvicorn = None
+    ADMIN_HTTP_AVAILABLE = False
+    ADMIN_HTTP_MISSING_HINT = (
+        "后台 Web 界面需要可选依赖 fastapi/starlette/uvicorn，"
+        "请执行 pip install \"nonebot-plugin-xiuxian-signin[admin]\" 后重启。"
+    )
+else:
+    ADMIN_HTTP_AVAILABLE = True
+    ADMIN_HTTP_MISSING_HINT = ""
 
 from . import beast_realm, domain, mystic_dungeon
 from .admin_auth import SESSION_COOKIE_NAME, AdminAuth
@@ -779,6 +796,8 @@ def create_admin_app(
     base_path: str = "/xiuxian-admin",
     static_root: Path | None = None,
 ) -> FastAPI:
+    if not ADMIN_HTTP_AVAILABLE:  # pragma: no cover - 仅在缺 admin extra 时命中
+        raise RuntimeError(ADMIN_HTTP_MISSING_HINT)
     # openapi_url 必须显式关闭：默认会在 /openapi.json 暴露全部路由清单，
     # 且该路径不受 token 保护（docs/redoc 已关闭，但 schema 未关）。
     app = FastAPI(title="Xiuxian Signin Admin", docs_url=None, redoc_url=None, openapi_url=None)

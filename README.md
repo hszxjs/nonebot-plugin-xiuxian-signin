@@ -14,10 +14,20 @@ pip install ./nonebot_plugin_xiuxian_signin-<版本>-py3-none-any.whl
 
 同一 Release 中的 `mystic_maps.zip` 是秘境背景图资源包（约 200 MB，见下文「资源包」），机器人首次启动会自动下载；离线环境可提前下载后按「资源包」小节放置。
 
+### 可选依赖：网页后台
+
+`fastapi` / `starlette` / `uvicorn` 只服务于网页后台（`/xiuxian-admin`），已从核心依赖移出：
+
+```bash
+pip install "nonebot-plugin-xiuxian-signin[admin]"   # 需要网页后台时装这个
+```
+
+不装也能正常跑机器人（命令、图片面板、存档全部不受影响）。此时 `xiuxian_signin_admin_enabled=true` 只会在启动日志里打一条提醒，然后跳过后台；其余功能无差别。
+
 也可以直接从仓库源码安装：
 
 ```bash
-pip install git+https://github.com/hszxjs/nonebot-plugin-xiuxian-signin.git
+pip install "git+https://github.com/hszxjs/nonebot-plugin-xiuxian-signin.git#egg=nonebot-plugin-xiuxian-signin[admin]"
 ```
 
 在 NoneBot 项目中加载：

@@ -170,7 +170,13 @@ from .domain import (
     use_pills_batch,
     use_talisman,
 )
-from .admin import AdminManager, install_admin_routes, start_admin_server
+from .admin import (
+    ADMIN_HTTP_AVAILABLE,
+    ADMIN_HTTP_MISSING_HINT,
+    AdminManager,
+    install_admin_routes,
+    start_admin_server,
+)
 from .mystic_battle import MysticBattleService
 from .mystic_cards import MysticMapRenderer, render_no_token_panel
 from .mystic_dungeon import (
@@ -488,7 +494,10 @@ async def mystic_recovery_sweep() -> None:
 async def start_rank_scheduler() -> None:
     global admin_http_server, rank_scheduler_task, mystic_recovery_task, asset_download_task
     admin_ready = False
-    if config.xiuxian_signin_admin_enabled:
+    if config.xiuxian_signin_admin_enabled and not ADMIN_HTTP_AVAILABLE:
+        # 后台 HTTP 层是可选依赖（R-23）：没装 admin extra 时机器人照常跑，只是后台起不来。
+        logger.warning(f"修仙签到后台未启动：{ADMIN_HTTP_MISSING_HINT}")
+    elif config.xiuxian_signin_admin_enabled:
         # fail-closed：账号初始化失败（数据目录不可写、凭据文件损坏）时
         # 直接不启动后台，而不是启动一个没人能登录、或没人需要登录的后台。
         try:
