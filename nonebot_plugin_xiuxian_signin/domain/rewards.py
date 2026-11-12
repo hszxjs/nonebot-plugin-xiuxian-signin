@@ -2,7 +2,7 @@
 
 由原 domain.py 抽取：物品元数据、归一化、背包读写、奖励签名等核心函数。
 这些函数被几乎所有子系统依赖，作为 Layer 1 提取以打破循环依赖。
-跨子系统调用通过模块级 _domain（由 __init__ 注入）延迟访问。
+反向依赖（roots/realms/methods_arrays/equipment）在函数内 import，避免循环导入。
 """
 from __future__ import annotations
 
@@ -15,8 +15,6 @@ from typing import Any, Optional
 from .constants import *  # noqa: F401,F403
 from .utils import *  # noqa: F401,F403
 from .models import *  # noqa: F401,F403
-
-_domain = None
 
 # 奖励名称推断缓存（运行时由 known_reward_names_for_inference 填充）。
 _REWARD_NAME_INFERENCE_CACHE: list[str] | None = None
@@ -365,23 +363,25 @@ def same_named_growth_item(left: Optional[dict[str, Any]], right: Optional[dict[
     return bool(left and right and reward_category(left) == category and reward_category(right) == category and reward_name(left) == reward_name(right))
 
 def ensure_method_tracking(record: UserRecord, method: dict[str, Any]) -> None:
+    from .methods_arrays import method_layer_cap
     if record.method_layers is None:
         record.method_layers = {}
     if record.method_proficiency is None:
         record.method_proficiency = {}
     key = reward_signature(method)
     record.method_layers.setdefault(key, 1)
-    record.method_layers[key] = max(1, min(_domain.method_layer_cap(method), int(record.method_layers.get(key, 1) or 1)))
+    record.method_layers[key] = max(1, min(method_layer_cap(method), int(record.method_layers.get(key, 1) or 1)))
     record.method_proficiency.setdefault(key, 0)
 
 def ensure_array_tracking(record: UserRecord, array: dict[str, Any]) -> None:
+    from .methods_arrays import array_layer_cap
     if record.array_proficiency is None:
         record.array_proficiency = {}
     if record.array_layers is None:
         record.array_layers = {}
     key = reward_signature(array)
     record.array_layers.setdefault(key, 1)
-    record.array_layers[key] = max(1, min(_domain.array_layer_cap(array), int(record.array_layers.get(key, 1) or 1)))
+    record.array_layers[key] = max(1, min(array_layer_cap(array), int(record.array_layers.get(key, 1) or 1)))
     if key not in record.array_proficiency:
         legacy = 0
         if record.equipped_method:
@@ -390,14 +390,15 @@ def ensure_array_tracking(record: UserRecord, array: dict[str, Any]) -> None:
         record.array_proficiency[key] = max(0, legacy)
 
 def advance_method_by_duplicate(record: UserRecord, method: dict[str, Any], incoming: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    from .methods_arrays import growth_has_unlimited_deduction, method_layer, migrate_tracking_key, next_growth_quality, set_growth_reward_note, sync_equipped_growth_item
     ensure_method_tracking(record, method)
     old_key = reward_signature(method)
     old_display = reward_display_name(method)
-    current_layer = _domain.method_layer(record, method) or 1
+    current_layer = method_layer(record, method) or 1
     new_layer = current_layer + 1
     quality_up = False
-    if not _domain.growth_has_unlimited_deduction(method) and current_layer >= METHOD_LAYER_STEP:
-        next_quality = _domain.next_growth_quality(str(method.get("tier", "凡品")), str(method.get("grade", "下品")), METHOD_GROWTH_TIERS)
+    if not growth_has_unlimited_deduction(method) and current_layer >= METHOD_LAYER_STEP:
+        next_quality = next_growth_quality(str(method.get("tier", "凡品")), str(method.get("grade", "下品")), METHOD_GROWTH_TIERS)
         if next_quality is not None:
             method["tier"], method["grade"] = next_quality
             method["price"] = reward_price(method)
@@ -408,23 +409,24 @@ def advance_method_by_duplicate(record: UserRecord, method: dict[str, Any], inco
         record.method_layers = {}
     if record.method_proficiency is None:
         record.method_proficiency = {}
-    _domain.migrate_tracking_key(record.method_layers, old_key, new_key, new_layer, keep_max=False)
-    _domain.migrate_tracking_key(record.method_proficiency, old_key, new_key, 0 if quality_up else None, keep_max=not quality_up)
-    _domain.sync_equipped_growth_item(record, METHOD_CATEGORY, old_key, method)
+    migrate_tracking_key(record.method_layers, old_key, new_key, new_layer, keep_max=False)
+    migrate_tracking_key(record.method_proficiency, old_key, new_key, 0 if quality_up else None, keep_max=not quality_up)
+    sync_equipped_growth_item(record, METHOD_CATEGORY, old_key, method)
     if incoming is not None:
-        _domain.set_growth_reward_note(incoming, method, old_display, new_layer, quality_up, METHOD_CATEGORY)
+        set_growth_reward_note(incoming, method, old_display, new_layer, quality_up, METHOD_CATEGORY)
     return method
 
 def advance_array_by_duplicate(record: UserRecord, array: dict[str, Any], incoming: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    from .methods_arrays import array_layer, array_proficiency_cap, array_proficiency_value, growth_has_unlimited_deduction, migrate_tracking_key, next_growth_quality, set_growth_reward_note, sync_equipped_growth_item
     ensure_array_tracking(record, array)
     old_key = reward_signature(array)
     old_display = reward_display_name(array)
-    current_layer = _domain.array_layer(record, array) or 1
-    current_proficiency = _domain.array_proficiency_value(record, array)
+    current_layer = array_layer(record, array) or 1
+    current_proficiency = array_proficiency_value(record, array)
     new_layer = current_layer + 1
     quality_up = False
-    if not _domain.growth_has_unlimited_deduction(array) and current_layer >= ARRAY_LAYER_STEP:
-        next_quality = _domain.next_growth_quality(str(array.get("tier", "凡品")), str(array.get("grade", "下品")), ARRAY_GROWTH_TIERS)
+    if not growth_has_unlimited_deduction(array) and current_layer >= ARRAY_LAYER_STEP:
+        next_quality = next_growth_quality(str(array.get("tier", "凡品")), str(array.get("grade", "下品")), ARRAY_GROWTH_TIERS)
         if next_quality is not None:
             array["tier"], array["grade"] = next_quality
             array["price"] = reward_price(array)
@@ -435,12 +437,12 @@ def advance_array_by_duplicate(record: UserRecord, array: dict[str, Any], incomi
         record.array_layers = {}
     if record.array_proficiency is None:
         record.array_proficiency = {}
-    _domain.migrate_tracking_key(record.array_layers, old_key, new_key, new_layer, keep_max=False)
-    migrated = _domain.migrate_tracking_key(record.array_proficiency, old_key, new_key, current_proficiency, keep_max=True)
-    record.array_proficiency[new_key] = min(_domain.array_proficiency_cap(array, new_layer), migrated)
-    _domain.sync_equipped_growth_item(record, ARRAY_CATEGORY, old_key, array)
+    migrate_tracking_key(record.array_layers, old_key, new_key, new_layer, keep_max=False)
+    migrated = migrate_tracking_key(record.array_proficiency, old_key, new_key, current_proficiency, keep_max=True)
+    record.array_proficiency[new_key] = min(array_proficiency_cap(array, new_layer), migrated)
+    sync_equipped_growth_item(record, ARRAY_CATEGORY, old_key, array)
     if incoming is not None:
-        _domain.set_growth_reward_note(incoming, array, old_display, new_layer, quality_up, ARRAY_CATEGORY)
+        set_growth_reward_note(incoming, array, old_display, new_layer, quality_up, ARRAY_CATEGORY)
     return array
 
 def ensure_unique_growth_rewards(record: UserRecord, category: str) -> None:
@@ -535,6 +537,7 @@ def breakthrough_reward_candidates(
     names: Sequence[str],
     target_index: int,
 ) -> list[tuple[int, dict[str, Any], int, str]]:
+    from .realms import breakthrough_candidate_sort_key, breakthrough_effective_quality_score, breakthrough_quality_label_from_score
     wanted = {str(name) for name in names}
     name_order = {str(name): index for index, name in enumerate(names)}
     candidates: list[tuple[int, dict[str, Any], int, str]] = []
@@ -542,10 +545,10 @@ def breakthrough_reward_candidates(
         if reward_name(raw) not in wanted:
             continue
         item = normalize_reward(dict(raw), record)
-        score = _domain.breakthrough_effective_quality_score(item, target_index)
-        quality = _domain.breakthrough_quality_label_from_score(score, target_index)
+        score = breakthrough_effective_quality_score(item, target_index)
+        quality = breakthrough_quality_label_from_score(score, target_index)
         candidates.append((list_index, item, score, quality))
-    candidates.sort(key=lambda entry: _domain.breakthrough_candidate_sort_key(entry, name_order), reverse=True)
+    candidates.sort(key=lambda entry: breakthrough_candidate_sort_key(entry, name_order), reverse=True)
     return candidates
 
 def consume_best_breakthrough_reward(
@@ -607,14 +610,15 @@ def record_has_artifact_signature(record: UserRecord, signature: str, source_uid
     return False
 
 def apply_demon_core_metadata(reward: dict[str, Any]) -> None:
-    if not _domain.is_demon_core_item(reward):
+    from .roots import demon_core_attribute, demon_core_cultivation_exp, demon_core_realm_name, is_demon_core_item
+    if not is_demon_core_item(reward):
         return
-    realm_name = _domain.demon_core_realm_name(reward) or DEMON_CORE_DEFAULT_REALM_BY_TIER.get(str(reward.get("tier")), "\u6b8b\u788e")
-    attribute = _domain.demon_core_attribute(reward)
+    realm_name = demon_core_realm_name(reward) or DEMON_CORE_DEFAULT_REALM_BY_TIER.get(str(reward.get("tier")), "\u6b8b\u788e")
+    attribute = demon_core_attribute(reward)
     reward["beast_realm"] = realm_name
     reward["element"] = attribute
     reward["required_attribute"] = attribute
-    reward["cultivation_exp"] = _domain.demon_core_cultivation_exp(reward)
+    reward["cultivation_exp"] = demon_core_cultivation_exp(reward)
     reward.setdefault("usage", "\u70bc\u4e39\u6750\u6599\uff1b\u53ef\u70bc\u5316\u63d0\u5347\u4fee\u4e3a\uff1b\u4e5f\u53ef\u70bc\u6210\u4e39\u7075\u6839\u7528\u4e8e\u4e94\u884c\u8865\u5168\u3002")
     reward["description"] = (
         f"{attribute}\u884c{realm_name}\u5996\u529b\u51dd\u6210\u7684\u5996\u4e39\uff0c"
@@ -673,12 +677,13 @@ def reward_display_name(reward: Optional[dict[str, Any]]) -> str:
     return f"[{prefix} {name}]"
 
 def normalize_artifact_slot(slot: Optional[str] = None, artifact: Optional[dict[str, Any]] = None) -> str:
+    from .equipment import artifact_is_armor
     text = str(slot or "").strip()
     if text in ARTIFACT_SLOT_ALIASES:
         return ARTIFACT_SLOT_ALIASES[text]
     if text:
         return text
-    if _domain.artifact_is_armor(artifact):
+    if artifact_is_armor(artifact):
         return "护甲"
     return "主手"
 

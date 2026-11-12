@@ -2,7 +2,7 @@
 
 由原 domain.py 抽取：9 个 dataclass（Root/UserRecord/SigninResult/CombatRuntimeState 等）。
 UserRecord/Root/CombatRuntimeState 的部分 property 反向调用子系统函数，
-通过模块级 _domain（由 domain/__init__.py 加载后注入）延迟访问，避免循环导入。
+通过函数内 import 延迟访问子系统函数，避免循环导入。
 """
 from __future__ import annotations
 
@@ -14,8 +14,6 @@ from .utils import *  # noqa: F401,F403  # root_attribute_name 等工具
 from .utils import normalize_mystic_settlement_ids
 
 # 由 domain/__init__.py 在导入本模块后注入为 domain 主模块，用于 property 内延迟访问子系统函数。
-_domain = None
-
 @dataclass
 class Root:
     tier: str
@@ -118,6 +116,7 @@ class Root:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Root:
+        from .roots import root_default_sources
         tier = str(data["tier"])
         if tier == "\u8def\u4eba\u7532":
             tier = "\u51e1\u54c1"
@@ -128,7 +127,7 @@ class Root:
         grade = str(data.get("grade", "\u6781\u54c1" if is_mutated else "\u4e2d\u54c1"))
         sources = data.get("sources")
         if not isinstance(sources, list) or not sources:
-            sources = _domain.root_default_sources(attribute)
+            sources = root_default_sources(attribute)
         source_purities = data.get("source_purities")
         if not isinstance(source_purities, dict):
             source_purities = {}
@@ -259,7 +258,8 @@ class UserRecord:
 
     @property
     def realm_stage(self) -> str:
-        return _domain.realm_stage(self)
+        from .realms import realm_stage
+        return realm_stage(self)
 
     @property
     def realm(self) -> str:
@@ -267,7 +267,8 @@ class UserRecord:
 
     @property
     def progress_required(self) -> int:
-        return _domain.realm_progress_required(self.root, self.realm_index)
+        from .roots import realm_progress_required
+        return realm_progress_required(self.root, self.realm_index)
 
     @property
     def roots(self) -> list[Root]:
@@ -279,10 +280,11 @@ class UserRecord:
 
     @property
     def root_attributes(self) -> set[str]:
+        from .roots import normalize_acquired_roots
         attrs = {root.attribute for root in self.roots}
         for root in self.roots:
             attrs.update(root.source_attributes)
-        for root in _domain.normalize_acquired_roots(self):
+        for root in normalize_acquired_roots(self):
             attr = str(root.get("attribute") or "")
             if attr:
                 attrs.add(attr)
@@ -309,15 +311,18 @@ class UserRecord:
 
     @property
     def is_bottleneck(self) -> bool:
-        return _domain.is_breakthrough_bottleneck(self)
+        from .realms import is_breakthrough_bottleneck
+        return is_breakthrough_bottleneck(self)
 
     @property
     def realm_quality(self) -> str:
-        return _domain.realm_quality_text(self)
+        from .realms import realm_quality_text
+        return realm_quality_text(self)
 
     @property
     def cultivation_locked(self) -> bool:
-        return _domain.is_cultivation_locked(self)
+        from .realms import is_cultivation_locked
+        return is_cultivation_locked(self)
 
     @property
     def route_summary(self) -> str:
@@ -549,8 +554,9 @@ class CombatRuntimeState:
 
     @classmethod
     def initial(cls, record: UserRecord) -> "CombatRuntimeState":
-        max_hp = _domain.combat_max_hp(record)
-        max_mana = _domain.combat_max_mana(record)
+        from .combat import combat_max_hp, combat_max_mana
+        max_hp = combat_max_hp(record)
+        max_mana = combat_max_mana(record)
         return cls(
             hp=max_hp,
             max_hp=max_hp,

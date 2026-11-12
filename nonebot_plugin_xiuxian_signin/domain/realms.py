@@ -1,7 +1,7 @@
 """domain 境界与突破子系统（Layer 2）。
 
 由原 domain.py 抽取：境界阶段、突破流程、瓶颈锁定、境界品质、突破物品与奖励抽取等。
-依赖 Layer 0/1 + roots，跨子系统调用通过 _domain 延迟访问。
+依赖 Layer 0/1 + roots；反向依赖（abilities）在函数内 import。
 """
 from __future__ import annotations
 
@@ -15,8 +15,6 @@ from .utils import *  # noqa: F401,F403
 from .models import *  # noqa: F401,F403
 from .rewards import *  # noqa: F401,F403
 from .roots import *  # noqa: F401,F403
-
-_domain = None
 
 def breakthrough_requirement_key_for_realm_index(realm_index: int) -> Optional[int]:
     index = int(realm_index)
@@ -793,6 +791,7 @@ def breakthrough_flavor_text(old_realm: str, target_realm: str, mark: str, item:
     )
 
 def breakthrough_realm(record: UserRecord) -> tuple[bool, str]:
+    from .abilities import maybe_grant_special_ability_material
     if record.root is None:
         return False, "\u5c1a\u672a\u8e0f\u5165\u4fee\u884c\u8def\uff0c\u53d1\u9001\u201c\u7b7e\u5230\u201d\u5148\u89c9\u9192\u7075\u6839\u3002"
     requirement = current_breakthrough_requirement(record)
@@ -824,7 +823,7 @@ def breakthrough_realm(record: UserRecord) -> tuple[bool, str]:
     if consumed_supplements:
         names = "、".join(reward_display_name(reward) for reward in consumed_supplements)
         message += f"\n五行补全：炼化{names}，丹/器灵根归入己身，助你掌握天地元气。"
-    special_reward = _domain.maybe_grant_special_ability_material(record, chance=0.35, source="突破余韵")
+    special_reward = maybe_grant_special_ability_material(record, chance=0.35, source="突破余韵")
     if special_reward:
         message += f"\n突破余韵中落下一份{reward_display_name(special_reward)}，可发送“领悟神通 编号”参悟。"
     return True, message

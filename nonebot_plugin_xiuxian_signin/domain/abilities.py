@@ -1,6 +1,6 @@
 """domain abilities 子系统。
 
-由原 domain.py 抽取。依赖 Layer 0+ 已提取子系统，跨子系统调用通过 _domain 延迟访问。
+由原 domain.py 抽取。跨子系统反向依赖一律在函数内 import，模块级不持有全局访问器。
 """
 from __future__ import annotations
 
@@ -16,8 +16,6 @@ from .roots import *  # noqa: F401,F403
 from .realms import *  # noqa: F401,F403
 from .methods_arrays import *  # noqa: F401,F403
 from .equipment import *  # noqa: F401,F403
-
-_domain = None
 
 def normalize_special_abilities(abilities: Sequence[str] | None) -> list[str]:
     result = list(dict.fromkeys(canonical_item_name(str(item)) for item in (abilities or []) if item))
@@ -207,9 +205,10 @@ def learn_special_ability(record: UserRecord, item_index: int) -> tuple[bool, st
     )
 
 def special_ability_list_text(record: UserRecord) -> str:
+    from .codex import available_special_ability_items
     record.special_abilities = normalize_special_abilities(record.special_abilities)
     abilities = list(record.special_abilities or [])
-    materials = _domain.available_special_ability_items(record)
+    materials = available_special_ability_items(record)
     secret_count = nine_secret_count(record)
     lines = ["\u3010\u6211\u7684\u795e\u901a\u3011"]
     if secret_count:

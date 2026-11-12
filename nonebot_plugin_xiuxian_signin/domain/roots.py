@@ -1,7 +1,7 @@
 """domain 灵根子系统（Layer 2）。
 
 由原 domain.py 抽取：灵根抽取、五行补全、丹器灵根、妖丹等。
-依赖 Layer 0/1（constants/utils/models/rewards），跨子系统调用通过 _domain 延迟访问。
+依赖 Layer 0/1（constants/utils/models/rewards）；反向依赖（realms/codex）在函数内 import。
 """
 from __future__ import annotations
 
@@ -13,8 +13,6 @@ from .constants import *  # noqa: F401,F403
 from .utils import *  # noqa: F401,F403
 from .models import *  # noqa: F401,F403
 from .rewards import *  # noqa: F401,F403
-
-_domain = None
 
 def root_default_sources(attribute: str) -> list[str]:
     attribute = normalize_root_attribute(attribute)
@@ -552,6 +550,7 @@ def refine_artifact_root(record: UserRecord, artifact_index: int) -> tuple[bool,
     return True, f"祭炼 {reward_display_name(source)} 成功。\n{reason}\n器灵根依托此器而成：器在则根在，器毁则根无。请勿出售或损毁该灵器。"
 
 def acquired_root_text(record: UserRecord) -> str:
+    from .codex import available_artifacts, available_materials
     roots = normalize_acquired_roots(record)
     lines = ["【后天灵根】"]
     if not roots:
@@ -571,7 +570,7 @@ def acquired_root_text(record: UserRecord) -> str:
     lines.append("丹灵根：以对应属性妖丹炼成，精纯度受妖兽修为与妖丹品阶影响，上限与地灵根持平。")
     lines.append(f"器灵根：以灵器适配属性作根，成功率 {int(ARTIFACT_ROOT_SUCCESS_RATE * 100)}%，器在则根在，器毁或出售则灵根失效。")
     lines.append("用法：炼化丹灵根 编号；炼化器灵根 编号。")
-    materials = _domain.available_materials(record)
+    materials = available_materials(record)
     cores = [item for item in materials if is_demon_core_item(item)]
     if cores:
         lines.append("")
@@ -579,7 +578,7 @@ def acquired_root_text(record: UserRecord) -> str:
         for index, item in enumerate(materials, start=1):
             if is_demon_core_item(item):
                 lines.append(f"{index}. {reward_display_name(item)} -> {demon_core_attribute(item)}灵根，预估精纯度≤{DAN_ROOT_MAX_PURITY}%")
-    artifacts = _domain.available_artifacts(record)
+    artifacts = available_artifacts(record)
     compatible_artifacts = [(index, item) for index, item in enumerate(artifacts, start=1) if artifact_root_attribute(item)]
     if compatible_artifacts:
         lines.append("")
@@ -598,8 +597,9 @@ def missing_five_elements(record: UserRecord) -> list[str]:
     return [attr for attr in BASE_FIVE_ELEMENTS if attr not in effective_five_elements(record)]
 
 def needs_five_element_completion(record: UserRecord) -> bool:
-    requirement = _domain.current_breakthrough_requirement(record)
-    return bool(requirement and _domain.current_breakthrough_target_realm(record) == "炼虚期")
+    from .realms import current_breakthrough_requirement, current_breakthrough_target_realm
+    requirement = current_breakthrough_requirement(record)
+    return bool(requirement and current_breakthrough_target_realm(record) == "炼虚期")
 
 def five_element_requirement_text(record: UserRecord) -> str:
     missing = missing_five_elements(record)

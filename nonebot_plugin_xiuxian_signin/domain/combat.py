@@ -1,6 +1,6 @@
 """domain combat 子系统。
 
-由原 domain.py 抽取。依赖 Layer 0+ 已提取子系统，跨子系统调用通过 _domain 延迟访问。
+由原 domain.py 抽取。跨子系统反向依赖一律在函数内 import，模块级不持有全局访问器。
 """
 from __future__ import annotations
 
@@ -23,14 +23,6 @@ from .abilities import *  # noqa: F401,F403
 from .crafting import *  # noqa: F401,F403
 from .mystic_drops import *  # noqa: F401,F403
 from .economy import *  # noqa: F401,F403
-
-_domain = None
-
-# 直接引用 mystic_drops 模块对象，读取其可调标量（apply_admin_config 运行时重绑）。
-try:
-    from . import mystic_drops as _mystic_drops_module  # noqa: E402,F401
-except ImportError:
-    pass
 
 def has_soul_insight(record: UserRecord) -> bool:
     profile = method_profile(record.equipped_method, record)
@@ -654,6 +646,7 @@ def battle_power(record: UserRecord) -> int:
     return max(1, power)
 
 def battle_summary(record: UserRecord) -> dict[str, Any]:
+    from .codex import available_special_ability_items
     equipment_power = (
         equipped_artifact_power(record)
         + method_power(record.equipped_method, record)
@@ -695,7 +688,7 @@ def battle_summary(record: UserRecord) -> dict[str, Any]:
         "hehuan_remaining": hehuan_remaining_text(record),
         "spirit_stones_text": spirit_stone_text(record.spirit_stones),
         "special_abilities": normalize_special_abilities(record.special_abilities),
-        "special_ability_materials": len(_domain.available_special_ability_items(record)),
+        "special_ability_materials": len(available_special_ability_items(record)),
         "special_ability_power": special_ability_power_total(record),
         "life_artifact": reward_display_name(record.life_artifact) if record.life_artifact else "未祭炼本命灵器",
         "immortal_seed": equipped_immortal_seed_name(record),

@@ -1,6 +1,6 @@
 """domain crafting 子系统。
 
-由原 domain.py 抽取。依赖 Layer 0+ 已提取子系统，跨子系统调用通过 _domain 延迟访问。
+由原 domain.py 抽取。跨子系统反向依赖一律在函数内 import，模块级不持有全局访问器。
 """
 from __future__ import annotations
 
@@ -17,8 +17,6 @@ from .realms import *  # noqa: F401,F403
 from .methods_arrays import *  # noqa: F401,F403
 from .equipment import *  # noqa: F401,F403
 from .abilities import *  # noqa: F401,F403
-
-_domain = None
 
 def recipe_base_quality_text(recipe: dict[str, Any]) -> str:
     return f"{recipe.get('tier', '凡品')}{recipe.get('grade', '中品')}"
@@ -419,6 +417,7 @@ def use_foods_batch(record: UserRecord, limit: Optional[int] = None) -> tuple[bo
     return _batch_apply_exp_items(record, FOOD_CATEGORY, limit, "享用")
 
 def use_curio(record: UserRecord, curio_index: int) -> tuple[bool, str]:
+    from .signin import draw_fishing_rewards
     result = pop_reward_by_category_index(record, CURIO_CATEGORY, curio_index)
     if result is None:
         return False, "\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u7f16\u53f7\u7684\u5947\u7269\u3002"
@@ -445,7 +444,7 @@ def use_curio(record: UserRecord, curio_index: int) -> tuple[bool, str]:
             append_reward(record, result)
             return False, "\u5f53\u524d\u5df2\u81f3\u74f6\u9888\u5dc5\u5cf0\uff0c\u5947\u7269\u7075\u673a\u65e0\u6cd5\u70bc\u5316\uff0c\u8bf7\u5148\u7a81\u7834\u3002"
         return True, exp_gain_text(prefix, applied_exp, leveled, exp_result)
-    reward = _domain.draw_fishing_rewards(1, record)[0]
+    reward = draw_fishing_rewards(1, record)[0]
     append_reward(record, reward)
     return True, f"{reward_display_name(result)} \u5185\u85cf\u5939\u5c42\uff0c\u53d6\u51fa {reward_display_name(reward)}\u3002"
 

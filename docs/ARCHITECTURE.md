@@ -74,7 +74,7 @@ Layer 3（复合子系统）
   equipment.py    灵器/符箓/傀儡/灵植/仙源装备 + 各 power
   abilities.py    神通系统
   crafting.py     炼丹/炼器/消耗品使用
-  mystic_drops.py 秘境掉落配置 + apply_admin_config + 运行时可变状态
+  mystic_drops.py 秘境掉落配置 + apply_admin_config + 不可变调参快照
   economy.py      商店/出售/交易/每日任务/路线身份/双修
 
 Layer 4（顶层）
@@ -85,22 +85,30 @@ Layer 4（顶层）
 
 `domain/__init__.py` 是 facade：`from .X import *` re-export 全部公开 API，外部（`__init__.py`/`cards`/`admin` 等）只需 `from .domain import X`，不感知内部子模块。
 
-### 延迟访问机制（`_domain`）
+### 反向依赖：只在函数体内 import
 
-部分 dataclass 的 property / 部分子系统函数反向调用其它子系统（如 `UserRecord.is_bottleneck` 调 `is_breakthrough_bottleneck`）。为避免循环导入，各子模块定义 `_domain = None`，由 `domain/__init__.py` 在加载完成后注入为 domain 主模块：
+部分 dataclass 的 property / 部分子系统函数需要调用**更上层**的函数（如 `UserRecord.is_bottleneck` 调 `realms.is_breakthrough_bottleneck`、`rewards.advance_method_by_duplicate` 调 `methods_arrays.method_layer`）。
+
+处理方式只有一种：**在该函数体首行 `from .<模块> import <名字>`**。模块加载期不产生回边，所以没有循环导入；调用发生在运行期，那时包已加载完毕。
 
 ```python
-# domain/__init__.py
-_domain_self = sys.modules[__name__]
-from . import models as _models_module
-_models_module._domain = _domain_self   # 子模块内用 _domain.FUNC(...) 延迟访问
+def is_bottleneck(self) -> bool:
+    from .realms import is_breakthrough_bottleneck
+    ...
 ```
 
-子模块内跨层调用用 `_domain.FUNC(...)` 而非直接引用，运行时（包已加载完毕）解析。
+历史实现是「各子模块占位 `_domain = None` + `domain/__init__.py` 加载后注入包自身 + 调用点写 `_domain.FUNC(...)`」，已于 R-20 全部删除。**不要复活它**：`tests/test_domain_layering.py` 会同时钉住「分层单向」与「`_domain` 不得出现」。
 
-### 运行时可变状态（apply_admin_config）
+### 运行时可变状态：不可变快照 + 整对象替换
 
-`mystic_drops.py` 持有秘境掉落的运行时可变状态（`MYSTIC_CATEGORY_WEIGHTS` 等 5 个容器 + 6 个可调标量）。`apply_admin_config` 用 `global`/`.clear()`/`.update()` 就地修改。读取这些标量的代码用 `_mystic_drops_module.X`（模块属性引用）拿最新值，**不可**用 `from .mystic_drops import X`（那是导入时的快照，重绑后失效）。
+`mystic_drops.py` 的秘境调参不再是散落的可变全局。所有可调值收在一个冻结的 `MysticTuning` 里（映射字段是 `MappingProxyType`、集合是 `frozenset`、行列表是 `tuple`），由 `_TuningHolder` 单点持有：
+
+```python
+tuning = current_mystic_tuning()          # 读取方唯一入口
+tuning.artifact_drop_pools                # 只读视图，写入抛 TypeError
+```
+
+`apply_admin_config` 解析完配置后**构造一个新快照整对象替换**（`_install_mystic_tuning`），不再 `global` 重绑标量、不再 `.clear()/.update()` 容器。因此读取方要么看到旧版本、要么看到新版本，不会读到「被清空到一半」的中间态；已取出的旧快照也永远保持构造时的值。
 
 ## cards/ — 图片面板渲染
 
@@ -182,7 +190,7 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 | 场景 | 位置 |
 | --- | --- |
 | 新增修仙规则/数据 | `domain/` 对应子系统；纯数据加 `constants.py` |
-| 新增领域函数 | 归入 `domain/` 的 Layer 2-4 对应模块；跨层调用用 `_domain.` |
+| 新增领域函数 | 归入 `domain/` 对应层级的模块；需要调上层函数时在函数体内 import（禁止 `_domain` 访问器） |
 | 新增图片面板 | `cards/`（新 render 函数） |
 | 新增命令 | 判定 `commands/rules.py` → matcher `commands/matchers.py` → handler `commands/handlers/<域>.py`；文案 `commands/texts.py` |
 | 新增后台页面 | `webui/src/`（前端）+ `admin.py`（API 路由） |

@@ -1,6 +1,6 @@
 """domain economy 子系统。
 
-由原 domain.py 抽取。依赖 Layer 0+ 已提取子系统，跨子系统调用通过 _domain 延迟访问。
+由原 domain.py 抽取。跨子系统反向依赖一律在函数内 import，模块级不持有全局访问器。
 """
 from __future__ import annotations
 
@@ -22,11 +22,6 @@ from .abilities import *  # noqa: F401,F403
 from .crafting import *  # noqa: F401,F403
 from .mystic_drops import *  # noqa: F401,F403
 
-_domain = None
-
-# 直接引用 mystic_drops 模块对象，读取其可调标量（apply_admin_config 运行时重绑）。
-from . import mystic_drops as _mystic_drops_module  # noqa: E402
-
 def shop_items_for_date(date_text: str, record: Optional[UserRecord] = None) -> list[dict[str, Any]]:
     seed = f"{date_text}:{getattr(record, 'user_id', '')}:{getattr(record, 'realm_index', '')}"
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
@@ -36,7 +31,7 @@ def shop_items_for_date(date_text: str, record: Optional[UserRecord] = None) -> 
     for _ in range(8):
         tier, grade, category, name, description, _ = weighted_choice_rng(pool, rng)
         if category == ARTIFACT_CATEGORY:
-            item = _domain.draw_configured_artifact_reward(tier, grade, rng)
+            item = draw_configured_artifact_reward(tier, grade, rng)
         else:
             item = {"tier": tier, "grade": grade, "category": category, "name": name, "description": description}
         item = normalize_reward(item, record)
@@ -244,7 +239,7 @@ def complete_daily_task(record: UserRecord, task_index: int, today: date) -> tup
     applied, leveled = applied_result
     record.spirit_stones += stones
     record.fishing_chances += fishing
-    token_grants = _domain.grant_mystic_tokens(
+    token_grants = grant_mystic_tokens(
         record,
         int(task.get("token_normal", 0)),
         int(task.get("token_high", 0)),

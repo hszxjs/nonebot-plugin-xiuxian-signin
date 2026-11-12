@@ -31,15 +31,12 @@ LAYERS = {
     "doudizhu": 4,
     "rewards": 3,
     "mystic_result": 4,
-    "rewards": 3,
-    "mystic_result": 4,
     "rules": 5,
     "matchers": 6,
 }
 
 # commands/handlers/ 下每个模块只允许依赖上表里的实现层。
 HANDLER_LAYER = 7
-HANDLER_NAMES = {p.stem for p in HANDLED.glob("*.py") if p.name != "__init__"}
 HANDLER_NAMES = {p.stem for p in HANDLED.glob("*.py") if p.name != "__init__"}
 
 # 允许 commands/ 从包根导入的模块名（都是与入口并列的功能包，不是入口本身）。

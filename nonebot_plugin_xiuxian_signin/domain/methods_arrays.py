@@ -1,7 +1,7 @@
 """domain 功法与阵盘子系统（Layer 2）。
 
 由原 domain.py 抽取：功法/阵盘层数、熟练度、成长追踪、阵法推演、聊天修炼等。
-依赖 Layer 0/1 + roots + realms，跨子系统调用通过 _domain 延迟访问。
+依赖 Layer 0/1 + roots + realms；反向依赖（equipment/codex/combat）在函数内 import。
 """
 from __future__ import annotations
 
@@ -15,8 +15,6 @@ from .models import *  # noqa: F401,F403
 from .rewards import *  # noqa: F401,F403
 from .roots import *  # noqa: F401,F403
 from .realms import *  # noqa: F401,F403
-
-_domain = None
 
 def growth_has_unlimited_deduction(item: Optional[dict[str, Any]]) -> bool:
     return bool(item and str(item.get("tier")) == "仙阶" and str(item.get("grade")) == "极品")
@@ -229,6 +227,7 @@ def method_content_text(method: Optional[dict[str, Any]], kind: str) -> str:
     return f"{name}\u5c06{attr_name}\u7075\u6c14\u538b\u7f29\u6210\u6218\u6280\uff0c\u53ef\u5728\u666e\u901a\u6597\u6cd5\u4e2d\u6839\u636e\u53d1\u8a00\u89e6\u53d1\u3002"
 
 def method_profile(method: Optional[dict[str, Any]], record: Optional[UserRecord] = None) -> dict[str, Any]:
+    from .equipment import method_power
     if not method:
         return {
             "signature": "",
@@ -260,7 +259,7 @@ def method_profile(method: Optional[dict[str, Any]], record: Optional[UserRecord
     chat_speed = METHOD_CHAT_BASE.get(tier, 0.35) * grade_ratio(grade) * max(1.0, layer / 2) * purity_mult
     hp_bonus = 0
     if kind == "\u953b\u4f53\u7c7b":
-        hp_bonus = max(60, int(_domain.method_power(method, record) * (0.18 + layer * 0.035)))
+        hp_bonus = max(60, int(method_power(method, record) * (0.18 + layer * 0.035)))
     techniques = method_techniques(method, kind)
     return {
         "signature": reward_signature(method),
@@ -283,15 +282,18 @@ def method_profile(method: Optional[dict[str, Any]], record: Optional[UserRecord
     }
 
 def format_method_detail(record: UserRecord, method_index: int) -> tuple[bool, str]:
-    methods = _domain.available_methods(record)
+    from .equipment import item_is_compatible
+    from .combat import technique_cooldown, technique_mana_cost
+    from .codex import available_methods
+    methods = available_methods(record)
     if method_index < 1 or method_index > len(methods):
         return False, f"\u8bf7\u9009\u62e9 1-{len(methods)} \u4e4b\u95f4\u7684\u529f\u6cd5\u7f16\u53f7\u3002" if methods else "\u6682\u65e0\u53ef\u5b66\u4e60\u529f\u6cd5\u3002"
     method = methods[method_index - 1]
     profile = method_profile(method, record)
-    compatible = "\u5951\u5408" if _domain.item_is_compatible(record, method) else "\u7075\u6839\u4e0d\u5951\u5408"
+    compatible = "\u5951\u5408" if item_is_compatible(record, method) else "\u7075\u6839\u4e0d\u5951\u5408"
     race_req = profile.get("required_race") or "\u65e0"
     technique_parts = [
-        f"{tech}\uff08\u8017\u7075{_domain.technique_mana_cost(record, tech)} / CD{_domain.technique_cooldown(tech)}\u606f\uff09"
+        f"{tech}\uff08\u8017\u7075{technique_mana_cost(record, tech)} / CD{technique_cooldown(tech)}\u606f\uff09"
         for tech in profile["techniques"]
     ]
     techniques = "\u3001".join(technique_parts) or "\u6682\u65e0"
@@ -324,8 +326,8 @@ def array_multiplier(record: UserRecord, method: Optional[dict[str, Any]] = None
     if not record.equipped_array:
         return 1.0
     array = record.equipped_array
-    layer = _domain.array_layer(record, array)
-    proficiency = _domain.array_proficiency_value(record, array)
+    layer = array_layer(record, array)
+    proficiency = array_proficiency_value(record, array)
     cap = array_multiplier_cap(array, layer)
     multiplier = min(cap, 1.0 + proficiency / 100)
     if record.cultivation_route == "阵法师":
@@ -339,12 +341,13 @@ def increase_array_proficiency(record: UserRecord, amount: int = 1) -> None:
     ensure_array_tracking(record, array)
     key = reward_signature(array)
     gain = amount * (2 if record.cultivation_route == "阵法师" else 1)
-    cap = _domain.array_proficiency_cap(array, _domain.array_layer(record, array))
+    cap = array_proficiency_cap(array, array_layer(record, array))
     record.array_proficiency[key] = min(cap, int(record.array_proficiency.get(key, 0) or 0) + gain)
 
 def method_sign_bonus(record: UserRecord, base_exp: int) -> int:
+    from .equipment import item_is_compatible
     method = record.equipped_method
-    if not method or not _domain.item_is_compatible(record, method):
+    if not method or not item_is_compatible(record, method):
         return 0
     layer = method_layer(record, method)
     rate = METHOD_SIGN_RATE.get(str(method.get("tier")), 0.0)
@@ -359,8 +362,9 @@ def method_sign_bonus(record: UserRecord, base_exp: int) -> int:
     return max(1, bonus) if rate > 0 else 0
 
 def method_chat_exp(record: UserRecord, count: int = 1) -> int:
+    from .equipment import item_is_compatible
     method = record.equipped_method
-    if count <= 0 or not method or not _domain.item_is_compatible(record, method):
+    if count <= 0 or not method or not item_is_compatible(record, method):
         return 0
     layer = method_layer(record, method)
     raw = (
@@ -391,14 +395,15 @@ def next_tier_grade(tier: str, grade: str) -> tuple[str, str]:
     return result if result is not None else ("仙阶", "极品")
 
 def array_deduction_text(record: UserRecord) -> str:
-    arrays = _domain.available_arrays(record)
+    from .codex import available_arrays
+    arrays = available_arrays(record)
     lines = ["【阵法推演】", "重复获得阵盘会自动对同名阵盘推演：每次加一层，10层后升品或升阶；仙阶极品后可无限推演。"]
     if not arrays:
         lines.append("暂无阵盘。")
     for index, array in enumerate(arrays, start=1):
-        layer = _domain.array_layer(record, array)
-        proficiency = _domain.array_proficiency_value(record, array)
-        cap = _domain.array_proficiency_cap(array, layer)
+        layer = array_layer(record, array)
+        proficiency = array_proficiency_value(record, array)
+        cap = array_proficiency_cap(array, layer)
         cap_text = array_layer_cap_text(array)
         same = sum(1 for item in record.rewards or [] if reward_category(item) == ARRAY_CATEGORY and reward_name(item) == reward_name(array))
         lines.append(
@@ -408,7 +413,8 @@ def array_deduction_text(record: UserRecord) -> str:
     return "\n".join(lines)
 
 def deduce_array(record: UserRecord, array_index: int) -> tuple[bool, str]:
-    arrays = _domain.available_arrays(record)
+    from .codex import available_arrays
+    arrays = available_arrays(record)
     if array_index < 1 or array_index > len(arrays):
         return False, f"请选择 1-{len(arrays)} 之间的阵盘编号。"
     target = arrays[array_index - 1]
@@ -423,9 +429,9 @@ def deduce_array(record: UserRecord, array_index: int) -> tuple[bool, str]:
         material_index = list_index
         break
     if material_index is None:
-        layer = _domain.array_layer(record, target)
-        proficiency = _domain.array_proficiency_value(record, target)
-        cap = _domain.array_proficiency_cap(target, layer)
+        layer = array_layer(record, target)
+        proficiency = array_proficiency_value(record, target)
+        cap = array_proficiency_cap(target, layer)
         return True, f"{reward_display_name(target)} 当前第{layer}/{array_layer_cap_text(target)}层，熟练度 {proficiency}/{cap}；后续重复获得同名阵盘会自动推演。"
     material = normalize_reward(record.rewards.pop(material_index), record) if record.rewards is not None else None
     if material is None:
@@ -435,7 +441,7 @@ def deduce_array(record: UserRecord, array_index: int) -> tuple[bool, str]:
             before = reward_display_name(reward)
             record.rewards[list_index] = advance_array_by_duplicate(record, normalize_reward(reward, record), material)
             after = reward_display_name(record.rewards[list_index])
-            return True, f"阵纹重组，消耗 {reward_display_name(material)} 推演 {before}，当前为 {after} 第{_domain.array_layer(record, record.rewards[list_index])}层。"
+            return True, f"阵纹重组，消耗 {reward_display_name(material)} 推演 {before}，当前为 {after} 第{array_layer(record, record.rewards[list_index])}层。"
     append_reward(record, material)
     return False, "没有找到可推演的目标阵盘。"
 

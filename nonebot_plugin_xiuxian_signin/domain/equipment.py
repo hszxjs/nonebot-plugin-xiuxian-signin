@@ -1,7 +1,7 @@
 """domain 装备子系统（Layer 3）。
 
 由原 domain.py 抽取：灵器/符箓/傀儡/灵植/仙源装备、各 power 计算、本命灵器、图鉴等。
-依赖 Layer 0-2，跨子系统调用通过 _domain 延迟访问。
+依赖 Layer 0-2；反向依赖（abilities）在函数内 import。
 """
 from __future__ import annotations
 
@@ -16,8 +16,6 @@ from .rewards import *  # noqa: F401,F403
 from .roots import *  # noqa: F401,F403
 from .realms import *  # noqa: F401,F403
 from .methods_arrays import *  # noqa: F401,F403
-
-_domain = None
 
 def artifact_shape_from_name(name: str) -> str:
     text = str(name or "")
@@ -301,7 +299,8 @@ def emperor_artifact_catalog_text(owner_lookup: Optional[dict[str, str]] = None)
     return "\n".join(lines)
 
 def divine_ability_catalog_text(record: Optional[UserRecord] = None) -> str:
-    text = _domain.special_ability_catalog_text(record)
+    from .abilities import special_ability_catalog_text
+    text = special_ability_catalog_text(record)
     return text.replace("\u795e\u901a", "\u795e\u901a")
 
 def artifact_is_armor(artifact: Optional[dict[str, Any]]) -> bool:
@@ -358,6 +357,7 @@ def artifact_is_compatible(record: UserRecord, artifact: dict[str, Any]) -> bool
     return item_is_compatible(record, artifact)
 
 def artifact_power(artifact: Optional[dict[str, Any]], record: Optional[UserRecord] = None) -> int:
+    from .abilities import special_ability_power_total
     if not artifact:
         return 0
     required_index = item_required_realm_index(artifact)
@@ -373,7 +373,7 @@ def artifact_power(artifact: Optional[dict[str, Any]], record: Optional[UserReco
         power = int(power * artifact_power_rate(artifact))
         if record is not None and is_unique_reward(artifact):
             power = int(power * (1.0 + min(1.8, record.realm_index * 0.075)))
-            power += _domain.special_ability_power_total(record) // 4
+            power += special_ability_power_total(record) // 4
     else:
         realm_base = ARTIFACT_REALM_POWER_BASE.get(required_index)
         if realm_base is None:
@@ -397,7 +397,7 @@ def method_power(method: Optional[dict[str, Any]], record: Optional[UserRecord] 
     ratio = ARTIFACT_GRADE_RATIO.get(str(method.get("grade")), 1.0)
     power = int(base * ratio)
     if record is not None and item_is_compatible(record, method):
-        layer = _domain.method_layer(record, method)
+        layer = method_layer(record, method)
         layer_rate = 1.0 + max(0, layer - 1) * 0.08
         power = int(power * 1.12 * layer_rate * root_purity_multiplier(record, reward_required_attribute(method)))
     return power
@@ -536,9 +536,9 @@ def equip_array(record: UserRecord, array_index: int) -> tuple[bool, str]:
     _, array = result
     record.equipped_array = dict(array)
     ensure_array_tracking(record, record.equipped_array)
-    layer = _domain.array_layer(record, record.equipped_array)
-    proficiency = _domain.array_proficiency_value(record, record.equipped_array)
-    cap = _domain.array_proficiency_cap(record.equipped_array, layer)
+    layer = array_layer(record, record.equipped_array)
+    proficiency = array_proficiency_value(record, record.equipped_array)
+    cap = array_proficiency_cap(record.equipped_array, layer)
     multiplier = array_multiplier(record)
     return True, f"已布置 {reward_display_name(array)}，第{layer}层，熟练度 {proficiency}/{cap}，当前阵法效果 {multiplier:.1f}x。"
 

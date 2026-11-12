@@ -1,12 +1,14 @@
 """domain mystic_drops 子系统。
 
-由原 domain.py 抽取。依赖 Layer 0+ 已提取子系统，跨子系统调用通过 _domain 延迟访问。
+由原 domain.py 抽取。跨子系统反向依赖一律在函数内 import，模块级不持有全局访问器。
 """
 from __future__ import annotations
 
 import random
 
-from typing import Any, Optional
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
 
 from .constants import *  # noqa: F401,F403
 from .utils import *  # noqa: F401,F403
@@ -19,17 +21,57 @@ from .equipment import *  # noqa: F401,F403
 from .abilities import *  # noqa: F401,F403
 from .crafting import *  # noqa: F401,F403
 
-_domain = None
 
-# 秘境掉落运行时可变状态（由 apply_admin_config 就地修改，供所有读取方共享同一对象引用）。
-ARTIFACT_DROP_POOLS: dict[int, list[dict[str, Any]]] = {}
-MYSTIC_ENABLED_TYPES: set[str] = set(MYSTIC_REALM_TYPES)
-MYSTIC_ENABLED_HIGH_RISK_TYPES: set[str] = set(HIGH_RISK_MYSTIC_REALM_TYPES)
-MYSTIC_CATEGORY_WEIGHTS: dict[str, list[tuple[str, float]]] = {}
-MYSTIC_DROP_OVERRIDES: dict[str, list[dict[str, Any]]] = {}
-# 可调标量（apply_admin_config 用 global 重绑本模块命名空间；读取方经 _domain 访问以拿到最新值）。
-MYSTIC_FISHING_OPTION_RATE = 0.05
-SIGNIN_EXTRA_FISHING_CHANCE_RATE = 0.10
+@dataclass(frozen=True)
+class MysticTuning:
+    """秘境/签到可调参数的**不可变快照**。
+
+    所有字段只读（映射用 ``MappingProxyType`` 包裹、集合用 ``frozenset``、行列表用 ``tuple``），
+    调参时整对象替换，读取方永远看到某个完整版本，不会读到「清空到一半」的中间态。
+    """
+
+    artifact_drop_pools: Mapping[int, tuple[dict[str, Any], ...]] = field(default_factory=dict)
+    enabled_types: frozenset[str] = frozenset()
+    enabled_high_risk_types: frozenset[str] = frozenset()
+    category_weights: Mapping[str, tuple[tuple[str, float], ...]] = field(default_factory=dict)
+    drop_overrides: Mapping[str, tuple[dict[str, Any], ...]] = field(default_factory=dict)
+    fishing_option_rate: float = 0.05
+    signin_extra_fishing_chance_rate: float = 0.10
+
+    def __post_init__(self) -> None:
+        """把映射字段统一包成只读视图，保证任何构造路径产出的快照都改不动。"""
+        for name in ("artifact_drop_pools", "category_weights", "drop_overrides"):
+            object.__setattr__(self, name, MappingProxyType(dict(getattr(self, name))))
+        for name in ("enabled_types", "enabled_high_risk_types"):
+            object.__setattr__(self, name, frozenset(getattr(self, name)))
+
+
+class _TuningHolder:
+    """当前生效快照的唯一持有者。只有 ``apply_admin_config`` 会写它，写入是单次属性赋值。"""
+
+    __slots__ = ("snapshot",)
+
+    def __init__(self, snapshot: MysticTuning) -> None:
+        self.snapshot = snapshot
+
+
+def default_mystic_tuning() -> MysticTuning:
+    return MysticTuning(
+        enabled_types=frozenset(MYSTIC_REALM_TYPES),
+        enabled_high_risk_types=frozenset(HIGH_RISK_MYSTIC_REALM_TYPES),
+    )
+
+
+_TUNING = _TuningHolder(default_mystic_tuning())
+
+
+def current_mystic_tuning() -> MysticTuning:
+    """返回当前生效的不可变快照（读取方统一走这里，不再读模块级可变全局）。"""
+    return _TUNING.snapshot
+
+
+def _install_mystic_tuning(snapshot: MysticTuning) -> None:
+    _TUNING.snapshot = snapshot
 
 def random_beast_name() -> str:
     return random.choice(BEAST_NAMES)
@@ -134,10 +176,12 @@ def _artifact_pool_candidates(entry: dict[str, Any], tier: str = "", grade: str 
     return candidates
 
 def configured_artifact_drop_entries() -> list[dict[str, Any]]:
-    pools = ARTIFACT_DROP_POOLS or {int(key): value for key, value in default_artifact_drop_pools().items()}
+    pools = current_mystic_tuning().artifact_drop_pools or {
+        int(key): tuple(value) for key, value in default_artifact_drop_pools().items()
+    }
     entries: list[dict[str, Any]] = []
     for realm_index, rows in pools.items():
-        if not isinstance(rows, list):
+        if not isinstance(rows, (list, tuple)):
             continue
         for row in rows:
             if not isinstance(row, dict):
@@ -258,14 +302,10 @@ def apply_admin_config(config: dict[str, Any]) -> None:
                         ARTIFACT_GRADE_RATIO[str(grade)] = max(0.1, float(value))
                     except (TypeError, ValueError):
                         continue
-        upgrade_rate = equipment_rules.get("artifact_immortal_upgrade_rate")
-        if upgrade_rate is not None:
-            try:
-                globals()["ARTIFACT_IMMORTAL_UPGRADE_RATE"] = max(0.0, min(1.0, float(upgrade_rate)))
-            except (TypeError, ValueError):
-                pass
+        # `artifact_immortal_upgrade_rate` 只被后台表单当作配置键读写，游戏内无消费者，
+        # 因此不再写模块级全局（原 globals() 重绑既无读者，又污染本模块命名空间）。
         drop_pools = equipment_rules.get("artifact_drop_pools", {})
-        ARTIFACT_DROP_POOLS.clear()
+        drop_pool_rows: dict[int, tuple[dict[str, Any], ...]] = {}
         if isinstance(drop_pools, dict):
             for realm_key, rows in drop_pools.items():
                 try:
@@ -310,49 +350,63 @@ def apply_admin_config(config: dict[str, Any]) -> None:
                         cleaned["tiers"] = tiers
                     cleaned_rows.append(cleaned)
                 if cleaned_rows:
-                    ARTIFACT_DROP_POOLS[realm_index] = cleaned_rows
+                    drop_pool_rows[realm_index] = tuple(cleaned_rows)
     mystic_config = config.get("mystic", {}) if isinstance(config, dict) else {}
     signin_config = config.get("signin", {}) if isinstance(config, dict) else {}
-    MYSTIC_CATEGORY_WEIGHTS.clear()
-    MYSTIC_DROP_OVERRIDES.clear()
-    MYSTIC_ENABLED_TYPES.clear()
-    MYSTIC_ENABLED_HIGH_RISK_TYPES.clear()
-    globals()["MYSTIC_FISHING_OPTION_RATE"] = 0.05
-    globals()["SIGNIN_EXTRA_FISHING_CHANCE_RATE"] = 0.10
+    enabled_types = frozenset(MYSTIC_REALM_TYPES)
+    enabled_high_risk_types = frozenset(HIGH_RISK_MYSTIC_REALM_TYPES)
+    category_weights: dict[str, tuple[tuple[str, float], ...]] = {}
+    drop_overrides: dict[str, tuple[dict[str, Any], ...]] = {}
+    fishing_option_rate = 0.05
     if isinstance(mystic_config, dict):
         try:
-            globals()["MYSTIC_FISHING_OPTION_RATE"] = max(0.0, min(1.0, float(mystic_config.get("fishing_option_rate", MYSTIC_FISHING_OPTION_RATE))))
+            fishing_option_rate = max(0.0, min(1.0, float(mystic_config.get("fishing_option_rate", 0.05))))
         except (TypeError, ValueError):
             pass
-        enabled_types = mystic_config.get("enabled_types", list(MYSTIC_REALM_TYPES))
-        if isinstance(enabled_types, list):
-            MYSTIC_ENABLED_TYPES.update(str(item) for item in enabled_types if str(item) in MYSTIC_REALM_TYPES)
-        else:
-            MYSTIC_ENABLED_TYPES.update(MYSTIC_REALM_TYPES)
-        enabled_high_risk = mystic_config.get("enabled_high_risk_types", list(HIGH_RISK_MYSTIC_REALM_TYPES))
-        if isinstance(enabled_high_risk, list):
-            MYSTIC_ENABLED_HIGH_RISK_TYPES.update(str(item) for item in enabled_high_risk if str(item) in HIGH_RISK_MYSTIC_REALM_TYPES)
-        else:
-            MYSTIC_ENABLED_HIGH_RISK_TYPES.update(HIGH_RISK_MYSTIC_REALM_TYPES)
-        category_weights = mystic_config.get("category_weights", {})
-        if isinstance(category_weights, dict):
-            for realm_type, value in category_weights.items():
+        raw_enabled_types = mystic_config.get("enabled_types")
+        if isinstance(raw_enabled_types, list):
+            enabled_types = frozenset(
+                str(item) for item in raw_enabled_types if str(item) in MYSTIC_REALM_TYPES
+            )
+        raw_high_risk = mystic_config.get("enabled_high_risk_types")
+        if isinstance(raw_high_risk, list):
+            enabled_high_risk_types = frozenset(
+                str(item) for item in raw_high_risk if str(item) in HIGH_RISK_MYSTIC_REALM_TYPES
+            )
+        raw_category_weights = mystic_config.get("category_weights")
+        if isinstance(raw_category_weights, dict):
+            for realm_type, value in raw_category_weights.items():
                 pairs = _category_weight_pairs(value)
                 if pairs:
-                    MYSTIC_CATEGORY_WEIGHTS[str(realm_type)] = pairs
-        drop_overrides = mystic_config.get("drop_overrides", {})
-        if isinstance(drop_overrides, dict):
-            for realm_type, rewards in drop_overrides.items():
+                    category_weights[str(realm_type)] = tuple(pairs)
+        raw_overrides = mystic_config.get("drop_overrides")
+        if isinstance(raw_overrides, dict):
+            for realm_type, rewards in raw_overrides.items():
                 if isinstance(rewards, list):
-                    MYSTIC_DROP_OVERRIDES[str(realm_type)] = [dict(item) for item in rewards if isinstance(item, dict)]
-    else:
-        MYSTIC_ENABLED_TYPES.update(MYSTIC_REALM_TYPES)
-        MYSTIC_ENABLED_HIGH_RISK_TYPES.update(HIGH_RISK_MYSTIC_REALM_TYPES)
+                    drop_overrides[str(realm_type)] = tuple(
+                        dict(item) for item in rewards if isinstance(item, dict)
+                    )
+    signin_extra_fishing_rate = 0.10
     if isinstance(signin_config, dict):
         try:
-            globals()["SIGNIN_EXTRA_FISHING_CHANCE_RATE"] = max(0.0, min(1.0, float(signin_config.get("extra_fishing_chance_rate", SIGNIN_EXTRA_FISHING_CHANCE_RATE))))
+            signin_extra_fishing_rate = max(
+                0.0,
+                min(1.0, float(signin_config.get("extra_fishing_chance_rate", 0.10))),
+            )
         except (TypeError, ValueError):
             pass
+    # 一次性替换整个快照：读取方要么看到旧版本、要么看到新版本，永不读到中间态。
+    _install_mystic_tuning(
+        MysticTuning(
+            artifact_drop_pools=drop_pool_rows,
+            enabled_types=enabled_types,
+            enabled_high_risk_types=enabled_high_risk_types,
+            category_weights=category_weights,
+            drop_overrides=drop_overrides,
+            fishing_option_rate=fishing_option_rate,
+            signin_extra_fishing_chance_rate=signin_extra_fishing_rate,
+        )
+    )
 
 MYSTIC_TOKEN_MAX_COUNT = 3
 

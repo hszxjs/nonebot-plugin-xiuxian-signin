@@ -1,6 +1,6 @@
 """domain signin 子系统。
 
-由原 domain.py 抽取。依赖 Layer 0+ 已提取子系统，跨子系统调用通过 _domain 延迟访问。
+由原 domain.py 抽取。跨子系统反向依赖一律在函数内 import，模块级不持有全局访问器。
 """
 from __future__ import annotations
 
@@ -23,14 +23,6 @@ from .abilities import *  # noqa: F401,F403
 from .crafting import *  # noqa: F401,F403
 from .mystic_drops import *  # noqa: F401,F403
 from .economy import *  # noqa: F401,F403
-
-_domain = None
-
-# 直接引用 mystic_drops 模块对象，读取其可调标量（apply_admin_config 运行时重绑）。
-try:
-    from . import mystic_drops as _mystic_drops_module  # noqa: E402,F401
-except ImportError:
-    pass
 
 def maybe_apply_encounter(record: UserRecord, today: date) -> EncounterResult:
     today_text = today.isoformat()
@@ -122,7 +114,7 @@ def apply_signin(record: UserRecord, today: date) -> SigninResult:
 
     gained_fishing_chance = True
     fishing_gain = 1
-    if random.random() < _mystic_drops_module.SIGNIN_EXTRA_FISHING_CHANCE_RATE:
+    if random.random() < current_mystic_tuning().signin_extra_fishing_chance_rate:
         fishing_gain += 1
     record.fishing_chances += fishing_gain
     record.pending_fishing = record.fishing_chances
