@@ -20,6 +20,7 @@ from ..panels import BEAST_REALM_ICON, finish_panel, panel_segment
 from ..parsing import nickname_from_event, normalized_plain_text, remember_group_member
 from ..picmenu import command_hint
 from ... import beast_realm as beast_realm_game
+from ...runtime_state import interruption_notice
 
 
 @beast_realm_group_cmd.handle()
@@ -29,6 +30,11 @@ async def handle_beast_realm_group(matcher: Matcher, event: GroupMessageEvent) -
     record = await store.get_user(user_id)
     text_value = normalized_plain_text(event)
     group_key = beast_realm_group_key_from_event(event)
+
+    # 上次停机时本群还有未结束的御兽局（R-21）：先补一句说明，再照常开新局。
+    notice = interruption_notice("beast", group_key)
+    if notice:
+        await finish_panel(matcher, "御兽秘境", notice, record, icon="warning")
 
     if text_value == "御兽秘境帮助" or (text_value == "御兽秘境" and group_key not in beast_realm_tables):
         await finish_panel(matcher, "御兽秘境", beast_realm_game.help_text(), record, icon=BEAST_REALM_ICON, footer=command_hint("御兽秘境"))

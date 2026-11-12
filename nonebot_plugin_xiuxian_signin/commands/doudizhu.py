@@ -23,6 +23,7 @@ from .duel import finish_normal_duel, group_duel_session, send_normal_duel_prepa
 from .panels import finish_panel, panel_segment
 from .parsing import nickname_from_event, normalized_plain_text, remember_group_member
 from .texts import NORMAL_DUEL_DURATION_SECONDS, NORMAL_DUEL_PREPARE_SECONDS
+from ..runtime_state import interruption_notice
 
 
 DOUDIZHU_HELP_TEXTS = {"斗地主帮助", "斗地主规则", "斗牌帮助"}
@@ -664,6 +665,11 @@ async def handle_doudizhu(matcher: Matcher, event: GroupMessageEvent) -> None:
     user_id = event.get_user_id()
     text_value = normalized_plain_text(event)
     record = await store.get_user(user_id)
+
+    # 上次停机时本群还有未结束的牌桌（R-21）：先补一句说明，再照常开新局。
+    notice = interruption_notice("doudizhu", group_id)
+    if notice:
+        await finish_panel(matcher, "\u6597\u5730\u4e3b", notice, record, icon="warning")
 
     if text_value in DOUDIZHU_HELP_TEXTS:
         await finish_panel(matcher, "\u6597\u5730\u4e3b\u5e2e\u52a9", doudizhu_help_text(), record, icon="poker")

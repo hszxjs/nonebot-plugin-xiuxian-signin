@@ -143,6 +143,16 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 
 命令子模块通过 `from ..state import store, config` 获取单例。
 
+### 内存对局态的跨重启降级（`runtime_state.py`，R-21）
+
+`doudizhu_tables` / `normal_duel_sessions` / `beast_realm_tables` 只存在于内存，重启即清空。牌局对象里混着 `time.monotonic()` 计时、私聊通道与渲染句柄，**不做序列化恢复**（代价远高于收益），改为「说清楚」：
+
+1. `on_shutdown` → `record_shutdown_snapshot()`：把仍有对局的群键写进 `data/interrupted_games.json`（几十字节，不参与热路径）；
+2. `on_startup` → `load_interrupted()`：读回并删除文件，转存内存 + `logger.warning` + 审计；
+3. 玩家下次发该玩法入口命令时，各 handler 调用 `interruption_notice(game, group_key)` 补一句「上局因重启中断，已重置」，**只补一次**。
+
+没有对局时文件会被删除，避免凭空冒出提示；连续两次重启不会丢掉尚未送达的 notice（写入时与内存待送达集合合并）。硬崩溃（`kill -9`）无法记到，与改造前等价。
+
 ## commands/ — 命令子包
 
 命令层按「文本 → 解析 → 渲染 → 判定 → 注册」单向分层，`tests/test_plugin_structure.py` 用 AST 钉住这条分层，**新增模块必须登记到该测试的 `LAYERS` 表**：

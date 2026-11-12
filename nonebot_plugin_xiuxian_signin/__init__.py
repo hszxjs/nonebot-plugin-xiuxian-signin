@@ -202,6 +202,7 @@ from .storage import InsufficientSpiritStones, JsonStore, MysticRescueRequest
 from .net import close_shared_http_client
 from .resource_pack import configure as configure_resource_pack
 from .resource_pack import ensure_pack, pack_status as resource_pack_status
+from .runtime_state import load_interrupted, record_shutdown_snapshot
 from . import state as _state  # 共享单例（config/store/admin_manager/mystic_coordinator 等）
 from .state import (  # noqa: F401
     config, store, admin_manager, mystic_coordinator, mystic_catalog,
@@ -493,6 +494,20 @@ async def mystic_recovery_sweep() -> None:
 @driver.on_startup
 async def start_rank_scheduler() -> None:
     global admin_http_server, rank_scheduler_task, mystic_recovery_task, asset_download_task
+    # 内存对局态在重启后无法恢复（R-21）：先读回上次停机留下的「哪个群被打断」，
+    # 玩家下次发入口命令时补一句说明。这一步失败不影响启动。
+    try:
+        interrupted = load_interrupted(get_data_dir())
+    except Exception:
+        logger.exception("读取重启中断记录失败")
+        interrupted = {}
+    if interrupted:
+        summary = "、".join(f"{game}×{len(keys)}" for game, keys in sorted(interrupted.items()))
+        logger.warning(f"检测到上次停机时仍有未结束的对局（{summary}），已转为重启提示等待送达。")
+        try:
+            admin_manager.audit("runtime.interrupted_games", games=interrupted)
+        except Exception:
+            logger.exception("记录重启中断审计失败")
     admin_ready = False
     if config.xiuxian_signin_admin_enabled and not ADMIN_HTTP_AVAILABLE:
         # 后台 HTTP 层是可选依赖（R-23）：没装 admin extra 时机器人照常跑，只是后台起不来。
@@ -579,6 +594,19 @@ async def chat_flush_loop() -> None:
 @driver.on_shutdown
 async def stop_admin_http_server() -> None:
     global admin_http_server, mystic_recovery_task, rank_scheduler_task, asset_download_task, chat_flush_task
+    # 停机时把「仍有对局的群」记一笔，供下次启动补中断提示（R-21）。
+    # 内存对局态本身不落盘——这里只记群键，几十字节。
+    try:
+        record_shutdown_snapshot(
+            get_data_dir(),
+            {
+                "duel": [*normal_duel_sessions, *normal_duel_queue],
+                "doudizhu": list(doudizhu_tables),
+                "beast": list(beast_realm_tables),
+            },
+        )
+    except Exception:
+        logger.exception("停机时记录未结束对局失败")
     # 停机前先冲掉未落盘的聊天计数，再取消任务。
     try:
         await store.flush_chat_counts()

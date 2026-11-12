@@ -26,6 +26,7 @@ from ..parsing import (
     remember_group_member,
 )
 from ..texts import NORMAL_DUEL_DURATION_SECONDS, NORMAL_DUEL_PREPARE_SECONDS
+from ...runtime_state import interruption_notice
 
 
 @normal_duel_apply.handle()
@@ -33,6 +34,10 @@ async def handle_normal_duel_apply(matcher: Matcher, event: GroupMessageEvent) -
     await remember_group_member(event)
     group_id = str(event.group_id)
     user_id = event.get_user_id()
+    # 上次停机时本群还有未结束的对决（R-21）：先补一句说明，再照常申请。
+    notice = interruption_notice("duel", group_id)
+    if notice:
+        await finish_panel(matcher, "\u666e\u901a\u6597\u6cd5", notice, icon="warning")
     if group_duel_session(group_id):
         await finish_panel(matcher, "\u666e\u901a\u6597\u6cd5", "\u672c\u7fa4\u5df2\u6709\u4e00\u573a\u666e\u901a\u6597\u6cd5\u8fdb\u884c\u4e2d\uff0c\u8bf7\u7a0d\u540e\u518d\u7533\u8bf7\u3002", icon="duel")
     name = nickname_from_event(event) or await group_member_display_name(event, user_id)
