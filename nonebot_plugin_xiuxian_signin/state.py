@@ -77,8 +77,15 @@ def _build_store():
     data_dir = get_data_dir()
     backend = str(config.xiuxian_signin_storage_backend or "sqlite").strip().lower()
     if backend == "json":
-        return JsonStore(data_dir)
-    from .storage.migration import ensure_sqlite_backend  # 延迟导入，json 后端零开销
+        from .storage.migration import archive_retired_stores
+
+        store = JsonStore(data_dir)
+        # 归档已下线子系统的旧存档（R-31）：这件事与存储后端无关，json 分支同样要执行。
+        # 结构步骤（apply_schema_steps）只对 SQLite 有效；json 侧字段会在玩家下次
+        # 落盘时随 to_dict 自然消失，无需批量清洗。
+        archive_retired_stores(data_dir)
+        return store
+    from .storage.migration import ensure_sqlite_backend
 
     return ensure_sqlite_backend(data_dir)
 

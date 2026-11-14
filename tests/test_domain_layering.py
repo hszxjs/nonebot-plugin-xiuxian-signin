@@ -145,6 +145,24 @@ def test_apply_admin_config_swaps_snapshot_without_touching_old_one() -> None:
         domain.apply_admin_config({})
 
 
+@pytest.mark.parametrize("broken_section", [None, [], "x", 0])
+def test_apply_admin_config_tolerates_non_dict_sections(broken_section) -> None:
+    """手改坏的配置段不得让调参崩溃。
+
+    ``AdminManager.load_config`` 刻意不跑 Pydantic 校验（否则一份手改坏的
+    admin_config.json 会直接让后台打不开），所以 ``"equipment_rules": null``
+    这类值会原样递到这里。掉进 UnboundLocalError 等于把宽容承诺作废。
+    """
+    from nonebot_plugin_xiuxian_signin import domain
+
+    try:
+        domain.apply_admin_config({"equipment_rules": broken_section})
+        domain.apply_admin_config({"mystic": broken_section, "signin": broken_section})
+    finally:
+        domain.apply_admin_config({})
+    assert domain.configured_artifact_drop_entries(), "非 dict 配置后应回落到默认掉落池"
+
+
 def test_artifact_drop_pools_follow_snapshot() -> None:
     """掉落池来自快照；未配置时回落到内置默认表。"""
     from nonebot_plugin_xiuxian_signin import domain

@@ -52,6 +52,16 @@ def test_plugin_imports_without_admin_http_dependencies() -> None:
             assert "[admin]" in str(exc)
         else:
             raise AssertionError("缺 fastapi 时 create_admin_app 必须报错而不是静默返回")
+        # start_admin_server 自身不查标志位，而是靠第一行就调用 create_admin_app 兜住。
+        # 这里锁住该行为：顺序一旦被调换，用户会看到 AttributeError 而不是安装指引。
+        try:
+            admin.start_admin_server(manager=None)
+        except RuntimeError as exc:
+            assert "[admin]" in str(exc)
+        except (AttributeError, TypeError) as exc:
+            raise AssertionError(f"start_admin_server 应沿用安装指引，实际抛 {type(exc).__name__}: {exc}")
+        else:
+            raise AssertionError("缺 fastapi 时 start_admin_server 必须报错")
         print("OK")
         """
     )

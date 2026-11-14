@@ -250,6 +250,9 @@ def _category_weight_pairs(value: Any) -> list[tuple[str, float]]:
 
 def apply_admin_config(config: dict[str, Any]) -> None:
     equipment_rules = config.get("equipment_rules", {}) if isinstance(config, dict) else {}
+    # 必须在分支外初始化：手改坏的配置（``"equipment_rules": null``）会让下面的
+    # isinstance 判定为假，若就地声明就会在构造快照时抛 UnboundLocalError。
+    drop_pool_rows: dict[int, tuple[dict[str, Any], ...]] = {}
     if isinstance(equipment_rules, dict):
         tier_default = equipment_rules.get("tier_default_realm", {})
         if isinstance(tier_default, dict):
@@ -305,7 +308,6 @@ def apply_admin_config(config: dict[str, Any]) -> None:
         # `artifact_immortal_upgrade_rate` 只被后台表单当作配置键读写，游戏内无消费者，
         # 因此不再写模块级全局（原 globals() 重绑既无读者，又污染本模块命名空间）。
         drop_pools = equipment_rules.get("artifact_drop_pools", {})
-        drop_pool_rows: dict[int, tuple[dict[str, Any], ...]] = {}
         if isinstance(drop_pools, dict):
             for realm_key, rows in drop_pools.items():
                 try:
