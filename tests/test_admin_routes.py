@@ -21,17 +21,29 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "nonebot_plugin_xiuxian_sig
 
 
 def _load_admin_module() -> Any:
-    if PACKAGE_NAME not in sys.modules:
+    """按文件路径加载 admin 模块，不依赖插件入口（入口会初始化 NoneBot driver）。
+
+    注意：这里临时注入的「只有 ``__path__`` 的空壳包」必须在加载完成后弹出，
+    否则它会一直占着 ``nonebot_plugin_xiuxian_signin`` 这个真名，后续任何
+    ``import nonebot_plugin_xiuxian_signin`` 都变成 no-op——插件入口永远不会执行，
+    matcher 一个都不会注册（``tests/test_entry_smoke.py`` 就是被这个副作用打红的）。
+    """
+    stub_created = PACKAGE_NAME not in sys.modules
+    if stub_created:
         package = types.ModuleType(PACKAGE_NAME)
         package.__path__ = [str(PACKAGE_ROOT)]  # type: ignore[attr-defined]
         package.__package__ = PACKAGE_NAME
         sys.modules[PACKAGE_NAME] = package
     module_name = f"{PACKAGE_NAME}.admin"
-    spec = importlib.util.spec_from_file_location(module_name, PACKAGE_ROOT / "admin.py")
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, PACKAGE_ROOT / "admin.py")
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+    finally:
+        if stub_created:
+            sys.modules.pop(PACKAGE_NAME, None)
     return module
 
 

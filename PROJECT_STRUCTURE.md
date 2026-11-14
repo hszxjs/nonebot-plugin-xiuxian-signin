@@ -12,17 +12,24 @@
 
 ## 插件包 `nonebot_plugin_xiuxian_signin/`
 
-- `__init__.py`：插件入口（命令分发 + 生命周期 + 单例）。
+- `__init__.py`：插件入口。**只放元数据、生命周期（startup/shutdown）与子模块导入**，命令实现一律在 `commands/`；`tests/test_plugin_structure.py` 钉住行数上限 800。
+- `state.py`：共享单例（`config` / `store` / `admin_manager` / `mystic_*` 服务）与内存对局态字典。命令子模块通过 `from ...state import store` 获取，避免循环导入。
+- `runtime_state.py`：内存对局态的跨重启降级——停机记「哪个群还有局」、启动转成一次性提示，不序列化牌局本身。
 - `config.py`：插件配置模型，所有配置都有默认值，保证零配置加载。
-- `domain/`：修仙领域逻辑子包，按依赖分 5 层（constants/utils/models → rewards → roots/realms/methods_arrays → equipment/abilities/crafting/mystic_drops/economy → combat/codex/signin）。详见 `docs/ARCHITECTURE.md`。
-- `cards/`：图片面板渲染（PIL），运行时只读取 `assets/` 下的资源。
-- `beast_realm/`：御兽秘境卡牌玩法逻辑。
+- `config_schema.py`：后台配置的 Pydantic v2 schema、版本迁移与「裁掉未定义键」。**必需 pydantic ≥ 2.0**。
+- `net.py`：共享 httpx 客户端与头像 LRU 缓存（含关闭钩子）。
+- `resource_pack.py`：秘境背景图外置资源包的下载/校验/解析（202 MB 不进 wheel）。
+- `commands/`：命令子包，按 8 层单向依赖组织（`texts`/`picmenu` → `parsing` → `panels`/`ranking` → `duel`/`formatting`/`beast`/`rewards` → `doudizhu`/`mystic_result` → `rules` → `matchers` → `handlers/*`）。新增命令的固定路径：`rules.py` 判定 → `matchers.py` 注册 → `handlers/<域>.py` 实现 → `texts.py` 文案。
+- `domain/`：修仙领域逻辑子包，15 个模块按依赖单向分层（constants → utils → models → rewards → roots → realms → methods_arrays → equipment → abilities → crafting → mystic_drops → economy → combat → codex → signin）。反向依赖只在**函数体内** import。详见 `docs/ARCHITECTURE.md`。
+- `cards/`：图片面板渲染原语（PIL）：字体/背景缓存、圆角卡片、加权文字、渐变背景。
+- `beast_realm/`：御兽秘境卡牌玩法逻辑（卡表、生成规则、九阵营、反阵）。
 - `beast_realm_cards.py`：御兽秘境面板渲染。
-- `storage/`：JSON 数据读写，只写入 localstore 或用户配置的数据目录。
-- `admin.py`：网页后台服务和 API。
+- `mystic_dungeon.py` / `mystic_battle.py` / `mystic_cards.py` / `mystic_runtime.py` / `mystic_events.py` / `mystic_menu.py`：秘境副本子系统（状态机 / 战斗 / 渲染 / 编排 / 事件 / 菜单）。R-40 将整套重建。
+- `storage/`：持久化层。默认 **SQLite（WAL）**，`xiuxian_signin_storage_backend=json` 可应急回退到 JSON。含原子写、覆盖前快照、审计日志、版本化结构步骤（`apply_schema_steps`）与 JSON→SQLite 幂等迁移。
+- `admin.py`：后台管理服务与 API（账号+会话 Cookie 鉴权，`openapi_url` 关闭）。HTTP 层是可选依赖（`[admin]` extra）。
+- `admin_auth.py`：后台账号、密码哈希（16 字符下限）与 7 天会话。
 - `admin_dashboard.py`：后台仪表盘数据聚合。
-- `mystic_dungeon.py` / `mystic_battle.py` / `mystic_cards.py` / `mystic_runtime.py` / `mystic_menu.py`：秘境副本子系统（状态机/战斗/渲染/编排/菜单）。
-- `character_assets.py`：角色头像 manifest 和图片读取。
+- `character_assets.py`：角色头像 manifest 与图片读取。**当前在包内没有任何引用方**（2026-11-14 全仓核对），头像的实际渲染走 `cards/` 与 `beast_realm/`；保留它是因为 R-37/R-40 可能复用，清理前请先确认。
 
 ## 运行时资源 `assets/`
 
@@ -36,6 +43,13 @@
 - `webui/`：后台前端源码（React + AntD），构建到 `assets/admin_web/`。
 - `build/`：预览图、报告、临时切图、生成记录，被 `.gitignore` 忽略。
 - `tests/`：测试套件（unittest + pytest）。
+
+## 文档
+
+- `PROJECT_STRUCTURE.md`（本文件）：目录与模块职责清单。
+- `docs/ARCHITECTURE.md`：分层约束、依赖规则、资源组织、新增功能指引。
+- `docs/NUMBERS.md`：数值口径（境界 / 修为需求 / 收益区间 / 灵石价值表）。
+- `docs/ASSESSMENT_REPORT.md`、`docs/CONSOLIDATED_PLAN.md`：重构前的评审底稿与综合计划，保留作为溯源材料，**不作为执行依据**。
 
 ## NoneBot 插件规范检查点
 

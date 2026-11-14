@@ -659,6 +659,7 @@ async def is_doudizhu_message(event: MessageEvent) -> bool:
 
 doudizhu_cmd = on_message(rule=Rule(is_doudizhu_message), priority=10, block=True)
 
+@doudizhu_cmd.handle()
 async def handle_doudizhu(matcher: Matcher, event: GroupMessageEvent) -> None:
     await remember_group_member(event)
     group_id = doudizhu_group_key(event)

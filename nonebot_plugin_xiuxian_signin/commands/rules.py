@@ -87,6 +87,7 @@ def is_managed_command_text(text: str) -> bool:
     return (
         parse_mystic_group_command(text) is not None
         or text in SIGNIN_TEXTS
+        or text in SIGNIN_CALENDAR_TEXTS
         or text in STATUS_TEXTS
         or text in HELP_TEXTS
         or text in NEWBIE_TUTORIAL_TEXTS

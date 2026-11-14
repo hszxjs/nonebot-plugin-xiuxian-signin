@@ -209,10 +209,28 @@ PIL 渲染，仅依赖 `domain`。公开 API：`render_signin_card`/`render_fish
 
 ## 测试
 
-`tests/` 用 `importlib` 动态加载模块。加载 domain 子包时用「伪造父包」模式（伪造 `nonebot_plugin_xiuxian_signin` 的 `__path__`，避免触发插件入口的 NoneBot 初始化）。运行：
+统一用 pytest（`unittest` 用例同样能被 pytest 收集）：
 
 ```bash
-.venv/Scripts/python.exe -m unittest discover -s tests   # unittest 套件
-.venv/Scripts/python.exe -m pytest tests/                 # pytest 套件（mystic 等）
-.venv/Scripts/python.exe -m mypy                          # 类型检查
+.venv/Scripts/python.exe -m pytest -q                     # 全量（当前 450+ 例）
+.venv/Scripts/python.exe -m mypy                          # 类型检查（7 文件白名单）
+.venv/Scripts/python.exe -m ruff check --select E9,F63,F7,F82,F811,F821 nonebot_plugin_xiuxian_signin tests
 ```
+
+「门禁绿」只在这三条同时通过时成立。其中 `ruff` 只跑真错误集（未定义名、重复参数等），
+`E501` 等历史风格告警尚未纳入门禁。
+
+结构类测试（改动架构时先跑这几个，它们比功能测试更快指出问题）：
+
+| 文件 | 钉住什么 |
+|---|---|
+| `tests/test_entry_smoke.py` | 插件被真正 import 后的 matcher/handler 库存：每个入口都必须挂上 handler、优先级分布快照、每个 handler 域模块都必须贡献 handler、`texts` 里每个触发词集合都能被 `is_managed_command_text` 认出 |
+| `tests/test_plugin_structure.py` | `commands/` 分层单向、不得反向 import 入口、handlers 不得互相依赖、入口 < 800 行；**新模块未登记 LAYERS 直接失败**（不 skip） |
+| `tests/test_domain_layering.py` | `domain/` 15 层单向、`_domain` 不得复活、秘境调参是不可变快照 |
+| `tests/test_packaging.py` | wheel 清单与磁盘资源一致、202 MB 背景图被排除、HTTP 栈不在核心依赖、pydantic 下限为 2 |
+
+`commands/handlers/*` 的注册发生在模块执行期，**函数级测试绕不过注册环节**——斗地主曾因此
+出现「handler 一个不少、但 matcher 没挂 handler，整个玩法不响应」的静默故障
+（`a3d850e` 丢掉了 `@doudizhu_cmd.handle()`，直到 R-19 才被 `test_entry_smoke.py` 抓到）。
+
+数值口径见 `docs/NUMBERS.md`；目录职责见 `PROJECT_STRUCTURE.md`。

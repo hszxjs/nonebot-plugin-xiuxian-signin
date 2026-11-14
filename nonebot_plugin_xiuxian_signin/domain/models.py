@@ -13,7 +13,7 @@ from .constants import *  # noqa: F401,F403  # REALMS/ATTRIBUTE_COLORS/TIER_RANK
 from .utils import *  # noqa: F401,F403  # root_attribute_name 等工具
 from .utils import normalize_mystic_settlement_ids
 
-# 由 domain/__init__.py 在导入本模块后注入为 domain 主模块，用于 property 内延迟访问子系统函数。
+
 @dataclass
 class Root:
     tier: str

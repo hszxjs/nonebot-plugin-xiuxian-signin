@@ -60,3 +60,8 @@ webui/dist/
 /assets/realm_quality_icons/*_report.json
 /assets/realm_quality_icons/*.before_*.json
 /assets/*_sheet.png
+
+# 本地覆盖率产物
+.coverage
+.coverage.*
+htmlcov/
